@@ -482,9 +482,6 @@ export default function ImportCreateSkillPage() {
             >
               <ArrowLeft size={18} />
             </button>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
-              <Upload size={16} className="text-white" />
-            </div>
             <div>
               <h1 className="text-lg font-semibold text-white">导入创建 Skill</h1>
             </div>

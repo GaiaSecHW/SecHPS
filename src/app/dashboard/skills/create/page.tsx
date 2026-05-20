@@ -267,9 +267,6 @@ export default function CreateSkillPage() {
             >
               <ArrowLeft size={18} />
             </button>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-              <Wand2 size={16} className="text-white" />
-            </div>
             <div>
               <h1 className="text-lg font-semibold text-white">快速创建 Skill</h1>
             </div>
@@ -336,27 +333,28 @@ export default function CreateSkillPage() {
               )}
 
               <div className="mt-3">
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
-                </label>
-                <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
-              </div>
-
-              {isAdmin && (
-                <div className="mt-3">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={isPublic}
-                      onChange={(e) => setIsPublic(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-600 text-blue-400 focus:ring-primary-500 bg-dark-bg"
-                    />
-                    <span className="ml-2 text-sm text-gray-300">
-                      公开 Skill（所有用户可见）
-                    </span>
-                  </label>
+                <div className="flex items-center gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                      适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
+                    </label>
+                    <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
+                  </div>
+                  {isAdmin && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isPublic}
+                        onChange={(e) => setIsPublic(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-600 text-blue-400 focus:ring-primary-500 bg-dark-bg"
+                      />
+                      <span className="ml-2 text-sm text-gray-300">
+                        公开 Skill
+                      </span>
+                    </label>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Skill 内容 */}
               <div className="mt-4 pt-4 border-t border-gray-700/50">
@@ -468,7 +466,7 @@ export default function CreateSkillPage() {
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full h-[350px] px-3 py-2 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-gray-200"
+                  className="w-full h-[285px] px-3 py-2 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-gray-200"
                   placeholder="输入 Markdown 格式的 Skill 定义，或点击上方「AI 生成」按钮自动生成..."
                   required
                 />

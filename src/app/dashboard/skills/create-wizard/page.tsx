@@ -313,7 +313,7 @@ export default function SkillCreateWizardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex flex-col">
+    <div className="flex flex-col h-full bg-[#0F172A]">
       {/* Header */}
       <div className="bg-dark-surface border-b border-gray-700/50">
         <div className="flex items-center justify-between px-5 py-3">
@@ -326,9 +326,6 @@ export default function SkillCreateWizardPage() {
             >
               <ArrowLeft size={18} />
             </button>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-              <Wand2 size={16} className="text-white" />
-            </div>
             <div>
               <h1 className="text-lg font-semibold text-white">Skill 引导创建</h1>
             </div>
@@ -454,40 +451,6 @@ export default function SkillCreateWizardPage() {
                 <OptimizationStep skillData={wizardData.skill} testCases={wizardData.testCases} evaluationData={wizardData.evaluation} iterations={wizardData.iterations} optimizationData={wizardData.optimization} onChange={(data) => saveData(data)} onNext={handleComplete} onPrevious={handlePrevious} />
               )}
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer Navigation */}
-      <div className="bg-dark-surface border-t border-gray-700/50 px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <button
-            onClick={handlePrevious}
-            disabled={currentStepIndex === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft size={16} />
-            上一步
-          </button>
-          <div className="flex items-center gap-2">
-            {currentStepIndex === WIZARD_STEPS.length - 1 ? (
-              <button
-                onClick={handleComplete}
-                disabled={isSaving}
-                className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-purple-500 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:bg-purple-400 disabled:opacity-50"
-              >
-                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                完成创建
-              </button>
-            ) : (
-              <button
-                onClick={handleNext}
-                className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
-              >
-                下一步
-                <ChevronRight size={16} />
-              </button>
-            )}
           </div>
         </div>
       </div>
