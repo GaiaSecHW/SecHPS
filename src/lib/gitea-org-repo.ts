@@ -170,14 +170,6 @@ function removeCommonPrefix(files: Map<string, Buffer>): Map<string, Buffer> {
 }
 
 async function ensureIndependentGitRepo(localPath: string): Promise<void> {
-  const agentHarnessRoot = join(process.cwd(), AGENT_HARNESS_LOCAL_PATH);
-  const gitFileInRoot = join(agentHarnessRoot, '.git');
-  
-  if (!existsSync(gitFileInRoot)) {
-    await mkdir(agentHarnessRoot, { recursive: true });
-    await writeFile(gitFileInRoot, 'gitdir: ../.git/modules/AgentHarness\n');
-  }
-  
   await mkdir(localPath, { recursive: true });
   
   const gitDir = join(localPath, '.git');
