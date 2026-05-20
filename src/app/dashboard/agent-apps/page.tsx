@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
 import { PipelineViewModal } from '@/components/agent-apps/PipelineViewModal';
@@ -274,7 +274,14 @@ export default function AgentAppsPage() {
           </div>
         </div>
 <div className="flex items-center gap-3">
-           <button
+          <button
+            onClick={() => window.location.href = '/dashboard/agent-apps/developer-guide'}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-300 bg-dark-surface border border-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <BookOpen size={16} />
+            开发者指南
+          </button>
+          <button
              onClick={handleRefresh}
              disabled={refreshing}
              className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"

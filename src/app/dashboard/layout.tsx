@@ -174,7 +174,7 @@ function DashboardLayoutContent({
                 工作流编排
               </NavLink>
               <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={collapsed}>
-                进化
+                智能体进化
               </NavLink>
               <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={collapsed}>
                 知识图谱
