@@ -672,10 +672,10 @@ function SkillsPageContent() {
           </div>
         ) : (
         <div className="p-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
           {skills.map((skill) => {
             const IconComp = getCategoryIcon(skill);
-            const iconColor = CATEGORY_COLORS[skill.categoryId] || 'bg-[#0F172A]0';
+            const iconColor = CATEGORY_COLORS[skill.categoryId] || 'bg-gray-600';
             const canEdit = isAdmin || (skill.userId !== null && skill.userId === user?.id);
             const canDelete = isAdmin || (skill.userId !== null && skill.userId === user?.id && !skill.isBuiltin);
             const canShare = skill.userId !== null && skill.userId === user?.id;
