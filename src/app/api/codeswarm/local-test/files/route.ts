@@ -1,7 +1,37 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { listTaskFiles, TaskFileInfo } from '@/lib/minio-vulnerability';
 
 const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
+
+async function getTaskContext(taskId: string): Promise<{ productName: string; taskName: string }> {
+  const taskInstance = await prisma.taskInstance.findUnique({
+    where: { id: taskId },
+    select: { name: true, targetProduct: true, codeswarmTaskId: true },
+  });
+
+  if (!taskInstance) {
+    return { productName: 'default', taskName: 'local-test' };
+  }
+
+  let productName = taskInstance.targetProduct;
+
+  if (!productName && taskInstance.codeswarmTaskId) {
+    const codeswarmTask = await prisma.codeswarmTask.findUnique({
+      where: { taskId: taskInstance.codeswarmTaskId },
+      select: { targetProduct: true },
+    });
+    productName = codeswarmTask?.targetProduct || 'default';
+  }
+
+  if (!productName) {
+    productName = 'default';
+  }
+
+  const taskName = taskInstance.name || 'local-test';
+
+  return { productName, taskName };
+}
 
 export async function GET(request: Request) {
   try {
@@ -14,23 +44,27 @@ export async function GET(request: Request) {
 
     const effectiveTaskId = taskId === 'default' ? LOCAL_TEST_VULN_TASK_ID : taskId;
 
-    const files = await listTaskFiles(effectiveTaskId);
+    const { productName, taskName } = await getTaskContext(effectiveTaskId);
+
+    const files = await listTaskFiles(effectiveTaskId, productName, taskName);
 
     const reportFiles: TaskFileInfo[] = [];
-    const rawReportFiles: TaskFileInfo[] = [];
+    const fileFiles: TaskFileInfo[] = [];
 
     for (const file of files) {
       if (file.category === 'report') {
         reportFiles.push(file);
-      } else if (file.category === 'raw') {
-        rawReportFiles.push(file);
+      } else if (file.category === 'file') {
+        fileFiles.push(file);
       }
     }
 
     return NextResponse.json({
       taskId: effectiveTaskId,
+      productName,
+      taskName,
       reportFiles,
-      rawReportFiles,
+      fileFiles,
       totalFiles: files.length,
     });
   } catch (error) {

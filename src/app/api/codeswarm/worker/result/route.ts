@@ -175,16 +175,25 @@ async function createParseLog(
   });
 }
 
-function executeVulnerabilityParseAsync(taskId: string, projectPath: string, taskInstanceId?: string): void {
+interface ParseContext {
+  productName: string;
+  taskName: string;
+}
+
+function executeVulnerabilityParseAsync(
+  taskId: string,
+  projectPath: string,
+  taskInstanceId: string,
+  context: ParseContext
+): void {
   (async () => {
     const startTime = Date.now();
+    const { productName, taskName } = context;
 
     try {
-      console.log(`[VulnParse:${taskId}] 开始解析漏洞报告`);
+      console.log(`[VulnParse:${taskId}] 开始解析漏洞报告 (productName=${productName}, taskName=${taskName})`);
 
-      if (taskInstanceId) {
-        await createParseLog(taskInstanceId, 'info', '开始解析漏洞报告', '使用 audit-report-parser skill 提取结构化漏洞数据');
-      }
+      await createParseLog(taskInstanceId, 'info', '开始解析漏洞报告', `产品: ${productName}, 任务: ${taskName}`);
 
       let filePath: string = projectPath;
 
@@ -192,92 +201,70 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string, tas
       if (reportFolder) {
         console.log(`[VulnParse:${taskId}] 找到 Report 文件夹: ${path.relative(projectPath, reportFolder).replace(/\\/g, '/')}`);
 
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'info', '找到 Report 文件夹', `上传报告文件到 MinIO`);
-        }
+        await createParseLog(taskInstanceId, 'info', '找到 Report 文件夹', `上传报告文件到 MinIO (${productName}/${taskName}/report)`);
 
-        console.log(`[VulnParse:${taskId}] 上传 Report 文件到 MinIO...`);
-        const uploadResult = await uploadReportFolder(taskId, reportFolder);
+        console.log(`[VulnParse:${taskId}] 上传 Report 文件到 MinIO (${productName}/${taskName}/report)...`);
+        const uploadResult = await uploadReportFolder(taskId, reportFolder, productName, taskName);
 
         if (uploadResult.success) {
           filePath = JSON.stringify(uploadResult.urls);
           console.log(`[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
-          if (taskInstanceId) {
-            await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
-          }
+          await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
         } else {
           console.log(`[VulnParse:${taskId}] MinIO 上传失败: ${uploadResult.error}`);
           filePath = reportFolder;
-          if (taskInstanceId) {
-            await createParseLog(taskInstanceId, 'warn', `MinIO 上传失败`, uploadResult.error || '未知错误');
-          }
+          await createParseLog(taskInstanceId, 'warn', `MinIO 上传失败`, uploadResult.error || '未知错误');
         }
       } else {
         console.log(`[VulnParse:${taskId}] 未找到 Report 文件夹`);
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'warn', '未找到 Report 文件夹', `工作区路径: ${projectPath}`);
-        }
+        await createParseLog(taskInstanceId, 'warn', '未找到 Report 文件夹', `工作区路径: ${projectPath}`);
       }
 
       let report: ParsedVulnerabilityReport | null = null;
 
-      if (taskInstanceId) {
-        await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', 'opencode run --agent build "执行 audit-report-parser skill 解析漏洞报告"');
-      }
+      await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', 'opencode run --agent build "执行 audit-report-parser skill 解析漏洞报告"');
       report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE1);
 
       if (report) {
         const durationMs = Date.now() - startTime;
         console.log(`[VulnParse:${taskId}] Skill 解析成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'success', `Skill 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s`);
-        }
+        await createParseLog(taskInstanceId, 'success', `Skill 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s`);
       }
 
       if (!report) {
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', '使用 opencode --agent build 直接解析报告');
-        }
+        await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', '使用 opencode --agent build 直接解析报告');
         report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE2);
 
         if (report) {
           const durationMs = Date.now() - startTime;
           console.log(`[VulnParse:${taskId}] AI Fallback 解析成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
-          if (taskInstanceId) {
-            await createParseLog(taskInstanceId, 'info', `AI Fallback 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s`);
-          }
+          await createParseLog(taskInstanceId, 'info', `AI Fallback 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s`);
         }
       }
 
       if (!report) {
         console.log(`[VulnParse:${taskId}] 无法解析漏洞（Skill 和 AI 均失败）`);
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'warn', '漏洞报告解析失败', '无法从 Report 文件夹或 AI 输出中提取漏洞数据');
-        }
+        await createParseLog(taskInstanceId, 'warn', '漏洞报告解析失败', '无法从 Report 文件夹或 AI 输出中提取漏洞数据');
         return;
       }
 
       console.log(`[VulnParse:${taskId}] 解析到 ${report.vulnerabilities.length} 条漏洞`);
 
-      console.log(`[VulnParse:${taskId}] 上传漏洞原始文件到 MinIO...`);
+      console.log(`[VulnParse:${taskId}] 上传漏洞原始文件到 MinIO (${productName}/${taskName}/file)...`);
       const vulnsWithRawReports = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.trim());
       if (vulnsWithRawReports.length > 0) {
-        report.vulnerabilities = await processVulnerabilityRawReports(taskId, report.vulnerabilities);
+        report.vulnerabilities = await processVulnerabilityRawReports(taskId, report.vulnerabilities, productName, taskName);
         const uploadedCount = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.includes('http')).length;
         console.log(`[VulnParse:${taskId}] 漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'success', `漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
-        }
+        await createParseLog(taskInstanceId, 'success', `漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
       } else {
         console.log(`[VulnParse:${taskId}] 无漏洞原始文件需要上传`);
       }
 
-      const effectiveTaskId = taskInstanceId || taskId;
+      const effectiveTaskId = taskInstanceId;
 
       console.log(`[VulnParse:${taskId}] 调用 /api/v1/vulnerabilities 入库: ${report.vulnerabilities.length} 条漏洞`);
-      if (taskInstanceId) {
-        await createParseLog(taskInstanceId, 'info', `调用 /api/v1/vulnerabilities 入库`, `${report.vulnerabilities.length} 条漏洞`);
-      }
+      await createParseLog(taskInstanceId, 'info', `调用 /api/v1/vulnerabilities 入库`, `${report.vulnerabilities.length} 条漏洞`);
 
       const vulnRequestBody = {
         taskId: effectiveTaskId,
@@ -305,23 +292,17 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string, tas
         `;
 
         console.log(`[VulnParse:${taskId}] 漏洞提交成功: created=${createdCount}, skipped=${skippedCount}`);
-        if (taskInstanceId) {
-          const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join('\n');
-          await createParseLog(taskInstanceId, 'success', `漏洞入库完成：创建 ${createdCount} 条，跳过 ${skippedCount} 条`, vulnSummary);
-        }
+        const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join('\n');
+        await createParseLog(taskInstanceId, 'success', `漏洞入库完成：创建 ${createdCount} 条，跳过 ${skippedCount} 条`, vulnSummary);
       } else {
         const errorMsg = vulnResult.error || '未知错误';
         console.error(`[VulnParse:${taskId}] 漏洞提交失败: ${errorMsg}`);
-        if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'error', '漏洞入库失败', errorMsg);
-        }
+        await createParseLog(taskInstanceId, 'error', '漏洞入库失败', errorMsg);
       }
 
     } catch (e) {
       console.error(`[VulnParse:${taskId}] 异常:`, e);
-      if (taskInstanceId) {
-        await createParseLog(taskInstanceId, 'error', 'VulnParse 异常', e instanceof Error ? e.message : String(e));
-      }
+      await createParseLog(taskInstanceId, 'error', 'VulnParse 异常', e instanceof Error ? e.message : String(e));
     }
   })();
 }
@@ -398,12 +379,30 @@ export async function POST(request: Request) {
     if (finalState === 'completed') {
       const taskInstanceForParse = await prisma.taskInstance.findFirst({
         where: { codeswarmTaskId: taskId },
-        select: { id: true, projectPath: true },
+        select: { id: true, projectPath: true, name: true, targetProduct: true },
       });
 
       if (taskInstanceForParse?.projectPath) {
-        await createParseLog(taskInstanceForParse.id, 'info', '收到 Worker 完成回调', `codeswarmTaskId: ${taskId}，即将启动漏洞报告解析`);
-        executeVulnerabilityParseAsync(taskId, taskInstanceForParse.projectPath, taskInstanceForParse.id);
+        let productName = taskInstanceForParse.targetProduct;
+
+        if (!productName) {
+          const codeswarmTask = await prisma.codeswarmTask.findUnique({
+            where: { taskId },
+            select: { targetProduct: true },
+          });
+          productName = codeswarmTask?.targetProduct || 'default';
+        }
+
+        const taskName = taskInstanceForParse.name || 'unnamed-task';
+
+        await createParseLog(taskInstanceForParse.id, 'info', '收到 Worker 完成回调', `codeswarmTaskId: ${taskId}, 产品: ${productName}, 任务: ${taskName}`);
+
+        executeVulnerabilityParseAsync(
+          taskId,
+          taskInstanceForParse.projectPath,
+          taskInstanceForParse.id,
+          { productName, taskName }
+        );
       }
     }
 

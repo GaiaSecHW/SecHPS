@@ -31,6 +31,35 @@ interface ParsedVulnerabilityReport {
 
 const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
 
+async function getTaskContext(taskId: string): Promise<{ productName: string; taskName: string }> {
+  const taskInstance = await prisma.taskInstance.findUnique({
+    where: { id: taskId },
+    select: { name: true, targetProduct: true, codeswarmTaskId: true },
+  });
+
+  if (!taskInstance) {
+    return { productName: 'default', taskName: 'local-test' };
+  }
+
+  let productName = taskInstance.targetProduct;
+
+  if (!productName && taskInstance.codeswarmTaskId) {
+    const codeswarmTask = await prisma.codeswarmTask.findUnique({
+      where: { taskId: taskInstance.codeswarmTaskId },
+      select: { targetProduct: true },
+    });
+    productName = codeswarmTask?.targetProduct || 'default';
+  }
+
+  if (!productName) {
+    productName = 'default';
+  }
+
+  const taskName = taskInstance.name || 'local-test';
+
+  return { productName, taskName };
+}
+
 const isWindows = process.platform === 'win32';
 
 function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
@@ -252,6 +281,9 @@ function executeTaskAsync(
       addLog('info', '开始执行本地测试');
       await updateRecord({ status: 'running', startedAt: new Date() });
 
+      const { productName, taskName } = await getTaskContext(LOCAL_TEST_VULN_TASK_ID);
+      addLog('info', `获取任务上下文: productName=${productName}, taskName=${taskName}`);
+
       const reportFolder = findReportFolder(workspacePath);
       let filePath: string = '';
       let report: ParsedVulnerabilityReport | null = null;
@@ -259,8 +291,8 @@ function executeTaskAsync(
       if (reportFolder) {
         addLog('info', `找到 Report 文件夹: ${path.relative(workspacePath, reportFolder).replace(/\\/g, '/')}`);
         
-        addLog('info', '上传 Report 文件到 MinIO...');
-        const uploadResult = await uploadReportFolder(LOCAL_TEST_VULN_TASK_ID, reportFolder);
+        addLog('info', `上传 Report 文件到 MinIO (${productName}/${taskName}/report)...`);
+        const uploadResult = await uploadReportFolder(LOCAL_TEST_VULN_TASK_ID, reportFolder, productName, taskName);
         
         if (uploadResult.success) {
           filePath = JSON.stringify(uploadResult.urls);
@@ -297,10 +329,10 @@ function executeTaskAsync(
         return;
       }
 
-      addLog('info', '上传漏洞原始文件到 MinIO...');
+      addLog('info', `上传漏洞原始文件到 MinIO (${productName}/${taskName}/file)...`);
       const vulnsWithRawReports = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.trim());
       if (vulnsWithRawReports.length > 0) {
-        report.vulnerabilities = await processVulnerabilityRawReports(LOCAL_TEST_VULN_TASK_ID, report.vulnerabilities);
+        report.vulnerabilities = await processVulnerabilityRawReports(LOCAL_TEST_VULN_TASK_ID, report.vulnerabilities, productName, taskName);
         const uploadedCount = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.includes('http')).length;
         addLog('success', `漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
       } else {
