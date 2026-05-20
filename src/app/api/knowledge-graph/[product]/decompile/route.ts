@@ -66,6 +66,9 @@ ${code}`,
     }
   );
 
-  const content = response?.content?.[0]?.text ?? response?.choices?.[0]?.message?.content ?? '';
+  const blocks: any[] = response?.content ?? [];
+  const content = blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+    || response?.choices?.[0]?.message?.content
+    || '';
   return NextResponse.json({ source: content });
 }
