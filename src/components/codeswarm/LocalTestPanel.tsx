@@ -335,7 +335,7 @@ export function LocalTestPanel() {
   // 渲染目录浏览器 modal
   const renderDirBrowser = () => showDirBrowser && (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
+      <div className="bg-dark-surface border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2"><FolderSearch className="w-5 h-5" />浏览目录</h3>
           <button onClick={() => setShowDirBrowser(false)} className="text-gray-400 hover:text-gray-200">✕</button>
@@ -346,7 +346,7 @@ export function LocalTestPanel() {
               <select
                 value={isRootList ? 'root://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
                 onChange={(e) => { if (e.target.value === 'root://') browseDirectory('root://'); else if (e.target.value) browseDirectory(e.target.value); }}
-                className="px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+                className="px-3 py-2 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100"
               >
                 <option value="root://">我的电脑</option>
                 {rootEntries.map(e => <option key={e.path} value={e.path}>{e.name}</option>)}
@@ -356,7 +356,7 @@ export function LocalTestPanel() {
               value={isRootList ? (platform === 'windows' ? '我的电脑' : '根目录') : currentBrowsePath}
               onChange={(e) => setCurrentBrowsePath(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') browseDirectory(currentBrowsePath); }}
-              className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+              className="flex-1 px-3 py-2 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100"
               disabled={isRootList}
             />
             <button onClick={() => browseDirectory(currentBrowsePath)} disabled={loadingDirs || isRootList}
@@ -406,7 +406,7 @@ export function LocalTestPanel() {
 
   const renderFilesModal = () => showFilesModal && (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-      <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[700px] max-h-[600px] flex flex-col">
+      <div className="bg-dark-surface border border-gray-700 rounded-lg w-[700px] max-h-[600px] flex flex-col">
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
             <Download className="w-5 h-5" />任务文件下载
@@ -427,7 +427,7 @@ export function LocalTestPanel() {
                   <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
                     <FolderSearch className="w-4 h-4" />Report 文件夹文件
                   </h4>
-                  <div className="bg-[#0F172A] rounded-lg p-2 space-y-1">
+                  <div className="bg-dark-bg rounded-lg p-2 space-y-1">
                     {filesData.reportFiles.map((file, i) => (
                       <div key={i} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
                         <span className="text-xs text-gray-300 truncate flex-1">{file.name}</span>
@@ -447,7 +447,7 @@ export function LocalTestPanel() {
                   <h4 className="text-sm font-medium text-purple-400 mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" />漏洞原始文件
                   </h4>
-                  <div className="bg-[#0F172A] rounded-lg p-2 space-y-1 max-h-[200px] overflow-y-auto">
+                  <div className="bg-dark-bg rounded-lg p-2 space-y-1 max-h-[200px] overflow-y-auto">
                     {filesData.rawReportFiles.map((file, i) => (
                       <div key={i} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
                         <span className="text-xs text-gray-300 truncate flex-1">{file.name.replace('raw/', '')}</span>
@@ -483,7 +483,7 @@ export function LocalTestPanel() {
       {renderFilesModal()}
 
       {/* 工作区选择 */}
-      <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+      <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
         <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400" />
           报告路径
@@ -493,7 +493,7 @@ export function LocalTestPanel() {
             type="text" value={workspacePath}
             onChange={(e) => setWorkspacePath(e.target.value)}
             placeholder="选择包含 Report 文件夹的工作区目录"
-            className="flex-1 px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
+            className="flex-1 px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
           />
           <button onClick={() => setShowDirBrowser(true)}
             className="px-3 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-sm text-blue-400 flex items-center gap-1">
@@ -505,7 +505,7 @@ export function LocalTestPanel() {
           </button>
         </div>
         {showWorkspaceList && (
-          <div className="mt-2 bg-[#0F172A] border border-gray-700 rounded-lg p-1">
+          <div className="mt-2 bg-dark-bg border border-gray-700 rounded-lg p-1">
             {COMMON_WORKSPACES.map(ws => (
               <button key={ws.path} onClick={() => { setWorkspacePath(ws.path); setShowWorkspaceList(false); }}
                 className="w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded text-sm text-gray-300 flex items-center justify-between">
@@ -538,7 +538,7 @@ export function LocalTestPanel() {
             </div>
             <div className="flex items-center gap-2">
               <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Math.max(60, parseInt(e.target.value) || 600))}
-                min={60} max={7200} className="w-32 px-3 py-1.5 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100" />
+                min={60} max={7200} className="w-32 px-3 py-1.5 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100" />
               <span className="text-xs text-gray-500">秒（fallback 超时时间）</span>
             </div>
           </div>
@@ -568,7 +568,7 @@ export function LocalTestPanel() {
 
       {/* 执行时间线 */}
       {(isRunning || parseLogs.length > 0) && (
-        <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
           <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
             <Zap className="w-4 h-4 text-yellow-400" />
             执行时间线
@@ -614,15 +614,15 @@ export function LocalTestPanel() {
             解析结果
           </h3>
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-[#0F172A] rounded-lg p-3 text-center">
+            <div className="bg-dark-bg rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-green-400">{vulnCounts.created}</p>
               <p className="text-xs text-gray-400 mt-1">新建漏洞</p>
             </div>
-            <div className="bg-[#0F172A] rounded-lg p-3 text-center">
+            <div className="bg-dark-bg rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-yellow-400">{vulnCounts.skipped}</p>
               <p className="text-xs text-gray-400 mt-1">跳过（重复）</p>
             </div>
-            <div className="bg-[#0F172A] rounded-lg p-3 text-center">
+            <div className="bg-dark-bg rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-blue-400">{vulnCounts.created + vulnCounts.skipped}</p>
               <p className="text-xs text-gray-400 mt-1">解析总数</p>
             </div>
@@ -632,7 +632,7 @@ export function LocalTestPanel() {
 
       {/* 解析日志 */}
       {parseLogs.length > 0 && (
-        <div className="bg-[#1E293B] rounded-xl border border-gray-700/50">
+        <div className="bg-dark-surface rounded-xl border border-gray-700/50">
           <div className="px-5 py-3 border-b border-gray-700/50 flex items-center justify-between">
             <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -645,7 +645,7 @@ export function LocalTestPanel() {
               <Copy className="w-3 h-3" />复制
             </button>
           </div>
-          <div ref={logsRef} className="p-4 max-h-64 overflow-y-auto bg-[#0F172A] rounded-b-xl">
+          <div ref={logsRef} className="p-4 max-h-64 overflow-y-auto bg-dark-bg rounded-b-xl">
             {parseLogs.map((log, i) => (
               <div key={i} className={`text-xs font-mono flex gap-3 py-0.5 ${
                 log.level === 'error' ? 'text-red-400' :
@@ -674,7 +674,7 @@ export function LocalTestPanel() {
             <XCircle className="w-4 h-4 text-red-400" />
             <h3 className="text-sm font-medium text-red-400">错误信息</h3>
           </div>
-          <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-[#0F172A] rounded-lg p-3">{result.error}</pre>
+          <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-dark-bg rounded-lg p-3">{result.error}</pre>
         </div>
       )}
 
@@ -692,7 +692,7 @@ export function LocalTestPanel() {
       {/* 历史 Modal */}
       {showHistory && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[900px] max-h-[700px] flex flex-col">
+          <div className="bg-dark-surface border border-gray-700 rounded-lg w-[900px] max-h-[700px] flex flex-col">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
                 <Clock className="w-5 h-5" />解析历史
@@ -750,7 +750,7 @@ export function LocalTestPanel() {
                       </span>
                     </div>
 
-                    <div className="bg-[#0F172A] rounded-lg p-3 space-y-2">
+                    <div className="bg-dark-bg rounded-lg p-3 space-y-2">
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">任务 ID</span>
                         <span className="text-gray-300">{selectedHistoryRecord.taskId}</span>
@@ -787,7 +787,7 @@ export function LocalTestPanel() {
                             <Copy className="w-3 h-3" />复制
                           </button>
                         </div>
-                        <div className="bg-[#0F172A] rounded-lg p-3 max-h-[350px] overflow-y-auto">
+                        <div className="bg-dark-bg rounded-lg p-3 max-h-[350px] overflow-y-auto">
                           {parseLogsFromResult(selectedHistoryRecord.result).map((log, i) => (
                             <div key={i} className={`text-xs font-mono flex gap-3 py-0.5 ${
                               log.level === 'error' ? 'text-red-400' :
@@ -807,7 +807,7 @@ export function LocalTestPanel() {
                     {selectedHistoryRecord.error && (
                       <div>
                         <h5 className="text-xs font-medium text-red-400 mb-2">错误信息</h5>
-                        <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-[#0F172A] rounded-lg p-3 border border-red-700/50">
+                        <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-dark-bg rounded-lg p-3 border border-red-700/50">
                           {selectedHistoryRecord.error}
                         </pre>
                       </div>
@@ -822,7 +822,7 @@ export function LocalTestPanel() {
                             <Copy className="w-3 h-3" />复制JSON
                           </button>
                         </div>
-                        <div className="bg-[#0F172A] rounded-lg p-3 max-h-[400px] overflow-y-auto">
+                        <div className="bg-dark-bg rounded-lg p-3 max-h-[400px] overflow-y-auto">
                           <pre className="text-xs text-cyan-300 whitespace-pre-wrap font-mono">
                             {(() => {
                               try {

@@ -336,12 +336,12 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-dark-bg">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-dark-bg disabled:opacity-50"
           >
             取消
           </button>

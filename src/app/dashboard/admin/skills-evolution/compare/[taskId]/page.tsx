@@ -445,7 +445,7 @@ function VersionCompareContent() {
 
       {/* Metrics Comparison Table */}
       <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center gap-2">
+        <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50 flex items-center gap-2">
           <BarChart3 size={18} className="text-gray-400" />
           <h2 className="text-lg font-semibold text-gray-100">指标对比</h2>
         </div>
@@ -453,7 +453,7 @@ function VersionCompareContent() {
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Precision */}
-            <div className="bg-[#0F172A] rounded-lg p-4">
+            <div className="bg-dark-bg rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Target size={18} className="text-blue-600" />
                 <h3 className="font-medium text-gray-100">精准率</h3>
@@ -479,7 +479,7 @@ function VersionCompareContent() {
             </div>
 
             {/* Recall */}
-            <div className="bg-[#0F172A] rounded-lg p-4">
+            <div className="bg-dark-bg rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Award size={18} className="text-green-600" />
                 <h3 className="font-medium text-gray-100">召回率（确认率）</h3>
@@ -505,7 +505,7 @@ function VersionCompareContent() {
             </div>
 
             {/* False Positive Rate */}
-            <div className="bg-[#0F172A] rounded-lg p-4">
+            <div className="bg-dark-bg rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle size={18} className="text-red-600" />
                 <h3 className="font-medium text-gray-100">误报率</h3>
@@ -565,7 +565,7 @@ function VersionCompareContent() {
 
       {/* Trend Visualization */}
       <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center gap-2">
+        <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50 flex items-center gap-2">
           <TrendingUp size={18} className="text-gray-400" />
           <h2 className="text-lg font-semibold text-gray-100">趋势可视化</h2>
         </div>
@@ -619,14 +619,14 @@ function VersionCompareContent() {
             <div className="space-y-3">
               {/* Success Reason */}
               {comparison?.successReason && (
-                <div className="bg-[#0F172A] rounded-lg p-3">
+                <div className="bg-dark-bg rounded-lg p-3">
                   <p className="text-sm text-gray-400 mb-1">原因说明</p>
                   <p className="text-sm text-gray-100">{comparison.successReason}</p>
                 </div>
               )}
               
               {/* Success Criteria */}
-              <div className="bg-[#0F172A] rounded-lg p-3">
+              <div className="bg-dark-bg rounded-lg p-3">
                 <p className="text-sm text-gray-400 mb-2">成功标准</p>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li className="flex items-center gap-2">
@@ -664,7 +664,7 @@ function VersionCompareContent() {
       {/* Content Comparison */}
       {improvement && (
         <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-          <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center gap-2">
+          <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50 flex items-center gap-2">
             <Clock size={18} className="text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">内容对比</h2>
           </div>
@@ -681,7 +681,7 @@ function VersionCompareContent() {
                   {showOldContent ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
                 {showOldContent && (
-                  <div className="mt-2 p-3 bg-[#0F172A] rounded-lg border border-gray-700/50">
+                  <div className="mt-2 p-3 bg-dark-bg rounded-lg border border-gray-700/50">
                     <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-[300px]">
                       {skill.content || '无内容'}
                     </pre>

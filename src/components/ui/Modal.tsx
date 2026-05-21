@@ -87,7 +87,7 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          'bg-[#1E293B] rounded-xl shadow-2xl w-full max-h-[90vh] flex flex-col border border-gray-700/50',
+          'bg-dark-surface rounded-xl shadow-2xl w-full max-h-[90vh] flex flex-col border border-gray-700/50',
           sizeMap[size],
           className
         )}
@@ -120,7 +120,7 @@ export function Modal({
 
         {/* Footer */}
         {showFooter && footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#162032] rounded-b-xl">
+<div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 rounded-b-xl">
             {footer}
           </div>
         )}
@@ -169,7 +169,7 @@ export function ConfirmDialog({
       <div className="px-6 py-4">
         <p className="text-gray-300">{message}</p>
       </div>
-      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#162032] rounded-b-xl">
+      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 rounded-b-xl">
         <button
           type="button"
           onClick={onClose}

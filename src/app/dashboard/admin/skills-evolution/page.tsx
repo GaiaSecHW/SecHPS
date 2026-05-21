@@ -637,7 +637,7 @@ function SkillsEvolutionContent() {
 
       {/* Evolution Config Section */}
       <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center justify-between">
+        <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">进化配置</h2>
@@ -679,7 +679,7 @@ function SkillsEvolutionContent() {
                     max="1"
                     value={configForm.precisionThreshold}
                     onChange={(e) => setConfigForm({ ...configForm, precisionThreshold: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">低于此值的 Skill 将触发进化</p>
                 </div>
@@ -692,7 +692,7 @@ function SkillsEvolutionContent() {
                     min="0"
                     value={configForm.minFalsePositives}
                     onChange={(e) => setConfigForm({ ...configForm, minFalsePositives: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">至少需要这么多误报才能触发进化</p>
                 </div>
@@ -705,7 +705,7 @@ function SkillsEvolutionContent() {
                     min="0"
                     value={configForm.minConfirmed}
                     onChange={(e) => setConfigForm({ ...configForm, minConfirmed: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">至少需要这么多确认才能触发进化</p>
                 </div>
@@ -718,7 +718,7 @@ function SkillsEvolutionContent() {
                     min="1"
                     value={configForm.maxDailyTasks}
                     onChange={(e) => setConfigForm({ ...configForm, maxDailyTasks: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">每天最多创建的进化任务数</p>
                 </div>
@@ -811,7 +811,7 @@ function SkillsEvolutionContent() {
 
       {/* Skills Needing Evolution */}
       <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center justify-between">
+        <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-400" />
             <h2 className="text-lg font-semibold text-gray-100">待进化 Skills</h2>
@@ -842,7 +842,7 @@ function SkillsEvolutionContent() {
             metrics?.skillsNeedingEvolution.map((skill) => (
               <div key={skill.skillId} className="p-4">
                 <div
-                  className="cursor-pointer hover:bg-[#0F172A] transition-colors -mx-4 -my-4 px-4 py-4"
+                  className="cursor-pointer hover:bg-dark-bg transition-colors -mx-4 -my-4 px-4 py-4"
                   onClick={() => setExpandedSkill(expandedSkill === skill.skillId ? null : skill.skillId)}
                 >
                   <div className="flex items-center justify-between">
@@ -888,7 +888,7 @@ function SkillsEvolutionContent() {
                 </div>
                 
                 {expandedSkill === skill.skillId && (
-                  <div className="mt-4 pt-4 border-t border-gray-700/50 bg-[#0F172A] -mx-4 px-4">
+                  <div className="mt-4 pt-4 border-t border-gray-700/50 bg-dark-bg -mx-4 px-4">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => navigateToSkillDetail(skill.skillId)}
@@ -928,7 +928,7 @@ function SkillsEvolutionContent() {
         
         {/* Pagination for skills needing evolution */}
         {metrics?.skillsPagination?.totalPages && metrics.skillsPagination.totalPages > 1 && (
-          <div className="px-4 py-3 bg-[#0F172A] border-t border-gray-700/50 flex items-center justify-between">
+          <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50 flex items-center justify-between">
             <span className="text-sm text-gray-500">
               第 {skillsPage} / {metrics.skillsPagination.totalPages} 页 (共 {metrics.skillsPagination.total} 个)
             </span>
@@ -954,7 +954,7 @@ function SkillsEvolutionContent() {
 
       {/* Evolution Task History */}
       <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center justify-between">
+        <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <History className="h-5 w-5 text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">进化任务历史</h2>
@@ -978,7 +978,7 @@ function SkillsEvolutionContent() {
             tasks?.tasks.map((task) => (
               <div key={task.id} className="p-4">
                 <div
-                  className="cursor-pointer hover:bg-[#0F172A] transition-colors -mx-4 -my-4 px-4 py-4"
+                  className="cursor-pointer hover:bg-dark-bg transition-colors -mx-4 -my-4 px-4 py-4"
                   onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
                 >
                   <div className="flex items-center justify-between">
@@ -1031,7 +1031,7 @@ function SkillsEvolutionContent() {
                 </div>
                 
                 {expandedTask === task.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-700/50 bg-[#0F172A] -mx-4 px-4">
+                  <div className="mt-4 pt-4 border-t border-gray-700/50 bg-dark-bg -mx-4 px-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-xs text-gray-500">触发原因</p>
@@ -1101,7 +1101,7 @@ function SkillsEvolutionContent() {
         
         {/* Pagination */}
         {tasks?.pagination?.totalPages && tasks.pagination.totalPages > 1 && (
-          <div className="px-4 py-3 bg-[#0F172A] border-t border-gray-700/50 flex items-center justify-between">
+          <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50 flex items-center justify-between">
             <span className="text-sm text-gray-500">
               第 {tasksPage} / {tasks.pagination.totalPages} 页
             </span>

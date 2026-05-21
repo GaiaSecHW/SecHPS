@@ -129,10 +129,6 @@ export function WorkerLogsPage() {
     return acc;
   }, {} as Record<string, number>);
 
-  useEffect(() => {
-    if (!selectedTaskId && tasks.length > 0) setSelectedTaskId(tasks[0].taskId);
-  }, [tasks, selectedTaskId]);
-
   const filteredTasks = tasks.filter(task =>
     (statusFilter === 'all' || task.state === statusFilter) &&
     ((task.taskId?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
@@ -246,7 +242,7 @@ export function WorkerLogsPage() {
   const timeline = buildTimeline();
 
   return (
-    <div className="flex h-[calc(100vh-180px)] bg-[#0F172A]">
+    <div className="flex h-[calc(100vh-180px)] bg-dark-bg">
       {/* Left Panel */}
       <div className="w-[280px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0">
         <div className="flex-shrink-0 p-4 border-b border-gray-700/50">

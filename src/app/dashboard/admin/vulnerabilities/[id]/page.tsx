@@ -107,7 +107,7 @@ function InfoCard({
     return (
       <a
         href={href}
-        className="group block bg-[#0F172A] rounded-lg p-3 border border-blue-500/30 bg-blue-500/5 hover:border-blue-500/60 hover:bg-blue-500/10 transition-all cursor-pointer"
+        className="group block bg-dark-bg rounded-lg p-3 border border-blue-500/30 bg-blue-500/5 hover:border-blue-500/60 hover:bg-blue-500/10 transition-all cursor-pointer"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
@@ -126,7 +126,7 @@ function InfoCard({
   }
   
   return (
-    <div className="bg-[#0F172A] rounded-lg p-3 border border-gray-700/30 flex items-center gap-3">
+    <div className="bg-dark-bg rounded-lg p-3 border border-gray-700/30 flex items-center gap-3">
       <div className="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center text-gray-400">
         {icon}
       </div>
@@ -177,7 +177,7 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
   }
 
   return (
-    <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+    <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
       <div className="flex items-center gap-2 mb-4">
         <Clock size={18} className="text-cyan-400" />
         <h2 className="text-base font-semibold text-white">处理流程</h2>
@@ -460,12 +460,12 @@ function VulnerabilityDetailContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <header className="bg-[#1E293B] border border-gray-700/50 rounded-xl px-5 py-4">
+      <header className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard/admin/vulnerabilities')}
-              className="p-2 hover:bg-[#0F172A] rounded-lg transition-colors"
+              className="p-2 hover:bg-dark-bg rounded-lg transition-colors"
             >
               <ArrowLeft size={18} className="text-gray-400" />
             </button>
@@ -594,7 +594,7 @@ function VulnerabilityDetailContent() {
         {/* Left Column - Content (2/3) */}
         <div className="lg:col-span-2 space-y-5">
           {/* Description */}
-          <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
             <div className="flex items-center gap-2 mb-4">
               <MessageSquare size={18} className="text-purple-400" />
               <h2 className="text-base font-semibold text-white">漏洞概述</h2>
@@ -606,7 +606,7 @@ function VulnerabilityDetailContent() {
 
           {/* Location */}
           {vulnerability.location && (
-            <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <MapPin size={18} className="text-rose-400" />
                 <h2 className="text-base font-semibold text-white">代码位置</h2>
@@ -617,7 +617,7 @@ function VulnerabilityDetailContent() {
 
           {/* POC */}
           {vulnerability.POC && (
-            <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Code size={18} className="text-cyan-400" />
                 <h2 className="text-base font-semibold text-white">PoC 验证</h2>
@@ -628,7 +628,7 @@ function VulnerabilityDetailContent() {
 
           {/* Fix Suggestion */}
           {vulnerability.fixSuggestion && (
-            <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Wrench size={18} className="text-emerald-400" />
                 <h2 className="text-base font-semibold text-white">修复建议</h2>
@@ -645,7 +645,7 @@ function VulnerabilityDetailContent() {
           <StatusTimeline vulnerability={vulnerability} />
 
           {vulnerability.notes && (
-            <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <MessageSquare size={18} className="text-gray-400" />
                 <h2 className="text-base font-semibold text-white">备注</h2>
@@ -661,7 +661,7 @@ function VulnerabilityDetailContent() {
       {/* False Positive Modal */}
       {showFalsePositiveModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5 max-w-md w-full mx-4">
+          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <XCircle size={18} className="text-gray-400" />
@@ -684,7 +684,7 @@ function VulnerabilityDetailContent() {
               value={falsePositiveReasonInput}
               onChange={(e) => setFalsePositiveReasonInput(e.target.value)}
               placeholder="例如：该代码已进行输入验证，不存在漏洞..."
-              className="w-full px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-white resize-none"
+              className="w-full px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-white resize-none"
               rows={4}
             />
             <div className="mt-4 flex justify-end gap-3">

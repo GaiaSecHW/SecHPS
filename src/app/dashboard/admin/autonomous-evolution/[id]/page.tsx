@@ -180,7 +180,7 @@ export default function ExperienceDetailPage() {
             onClick={handleToggleInject}
             className={`px-3 py-1.5 text-sm rounded-lg border ${
               exp.isInjected
-                ? 'bg-[#0F172A] text-gray-400 border-gray-700/50 hover:bg-dark-surface-hover'
+                ? 'bg-dark-bg text-gray-400 border-gray-700/50 hover:bg-dark-surface-hover'
                 : 'bg-green-900/20 text-green-400 border-green-500/20 hover:bg-green-900/30'
             }`}
           >
@@ -204,7 +204,7 @@ export default function ExperienceDetailPage() {
       </div>
 
       {/* Basic info */}
-      <div className="bg-[#0F172A] rounded-lg p-4">
+      <div className="bg-dark-bg rounded-lg p-4">
         <h3 className="text-sm font-medium text-gray-300 mb-3">基本信息</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
           <div>
@@ -318,7 +318,7 @@ export default function ExperienceDetailPage() {
             className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none"
           />
         ) : (
-          <div className="bg-[#0F172A] border border-gray-700/50 rounded-lg p-3 text-sm text-gray-300 whitespace-pre-wrap">
+          <div className="bg-dark-bg border border-gray-700/50 rounded-lg p-3 text-sm text-gray-300 whitespace-pre-wrap">
             {exp.lesson}
           </div>
         )}
@@ -359,7 +359,7 @@ export default function ExperienceDetailPage() {
             ) : (
               <div className="space-y-1">
                 {usageLogs.map(log => (
-                  <div key={log.id} className="flex items-center justify-between px-3 py-2 bg-[#0F172A] rounded text-xs text-gray-400">
+                  <div key={log.id} className="flex items-center justify-between px-3 py-2 bg-dark-bg rounded text-xs text-gray-400">
                     <div className="flex items-center gap-3">
                       <span className="text-gray-400">{new Date(log.usedAt).toLocaleString('zh-CN')}</span>
                       {log.projectName && <span className="font-medium text-gray-300">{log.projectName}</span>}

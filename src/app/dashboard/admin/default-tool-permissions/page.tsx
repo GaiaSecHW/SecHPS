@@ -385,7 +385,7 @@ function DefaultToolPermissionsContent() {
                   value={formData.toolPattern}
                   onChange={(e) => setFormData({ ...formData, toolPattern: e.target.value })}
                   disabled={editingIndex !== null}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:ring-2 focus:ring-primary-500 disabled:bg-dark-surface-hover disabled:text-gray-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:ring-2 focus:ring-primary-500 disabled:bg-dark-surface-hover disabled:text-gray-500"
                   placeholder="例如：Bash 或 Bash(npm:*)"
                 />
               </div>
@@ -397,7 +397,7 @@ function DefaultToolPermissionsContent() {
                 <select
                   value={formData.permission}
                   onChange={(e) => setFormData({ ...formData, permission: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 rounded-md focus:ring-2 focus:ring-primary-500"
                 >
                   {PERMISSION_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -413,7 +413,7 @@ function DefaultToolPermissionsContent() {
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:ring-2 focus:ring-primary-500"
                   placeholder="描述这条权限规则的用途"
                 />
               </div>

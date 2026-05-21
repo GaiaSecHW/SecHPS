@@ -231,7 +231,7 @@ function TrendsPageContent() {
           {trendMetrics.map((metric) => (
             <div
               key={metric.label}
-              className="p-4 bg-[#0F172A] rounded-lg border border-gray-700/50"
+              className="p-4 bg-dark-bg rounded-lg border border-gray-700/50"
             >
               <div className="flex items-center justify-between mb-2">
                 {metric.icon}
@@ -386,19 +386,19 @@ function TrendsPageContent() {
         </h2>
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-dark-bg rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总观测</p>
             <p className="text-xl font-bold text-gray-100">{stats?.totalObservations || 0}</p>
           </div>
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-dark-bg rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总匹配</p>
             <p className="text-xl font-bold text-gray-100">{stats?.totalMatches || 0}</p>
           </div>
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-dark-bg rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总预警</p>
             <p className="text-xl font-bold text-gray-100">{stats?.totalWarnings || 0}</p>
           </div>
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-dark-bg rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总重叠</p>
             <p className="text-xl font-bold text-gray-100">{stats?.totalOverlaps || 0}</p>
           </div>
@@ -413,7 +413,7 @@ function TrendsPageContent() {
       </div>
 
       {/* Quick Links */}
-      <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
+      <div className="bg-dark-bg rounded-lg border border-gray-700/50 p-4">
         <h3 className="text-sm font-medium text-gray-300 mb-3">快速导航</h3>
         <div className="flex flex-wrap gap-2">
           <Link

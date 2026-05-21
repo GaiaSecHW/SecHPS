@@ -146,7 +146,7 @@ export default function ApiKeysPage() {
                 <h3 className="text-lg font-semibold text-green-300">API Key 创建成功</h3>
               </div>
               <p className="text-sm text-green-400 mb-4">此 Key 仅显示一次，请立即保存</p>
-              <div className="bg-[#0F172A] rounded-lg p-4 font-mono text-sm text-gray-100 break-all border border-green-700/30">
+              <div className="bg-dark-bg rounded-lg p-4 font-mono text-sm text-gray-100 break-all border border-green-700/30">
                 {newlyCreatedKey.key}
               </div>
               <div className="mt-3 flex items-center gap-4 text-sm text-gray-400">
@@ -196,7 +196,7 @@ export default function ApiKeysPage() {
           </div>
         ) : (
           <table className="min-w-full divide-y divide-gray-700/50">
-            <thead className="bg-[#0F172A]">
+            <thead className="bg-dark-bg">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key 前缀</th>

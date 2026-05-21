@@ -335,7 +335,7 @@ function FSMTemplateDetailPageContent() {
                       value={role.name}
                       onChange={(e) => handleRoleChange(index, 'name', e.target.value)}
                       disabled={!isAdmin}
-                      className="w-32 px-3 py-1 bg-[#0F172A] border border-gray-600 text-gray-100 rounded text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                      className="w-32 px-3 py-1 bg-dark-bg border border-gray-600 text-gray-100 rounded text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
                       placeholder="角色名称"
                     />
                     <input
@@ -343,7 +343,7 @@ function FSMTemplateDetailPageContent() {
                       value={role.description || ''}
                       onChange={(e) => handleRoleChange(index, 'description', e.target.value)}
                       disabled={!isAdmin}
-                      className="flex-1 px-3 py-1 bg-[#0F172A] border border-gray-600 text-gray-100 rounded text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                      className="flex-1 px-3 py-1 bg-dark-bg border border-gray-600 text-gray-100 rounded text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
                       placeholder="角色描述"
                     />
                     <input
@@ -392,7 +392,7 @@ function FSMTemplateDetailPageContent() {
                         value={node.roleId || ''}
                         onChange={(e) => handleNodeRoleChange(node.id, e.target.value)}
                         disabled={!isAdmin}
-                        className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                        className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 rounded-md text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
                       >
                         <option value="">选择角色...</option>
                         {roles.map((role) => (
@@ -438,7 +438,7 @@ function FSMTemplateDetailPageContent() {
                     value={penetrationNode.roleId || ''}
                     onChange={(e) => handleNodeRoleChange(penetrationNode.id, e.target.value)}
                     disabled={!isAdmin}
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-purple-500/30 text-gray-100 rounded-md text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                    className="w-full px-3 py-2 bg-dark-bg border border-purple-500/30 text-gray-100 rounded-md text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
                   >
                     <option value="">选择角色...</option>
                     {roles.map((role) => (
@@ -503,7 +503,7 @@ function FSMTemplateDetailPageContent() {
                   onChange={(e) => setPhaseContent(e.target.value)}
                   disabled={!isAdmin}
                   rows={25}
-                  className="w-full px-4 py-3 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                  className="w-full px-4 py-3 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
                   placeholder="阶段定义内容..."
                 />
               )}

@@ -364,7 +364,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
                 {/* Task Details */}
                 {isExpanded && (
-                  <div className="px-4 py-4 border-t border-gray-700/50 bg-[#0F172A] space-y-4">
+                  <div className="px-4 py-4 border-t border-gray-700/50 bg-dark-bg space-y-4">
                     {/* Meta Info */}
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>

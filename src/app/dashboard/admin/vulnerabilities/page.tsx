@@ -78,7 +78,7 @@ function SeverityProgressBar({ stats }: { stats: VulnStats }) {
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
               <span className="text-sm text-gray-400">{label}</span>
             </div>
-            <div className="flex-1 h-8 bg-[#0F172A] rounded-lg overflow-hidden">
+            <div className="flex-1 h-8 bg-dark-bg rounded-lg overflow-hidden">
               <div
                 className="h-full rounded-lg flex items-center px-3 transition-all duration-500"
                 style={{
@@ -123,7 +123,7 @@ function StatusProgressBar({ stats }: { stats: VulnStats }) {
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
               <span className="text-sm text-gray-400">{label}</span>
             </div>
-            <div className="flex-1 h-8 bg-[#0F172A] rounded-lg overflow-hidden">
+            <div className="flex-1 h-8 bg-dark-bg rounded-lg overflow-hidden">
               <div
                 className="h-full rounded-lg flex items-center px-3 transition-all duration-500"
                 style={{
@@ -242,7 +242,7 @@ function VulnerabilitiesContent() {
       {/* ========== 第一行：4个指标卡片 ========== */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5 hover:border-blue-500/50 transition-colors">
+          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-blue-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">漏洞总数</p>
@@ -254,7 +254,7 @@ function VulnerabilitiesContent() {
             </div>
           </div>
 
-          <div className="bg-[#1E293B] rounded-xl border border-red-500/30 p-5 hover:border-red-500/50 transition-colors">
+          <div className="bg-dark-surface rounded-xl border border-red-500/30 p-5 hover:border-red-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">高危威胁</p>
@@ -271,7 +271,7 @@ function VulnerabilitiesContent() {
             )}
           </div>
 
-          <div className="bg-[#1E293B] rounded-xl border border-yellow-500/30 p-5 hover:border-yellow-500/50 transition-colors">
+          <div className="bg-dark-surface rounded-xl border border-yellow-500/30 p-5 hover:border-yellow-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">待处理</p>
@@ -288,7 +288,7 @@ function VulnerabilitiesContent() {
             )}
           </div>
 
-          <div className="bg-[#1E293B] rounded-xl border border-green-500/30 p-5 hover:border-green-500/50 transition-colors">
+          <div className="bg-dark-surface rounded-xl border border-green-500/30 p-5 hover:border-green-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">已解决</p>
@@ -310,7 +310,7 @@ function VulnerabilitiesContent() {
       {/* ========== 第二行：两个进度条图表 ========== */}
       {stats && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <AlertTriangle size={18} className="text-red-400" />
               严重程度分布
@@ -318,7 +318,7 @@ function VulnerabilitiesContent() {
             <SeverityProgressBar stats={stats} />
           </div>
 
-          <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <CheckCircle size={18} className="text-purple-400" />
               状态分布
@@ -329,7 +329,7 @@ function VulnerabilitiesContent() {
       )}
 
       {/* ========== 漏洞列表卡片（含搜索筛选） ========== */}
-      <div className="bg-[#1E293B] rounded-xl border border-gray-700/50">
+      <div className="bg-dark-surface rounded-xl border border-gray-700/50">
         {/* 搜索筛选栏 */}
         <div className="px-5 py-4 border-b border-gray-700/50">
           <div className="flex flex-wrap items-center gap-3">
@@ -340,14 +340,14 @@ function VulnerabilitiesContent() {
                 placeholder="搜索漏洞..."
                 value={search}
                 onChange={(e) => updateUrl({ search: e.target.value, page: 1 })}
-                className="w-full pl-10 pr-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500 text-sm"
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500 text-sm"
               />
             </div>
 
             <select
               value={severity}
               onChange={(e) => updateUrl({ severity: e.target.value, page: 1 })}
-              className="w-[140px] px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
             >
               <option value="">所有级别</option>
               <option value="critical">严重</option>
@@ -360,7 +360,7 @@ function VulnerabilitiesContent() {
             <select
               value={status}
               onChange={(e) => updateUrl({ status: e.target.value, page: 1 })}
-              className="w-[130px] px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+              className="w-[130px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
             >
               <option value="">所有状态</option>
               <option value="new">新建</option>
@@ -374,7 +374,7 @@ function VulnerabilitiesContent() {
               <select
                 value={taskFilter}
                 onChange={(e) => updateUrl({ task: e.target.value, page: 1 })}
-                className="w-[180px] px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+                className="w-[180px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
               >
                 <option value="">所有任务</option>
                 {tasks.map(t => (
@@ -408,7 +408,7 @@ function VulnerabilitiesContent() {
           <div className="overflow-x-auto">
             <table className="w-full table-fixed">
               <thead>
-                <tr className="border-b border-gray-700/50 bg-[#0F172A]/50">
+                <tr className="border-b border-gray-700/50 bg-dark-bg/50">
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px] whitespace-nowrap">严重程度</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider overflow-hidden">标题</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider overflow-hidden min-w-[200px] w-[200px]">类型</th>
@@ -421,7 +421,7 @@ function VulnerabilitiesContent() {
                 {vulnerabilities.map((vuln) => (
                   <tr
                     key={vuln.id}
-                    className="hover:bg-[#0F172A]/50 cursor-pointer transition-colors"
+                    className="hover:bg-dark-bg/50 cursor-pointer transition-colors"
                     onClick={() => handleRowClick(vuln.id)}
                   >
                     <td className="px-4 py-3">
@@ -495,14 +495,14 @@ function VulnerabilitiesContent() {
               <button
                 onClick={() => updateUrl({ page: page - 1 })}
                 disabled={page === 1}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors"
+                className="p-2 border border-gray-600 rounded-lg hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors"
               >
                 <ChevronLeft size={16} />
               </button>
               <button
                 onClick={() => updateUrl({ page: page + 1 })}
                 disabled={page >= Math.ceil(totalCount / pageSize)}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors"
+                className="p-2 border border-gray-600 rounded-lg hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors"
               >
                 <ChevronRight size={16} />
               </button>

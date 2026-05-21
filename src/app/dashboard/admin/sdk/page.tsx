@@ -28,7 +28,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
     <div className="border rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center space-x-3 p-4 bg-[#0F172A] hover:bg-dark-surface-hover transition-colors"
+        className="w-full flex items-center space-x-3 p-4 bg-dark-bg hover:bg-dark-surface-hover transition-colors"
       >
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${
           endpoint.method === 'GET' ? 'bg-green-500/15 text-green-400' :

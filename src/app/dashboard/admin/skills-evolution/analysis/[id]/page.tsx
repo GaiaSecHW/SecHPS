@@ -295,7 +295,7 @@ function DiffModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-[#0F172A]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-dark-bg">
           <div className="flex items-center gap-4">
             <GitCompare size={20} className="text-indigo-600" />
             <h2 className="text-lg font-semibold text-gray-100">Skill 内容对比</h2>
@@ -392,7 +392,7 @@ function DiffModal({
                     <div className={`flex ${
                       line.type === 'removed' ? 'bg-red-100' :
                       line.type === 'same' ? 'bg-dark-surface' :
-                      'bg-[#0F172A]'
+                      'bg-dark-bg'
                     }`}>
                       <span className={`px-2 py-1 text-xs select-none min-w-[50px] text-right ${
                         line.oldLineNum ? 'text-gray-400 bg-dark-surface-hover border-r border-gray-700/50' : 'text-transparent'
@@ -411,7 +411,7 @@ function DiffModal({
                     <div className={`flex ${
                       line.type === 'added' ? 'bg-green-100' :
                       line.type === 'same' ? 'bg-dark-surface' :
-                      'bg-[#0F172A]'
+                      'bg-dark-bg'
                     }`}>
                       <span className={`px-2 py-1 text-xs select-none min-w-[50px] text-right ${
                         line.newLineNum ? 'text-gray-400 bg-dark-surface-hover border-r border-gray-700/50' : 'text-transparent'
@@ -457,10 +457,10 @@ function DiffModal({
                       line.type === 'added' ? 'bg-green-100 border-l-4 border-green-500' :
                       'bg-dark-surface'
                     }`}>
-                      <span className="px-2 py-1 text-xs text-gray-400 bg-[#0F172A] min-w-[50px] text-right select-none border-r border-gray-700/50">
+                      <span className="px-2 py-1 text-xs text-gray-400 bg-dark-bg min-w-[50px] text-right select-none border-r border-gray-700/50">
                         {line.oldLineNum || ''}
                       </span>
-                      <span className="px-2 py-1 text-xs text-gray-400 bg-[#0F172A] min-w-[50px] text-right select-none border-r border-gray-700/50">
+                      <span className="px-2 py-1 text-xs text-gray-400 bg-dark-bg min-w-[50px] text-right select-none border-r border-gray-700/50">
                         {line.newLineNum || ''}
                       </span>
                       <span className={`px-4 py-1 flex-1 whitespace-pre ${
@@ -527,7 +527,7 @@ function DiffModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-700/50 bg-[#0F172A] flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-gray-700/50 bg-dark-bg flex items-center justify-between">
           <div className="text-xs text-gray-500">
             使用 LCS（最长公共子序列）算法计算差异
           </div>
@@ -951,23 +951,23 @@ function EvolutionAnalysisContent() {
           </h2>
           
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <div className="p-3 bg-[#0F172A] rounded-lg">
+            <div className="p-3 bg-dark-bg rounded-lg">
               <p className="text-xs text-gray-500">版本</p>
               <p className="text-lg font-semibold text-gray-100">v{skill.version}</p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
+            <div className="p-3 bg-dark-bg rounded-lg">
               <p className="text-xs text-gray-500">执行次数</p>
               <p className="text-lg font-semibold text-gray-100">{skill.execCount}</p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
+            <div className="p-3 bg-dark-bg rounded-lg">
               <p className="text-xs text-gray-500">发现问题</p>
               <p className="text-lg font-semibold text-blue-600">{skill.vulnerabilityCount}</p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
+            <div className="p-3 bg-dark-bg rounded-lg">
               <p className="text-xs text-gray-500">成功执行</p>
               <p className="text-lg font-semibold text-green-600">{skill.successExecCount}</p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
+            <div className="p-3 bg-dark-bg rounded-lg">
               <p className="text-xs text-gray-500">进化前精准率</p>
               <p className={`text-lg font-semibold ${
                 (task.precisionBefore ?? 0) >= 0.7 ? 'text-green-600' : 'text-red-600'
@@ -975,7 +975,7 @@ function EvolutionAnalysisContent() {
                 {formatPrecision(task.precisionBefore)}
               </p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
+            <div className="p-3 bg-dark-bg rounded-lg">
               <p className="text-xs text-gray-500">成功率</p>
               <p className="text-lg font-semibold text-gray-100">
                 {skill.successRate ? `${(skill.successRate * 100).toFixed(1)}%` : 'N/A'}
@@ -1084,7 +1084,7 @@ function EvolutionAnalysisContent() {
                           <CheckCircle size={16} className="text-green-600" />
                         )}
                       </div>
-                      <div className="bg-[#0F172A] p-3 rounded-lg text-xs">
+                      <div className="bg-dark-bg p-3 rounded-lg text-xs">
                         <div className="flex items-center gap-4">
                           <div>
                             <p className="text-gray-500 mb-1">数据来源</p>
@@ -1125,7 +1125,7 @@ function EvolutionAnalysisContent() {
                           <Loader2 size={16} className="text-yellow-600 animate-spin" />
                         )}
                       </div>
-                      <div className="bg-[#0F172A] p-3 rounded-lg text-xs">
+                      <div className="bg-dark-bg p-3 rounded-lg text-xs">
                         <div className="flex items-center gap-4">
                           <div>
                             <p className="text-gray-500 mb-1">输入数据</p>
@@ -1172,7 +1172,7 @@ function EvolutionAnalysisContent() {
                           <Loader2 size={16} className="text-yellow-600 animate-spin" />
                         )}
                       </div>
-                      <div className="bg-[#0F172A] p-3 rounded-lg text-xs">
+                      <div className="bg-dark-bg p-3 rounded-lg text-xs">
                         <div className="flex items-center gap-4">
                           <div>
                             <p className="text-gray-500 mb-1">输入数据</p>
@@ -1250,7 +1250,7 @@ function EvolutionAnalysisContent() {
                     );
                   }
                   return fpCases.map((caseItem, index) => (
-                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-[#0F172A] transition-colors">
+                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-dark-bg transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
@@ -1327,7 +1327,7 @@ function EvolutionAnalysisContent() {
                     );
                   }
                   return ccCases.map((caseItem, index) => (
-                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-[#0F172A] transition-colors">
+                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-dark-bg transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
@@ -1393,7 +1393,7 @@ function EvolutionAnalysisContent() {
             {analysis.falsePositiveCauses.length > 0 && (
               <div className="mb-6">
                 <h3 className="text-sm font-medium text-gray-300 mb-2">误报原因</h3>
-                <ul className="list-disc list-inside text-sm text-gray-400 space-y-1 bg-[#0F172A] p-3 rounded-lg">
+                <ul className="list-disc list-inside text-sm text-gray-400 space-y-1 bg-dark-bg p-3 rounded-lg">
                   {analysis.falsePositiveCauses.map((cause, i) => (
                     <li key={i}>{cause}</li>
                   ))}
@@ -1570,7 +1570,7 @@ function EvolutionAnalysisContent() {
                 <div className="p-4">
                   {/* Summary */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="p-3 bg-[#0F172A] rounded-lg">
+                    <div className="p-3 bg-dark-bg rounded-lg">
                       <p className="text-xs text-gray-500">总案例数</p>
                       <p className="text-lg font-semibold text-gray-100">{backtestResult.summary.totalCases}</p>
                     </div>
@@ -1646,14 +1646,14 @@ function EvolutionAnalysisContent() {
                         <Target size={16} className="text-purple-500" />
                         详细案例验证结果
                       </h3>
-                      <div className="mb-2 text-xs text-gray-500 bg-[#0F172A] p-2 rounded">
+                      <div className="mb-2 text-xs text-gray-500 bg-dark-bg p-2 rounded">
                         <span className="font-medium">验证目标：</span>
                         <span className="text-green-600 mx-1">确认是漏洞→仍能扫描出来 ✓</span>
                         <span className="text-red-600 mx-1">误报（非漏洞）→不再报告 ✓</span>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-700/50">
-                          <thead className="bg-[#0F172A]">
+                          <thead className="bg-dark-bg">
                             <tr>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">案例标题</th>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人工判定</th>
@@ -1744,7 +1744,7 @@ function EvolutionAnalysisContent() {
             </div>
           ) : (
             <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
-              <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50">
+              <div className="px-4 py-3 bg-dark-surface-alt border-b border-gray-700/50">
                 <h2 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
                   <History size={20} className="text-gray-400" />
                   进化尝试历史
@@ -1758,7 +1758,7 @@ function EvolutionAnalysisContent() {
                 {attempts.map((attempt) => (
                   <div 
                     key={attempt.id} 
-                    className="p-4 hover:bg-[#0F172A] transition-colors cursor-pointer"
+                    className="p-4 hover:bg-dark-bg transition-colors cursor-pointer"
                     onClick={() => fetchAttemptDetail(attempt.id)}
                   >
                     <div className="flex items-start justify-between">
@@ -1829,7 +1829,7 @@ function EvolutionAnalysisContent() {
               <div className="p-6 space-y-6">
                 {/* Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-3 bg-[#0F172A] rounded-lg">
+                  <div className="p-3 bg-dark-bg rounded-lg">
                     <p className="text-xs text-gray-500">状态</p>
                     <p className={`text-lg font-semibold ${selectedAttempt.isPassed ? 'text-green-600' : 'text-red-600'}`}>
                       {selectedAttempt.isPassed ? '达标' : '未达标'}

@@ -475,7 +475,7 @@ function DuplicateGroupDetailPageContent() {
                           ? 'bg-blue-900/20 border-blue-500/20'
                           : selectedToDelete.includes(member.skillId)
                             ? 'bg-red-900/20 border-red-500/20'
-                            : 'bg-[#0F172A] border-gray-700/50 hover:bg-dark-surface-hover'
+                            : 'bg-dark-bg border-gray-700/50 hover:bg-dark-surface-hover'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -574,7 +574,7 @@ function DuplicateGroupDetailPageContent() {
                   {group.analyses.map((analysis) => (
                     <div
                       key={analysis.id}
-                      className="p-4 bg-[#0F172A] rounded-lg border border-gray-700/50"
+                      className="p-4 bg-dark-bg rounded-lg border border-gray-700/50"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-2">
@@ -663,7 +663,7 @@ function DuplicateGroupDetailPageContent() {
               value={actionNotes}
               onChange={(e) => setActionNotes(e.target.value)}
               placeholder="输入审核备注（可选）..."
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               rows={3}
             />
           </div>

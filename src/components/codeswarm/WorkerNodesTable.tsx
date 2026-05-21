@@ -125,7 +125,7 @@ export function WorkerNodesTable() {
             <p className="mt-2 text-sm text-gray-400">
               启动 Worker 后会自动注册到此处
             </p>
-            <div className="mt-4 text-xs text-gray-500 bg-[#0F172A] p-3 rounded-lg">
+            <div className="mt-4 text-xs text-gray-500 bg-dark-bg p-3 rounded-lg">
               <code>ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs</code>
             </div>
           </div>
@@ -133,7 +133,7 @@ export function WorkerNodesTable() {
       ) : (
         <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-700/50">
-            <thead className="bg-[#162032]">
+            <thead className="bg-dark-surface-alt">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   节点

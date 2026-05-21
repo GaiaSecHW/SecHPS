@@ -476,7 +476,7 @@ export default function SkillMergePage() {
             {candidates.slice(0, 6).map((candidate) => (
               <div
                 key={candidate.skillId}
-                className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer border border-gray-700/50"
+                className="p-4 bg-dark-bg rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer border border-gray-700/50"
                 onClick={() => selectFromCandidate(candidate)}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -527,7 +527,7 @@ export default function SkillMergePage() {
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                 selectedStrategy === strategy.id
                   ? `${strategy.color} border-current`
-                  : 'bg-[#0F172A] border-gray-700/50 hover:border-gray-600'
+                  : 'bg-dark-bg border-gray-700/50 hover:border-gray-600'
               }`}
             >
               <div className="flex items-center space-x-3 mb-2">
@@ -575,7 +575,7 @@ export default function SkillMergePage() {
               {searchResults.map((skill) => (
                 <div
                   key={skill.id}
-                  className="p-3 hover:bg-[#0F172A] cursor-pointer flex items-center justify-between"
+                  className="p-3 hover:bg-dark-bg cursor-pointer flex items-center justify-between"
                   onClick={() => {
                     if (!targetSkill) {
                       selectTargetSkill(skill);
@@ -634,7 +634,7 @@ export default function SkillMergePage() {
                 </div>
               </div>
             ) : (
-              <div className="p-4 bg-[#0F172A] border border-gray-700/50 rounded-lg text-center text-gray-500">
+              <div className="p-4 bg-dark-bg border border-gray-700/50 rounded-lg text-center text-gray-500">
                 <Award className="mx-auto h-8 w-8 text-gray-400 mb-1" />
                 <p className="text-sm">请选择目标 Skill</p>
               </div>
@@ -670,7 +670,7 @@ export default function SkillMergePage() {
                 ))}
               </div>
             ) : (
-              <div className="p-4 bg-[#0F172A] border border-gray-700/50 rounded-lg text-center text-gray-500">
+              <div className="p-4 bg-dark-bg border border-gray-700/50 rounded-lg text-center text-gray-500">
                 <Layers className="mx-auto h-8 w-8 text-gray-400 mb-1" />
                 <p className="text-sm">请选择源 Skills</p>
               </div>
@@ -680,7 +680,7 @@ export default function SkillMergePage() {
 
         {/* New Skill Name (for content-merge) */}
         {selectedStrategy === 'content-merge' && targetSkill && (
-          <div className="mt-4 p-4 bg-[#0F172A] rounded-lg">
+          <div className="mt-4 p-4 bg-dark-bg rounded-lg">
             <h3 className="text-sm font-medium text-gray-300 mb-2">新 Skill 名称（可选）</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -690,7 +690,7 @@ export default function SkillMergePage() {
                   placeholder={`${targetSkill.name}-merged`}
                   value={newSkillName}
                   onChange={(e) => setNewSkillName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -700,7 +700,7 @@ export default function SkillMergePage() {
                   placeholder={`${targetSkill.displayName} (合并版)`}
                   value={newSkillDisplayName}
                   onChange={(e) => setNewSkillDisplayName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -725,7 +725,7 @@ export default function SkillMergePage() {
               className={`px-4 py-2 rounded-lg border transition-colors ${
                 mergeReason === reason.value
                   ? 'bg-blue-100 text-blue-800 border-blue-300'
-                  : 'bg-[#0F172A] text-gray-300 border-gray-700/50 hover:border-gray-600'
+                  : 'bg-dark-bg text-gray-300 border-gray-700/50 hover:border-gray-600'
               }`}
             >
               {reason.label}

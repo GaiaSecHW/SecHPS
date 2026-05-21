@@ -307,7 +307,7 @@ function DuplicateGroupsPageContent() {
               {filteredGroups.map((group) => (
                 <div
                   key={group.id}
-                  className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer"
+                  className="p-4 bg-dark-bg rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer"
                   onClick={() => router.push(`/dashboard/admin/skills-governance/duplicate-groups/${group.id}`)}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -404,7 +404,7 @@ function DuplicateGroupsPageContent() {
                 <button
                   onClick={() => setPage(page - 1)}
                   disabled={page === 1}
-                  className="px-3 py-1 text-sm border border-gray-600 rounded hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-sm border border-gray-600 rounded hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   上一页
                 </button>
@@ -414,7 +414,7 @@ function DuplicateGroupsPageContent() {
                 <button
                   onClick={() => setPage(page + 1)}
                   disabled={page === data.pagination.totalPages}
-                  className="px-3 py-1 text-sm border border-gray-600 rounded hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-sm border border-gray-600 rounded hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   下一页
                 </button>

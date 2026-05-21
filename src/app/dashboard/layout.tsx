@@ -367,7 +367,7 @@ function DashboardLayoutContent({
           </header>
 
           <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-zinc-950 custom-scrollbar content-scrollbar">
-            <div className="w-full min-h-full p-4 md:p-6 lg:p-8">
+            <div className="w-full min-h-full p-4 md:p-6 lg:p-6">
               <div className="w-full max-w-screen-2xl mx-auto">
                 <ErrorBoundary>
                   {children}

@@ -619,7 +619,7 @@ function SkillsGovernanceContent() {
                   {overview?.topOverlapSkills.map((skill, index) => (
                     <div
                       key={skill.skillId}
-                      className="flex items-center justify-between p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer"
+                      className="flex items-center justify-between p-4 bg-dark-bg rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer"
                       onClick={() => router.push(`/dashboard/skills/${skill.skillId}`)}
                     >
                       <div className="flex items-center space-x-4">
@@ -671,7 +671,7 @@ function SkillsGovernanceContent() {
                   {overview?.overlapPairs.map((pair, index) => (
                     <div
                       key={`${pair.skillId1}-${pair.skillId2}`}
-                      className="p-4 bg-[#0F172A] rounded-lg"
+                      className="p-4 bg-dark-bg rounded-lg"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-500">组 {index + 1}</span>
@@ -765,7 +765,7 @@ function SkillsGovernanceContent() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-[#0F172A] rounded-lg p-4">
+                <div className="bg-dark-bg rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-400">最近7天观测</span>
                     <TrendingUp className="text-green-500" size={18} />
@@ -773,7 +773,7 @@ function SkillsGovernanceContent() {
                   <p className="text-2xl font-bold text-gray-100">{stats?.recentObservations || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">观测活动趋势</p>
                 </div>
-                <div className="bg-[#0F172A] rounded-lg p-4">
+                <div className="bg-dark-bg rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-400">平均预警率</span>
                     <AlertTriangle className="text-orange-500" size={18} />
