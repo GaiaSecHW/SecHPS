@@ -391,7 +391,7 @@ function HighFrequencyPageContent() {
         <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700/50">
-              <thead className="bg-[#0F172A]">
+              <thead className="bg-dark-bg">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <label className="flex items-center space-x-2 cursor-pointer">
@@ -434,7 +434,7 @@ function HighFrequencyPageContent() {
                 {filteredSkills.map((skill, index) => {
                   const riskConfig = riskLevelConfig[skill.riskLevel] || riskLevelConfig.low;
                   return (
-                    <tr key={skill.id} className="hover:bg-[#0F172A] transition-colors">
+                    <tr key={skill.id} className="hover:bg-dark-bg transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -542,7 +542,7 @@ function HighFrequencyPageContent() {
           <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-700/50">
-                <thead className="bg-[#0F172A]">
+                <thead className="bg-dark-bg">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Skill 1
@@ -566,7 +566,7 @@ function HighFrequencyPageContent() {
                 </thead>
                 <tbody className="bg-dark-surface divide-y divide-gray-700/50">
                   {overlapPairs.slice(0, 10).map((pair, index) => (
-                    <tr key={`${pair.skillId1}-${pair.skillId2}-${index}`} className="hover:bg-[#0F172A] transition-colors">
+                    <tr key={`${pair.skillId1}-${pair.skillId2}-${index}`} className="hover:bg-dark-bg transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-100">
                         {pair.skillName1}
                       </td>

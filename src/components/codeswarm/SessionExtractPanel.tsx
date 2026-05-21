@@ -254,7 +254,7 @@ export function SessionExtractPanel() {
 
   const renderDirBrowser = () => showDirBrowser && (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
+      <div className="bg-dark-surface border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
             <FolderSearch className="w-5 h-5" />
@@ -268,7 +268,7 @@ export function SessionExtractPanel() {
               <select
                 value={isRootList ? 'root://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
                 onChange={(e) => { if (e.target.value === 'root://') browseDirectory('root://'); else if (e.target.value) browseDirectory(e.target.value); }}
-                className="px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+                className="px-3 py-2 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100"
               >
                 <option value="root://">我的电脑</option>
                 {rootEntries.map(e => <option key={e.path} value={e.path}>{e.name}</option>)}
@@ -278,7 +278,7 @@ export function SessionExtractPanel() {
               value={isRootList ? (platform === 'windows' ? '我的电脑' : '根目录') : currentBrowsePath}
               onChange={(e) => setCurrentBrowsePath(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') browseDirectory(currentBrowsePath); }}
-              className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+              className="flex-1 px-3 py-2 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100"
               disabled={isRootList}
             />
             <button
@@ -335,7 +335,7 @@ export function SessionExtractPanel() {
   );
 
   const renderHistoryPanel = () => (
-    <div className="w-64 bg-[#1E293B] rounded-lg border border-gray-700/50 flex flex-col shrink-0">
+    <div className="w-64 bg-dark-surface rounded-lg border border-gray-700/50 flex flex-col shrink-0">
       <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
         <h4 className="text-sm font-medium text-gray-200 flex items-center gap-2">
           <History className="w-4 h-4" />
@@ -403,7 +403,7 @@ export function SessionExtractPanel() {
   const renderResultPanel = () => (
     <div className="flex-1 min-w-0 space-y-4">
       {!extractResult ? (
-        <div className="bg-[#1E293B] rounded-lg p-8 border border-gray-700/50 text-center">
+        <div className="bg-dark-surface rounded-lg p-8 border border-gray-700/50 text-center">
           <p className="text-gray-500">选择历史记录或执行新解析查看结果</p>
         </div>
       ) : (
@@ -427,13 +427,13 @@ export function SessionExtractPanel() {
             </div>
           </div>
 
-          <div className="bg-[#1E293B] rounded-lg p-3 border border-gray-700/50">
+          <div className="bg-dark-surface rounded-lg p-3 border border-gray-700/50">
             <p className="text-xs text-gray-400">Summary</p>
             <p className="text-sm text-gray-200">{extractResult.summary || '无'}</p>
           </div>
 
           {extractResult.skills?.length > 0 && (
-            <div className="bg-[#1E293B] rounded-lg border border-cyan-700/30">
+            <div className="bg-dark-surface rounded-lg border border-cyan-700/30">
               <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
                 <h4 className="text-sm font-medium text-cyan-400">Skills 调用 ({extractResult.skills.length})</h4>
                 <p className="text-xs text-gray-500">连续加载的 skills 共享 reasoning/output</p>
@@ -478,13 +478,13 @@ export function SessionExtractPanel() {
                         <div className="mt-3 space-y-3 min-w-0">
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Input (skill 名称)</p>
-                            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-w-full">
+                            <pre className="text-xs text-gray-300 bg-dark-bg p-2 rounded overflow-x-auto max-w-full">
                               {truncateJson(skill.input, 300)}
                             </pre>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Skill 定义内容</p>
-                            <pre className="text-xs text-cyan-300 bg-[#0B1120] p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '150px' }}>
+                            <pre className="text-xs text-cyan-300 bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '150px' }}>
                               {skill.result ? truncateJson(skill.result, 500) : '无'}
                             </pre>
                           </div>
@@ -500,7 +500,7 @@ export function SessionExtractPanel() {
                                 Reasoning ({skill.reasoning.length})
                                 {sameOutputSkills.length > 1 && <span className="text-blue-400 ml-2">共享</span>}
                               </p>
-                              <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
+                              <div className="bg-dark-bg p-2 rounded max-h-[200px] overflow-y-auto">
                                 {skill.reasoning.map((r, ri) => (
                                   <p key={ri} className="text-xs text-yellow-200 mb-1 last:mb-0 whitespace-pre-wrap">
                                     {r.length > 200 ? r.slice(0, 200) + '...' : r}
@@ -516,7 +516,7 @@ export function SessionExtractPanel() {
                                 Output ({skill.textOutputs.length})
                                 {sameOutputSkills.length > 1 && <span className="text-blue-400 ml-2">共享</span>}
                               </p>
-                              <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
+                              <div className="bg-dark-bg p-2 rounded max-h-[200px] overflow-y-auto">
                                 {skill.textOutputs.map((t, ti) => (
                                   <p key={ti} className="text-xs text-green-200 mb-2 last:mb-0 whitespace-pre-wrap">
                                     {t.length > 300 ? t.slice(0, 300) + '...' : t}
@@ -538,7 +538,7 @@ export function SessionExtractPanel() {
           )}
 
           {extractResult.tools?.length > 0 && (
-            <div className="bg-[#1E293B] rounded-lg border border-purple-700/30">
+            <div className="bg-dark-surface rounded-lg border border-purple-700/30">
               <div className="p-3 border-b border-gray-700/50">
                 <h4 className="text-sm font-medium text-purple-400">Tools 调用 ({extractResult.tools.length})</h4>
               </div>
@@ -571,13 +571,13 @@ export function SessionExtractPanel() {
                       <div className="mt-3 space-y-2 min-w-0">
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Input</p>
-                          <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-w-full">
+                          <pre className="text-xs text-gray-300 bg-dark-bg p-2 rounded overflow-x-auto max-w-full">
                             {truncateJson(tool.input, 500)}
                           </pre>
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Result</p>
-                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
+                          <pre className="text-xs text-green-300 bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
                             {tool.result ? truncateJson(tool.result, 1000) : '无结果'}
                           </pre>
                         </div>
@@ -593,7 +593,7 @@ export function SessionExtractPanel() {
           )}
 
           {extractResult.reasoning?.length > 0 && (
-            <div className="bg-[#1E293B] rounded-lg border border-yellow-700/30">
+            <div className="bg-dark-surface rounded-lg border border-yellow-700/30">
               <div className="p-3 border-b border-gray-700/50">
                 <h4 className="text-sm font-medium text-yellow-400 flex items-center gap-2">
                   <Brain className="w-4 h-4" />
@@ -606,7 +606,7 @@ export function SessionExtractPanel() {
                     <p className="text-xs text-gray-500 mb-1">
                       {new Date(r.startTime).toLocaleTimeString()}
                     </p>
-                    <p className="text-xs text-yellow-200 whitespace-pre-wrap bg-[#0B1120] p-2 rounded">
+                    <p className="text-xs text-yellow-200 whitespace-pre-wrap bg-dark-bg p-2 rounded">
                       {r.content.length > 300 ? r.content.slice(0, 300) + '...' : r.content}
                     </p>
                   </div>
@@ -616,7 +616,7 @@ export function SessionExtractPanel() {
           )}
 
           {extractResult.textOutputs?.length > 0 && (
-            <div className="bg-[#1E293B] rounded-lg border border-green-700/30">
+            <div className="bg-dark-surface rounded-lg border border-green-700/30">
               <div className="p-3 border-b border-gray-700/50">
                 <h4 className="text-sm font-medium text-green-400 flex items-center gap-2">
                   <MessageSquare className="w-4 h-4" />
@@ -629,7 +629,7 @@ export function SessionExtractPanel() {
                     <p className="text-xs text-gray-500 mb-1">
                       {new Date(t.startTime).toLocaleTimeString()}
                     </p>
-                    <p className="text-xs text-green-200 whitespace-pre-wrap bg-[#0B1120] p-2 rounded">
+                    <p className="text-xs text-green-200 whitespace-pre-wrap bg-dark-bg p-2 rounded">
                       {t.content.length > 400 ? t.content.slice(0, 400) + '...' : t.content}
                     </p>
                   </div>
@@ -649,7 +649,7 @@ export function SessionExtractPanel() {
                 复制
               </button>
             </div>
-            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
+            <pre className="text-xs text-gray-300 bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
               {truncateJson(extractResult, 5000)}
             </pre>
           </div>
@@ -682,7 +682,7 @@ export function SessionExtractPanel() {
           </div>
 
           {activeTab === 'new' && (
-            <div className="bg-[#1E293B] rounded-lg p-4 border border-gray-700/50">
+            <div className="bg-dark-surface rounded-lg p-4 border border-gray-700/50">
               <h3 className="text-sm font-semibold text-gray-100 mb-3">执行新解析</h3>
               <div className="flex gap-2">
                 <input
@@ -690,7 +690,7 @@ export function SessionExtractPanel() {
                   value={workspacePath}
                   onChange={(e) => setWorkspacePath(e.target.value)}
                   placeholder={platform === 'windows' ? 'E:/work/202605/project' : '/home/user/project'}
-                  className="flex-1 px-3 py-2 bg-[#0B1120] border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm text-gray-100"
+                  className="flex-1 px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm text-gray-100"
                 />
                 <button
                   onClick={() => {

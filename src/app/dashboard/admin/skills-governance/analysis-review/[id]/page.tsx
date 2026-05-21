@@ -179,7 +179,7 @@ function AnalysisReviewDetailContent() {
               {showSkillAContent ? '收起内容' : '展开内容'}
             </button>
             {showSkillAContent && analysis.skillA.content && (
-              <pre className="mt-2 p-3 bg-[#0F172A] rounded text-xs overflow-auto max-h-64">
+              <pre className="mt-2 p-3 bg-dark-bg rounded text-xs overflow-auto max-h-64">
                 {analysis.skillA.content.substring(0, 3000)}
               </pre>
             )}
@@ -213,7 +213,7 @@ function AnalysisReviewDetailContent() {
                   {showSkillBContent ? '收起内容' : '展开内容'}
                 </button>
                 {showSkillBContent && analysis.skillB.content && (
-                  <pre className="mt-2 p-3 bg-[#0F172A] rounded text-xs overflow-auto max-h-64">
+                  <pre className="mt-2 p-3 bg-dark-bg rounded text-xs overflow-auto max-h-64">
                     {analysis.skillB.content.substring(0, 3000)}
                   </pre>
                 )}
@@ -230,19 +230,19 @@ function AnalysisReviewDetailContent() {
         <h3 className="font-semibold text-gray-100 mb-4">LLM 分析结果</h3>
         
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="p-3 bg-[#0F172A] rounded">
+          <div className="p-3 bg-dark-bg rounded">
             <div className="text-sm text-gray-500">判断结果</div>
             <div className={`text-lg font-semibold ${analysis.isDuplicate ? 'text-red-600' : 'text-green-600'}`}>
               {analysis.isDuplicate ? '重复' : '不重复'}
             </div>
           </div>
-          <div className="p-3 bg-[#0F172A] rounded">
+          <div className="p-3 bg-dark-bg rounded">
             <div className="text-sm text-gray-500">置信度</div>
             <div className="text-lg font-semibold text-gray-100">
               {(analysis.confidence * 100).toFixed(0)}%
             </div>
           </div>
-          <div className="p-3 bg-[#0F172A] rounded">
+          <div className="p-3 bg-dark-bg rounded">
             <div className="text-sm text-gray-500">建议操作</div>
             <div className="text-lg font-semibold text-blue-600">
               {analysis.recommendation === 'merge' ? '合并' : 
@@ -285,7 +285,7 @@ function AnalysisReviewDetailContent() {
         {analysis.llmReason && (
           <div className="mb-4">
             <h4 className="font-medium text-gray-300 mb-2">判断理由</h4>
-            <p className="text-gray-400 bg-[#0F172A] p-3 rounded">{analysis.llmReason}</p>
+            <p className="text-gray-400 bg-dark-bg p-3 rounded">{analysis.llmReason}</p>
           </div>
         )}
 
@@ -348,7 +348,7 @@ function AnalysisReviewDetailContent() {
 
         {/* 已审核信息 */}
         {analysis.reviewStatus !== 'pending' && (
-          <div className="mt-4 p-3 bg-[#0F172A] rounded text-sm text-gray-400">
+          <div className="mt-4 p-3 bg-dark-bg rounded text-sm text-gray-400">
             已由 {analysis.reviewedBy || '系统'} 于 {analysis.reviewedAt ? new Date(analysis.reviewedAt).toLocaleString() : '未知'} 审核
             {analysis.reviewNotes && `，备注: ${analysis.reviewNotes}`}
           </div>

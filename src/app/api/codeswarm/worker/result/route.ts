@@ -44,9 +44,14 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
         for (const match of matches) {
           const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
           if (inner.includes('vulnerabilities')) {
-            jsonStr = inner;
-            console.log(`[VulnParse] ```json 块中找到 vulnerabilities, 长度: ${jsonStr.length}`);
-            break;
+try {
+              JSON.parse(inner);
+              jsonStr = inner;
+              console.log(`[VulnParse] ```json 块中找到 vulnerabilities, 长度: ${jsonStr.length}`);
+              break;
+            } catch {
+              continue;
+            }
           }
         }
       } else {
@@ -372,7 +377,7 @@ export async function POST(request: Request) {
 
     const finalState = status === 'completed' ? 'completed' : 'failed';
 
-    await prisma.$executeRaw`
+    const updateResult = await prisma.$executeRaw`
       UPDATE "CodeswarmTask"
       SET state = ${finalState},
           result = ${result || null},
@@ -381,7 +386,16 @@ export async function POST(request: Request) {
           "completedAt" = NOW(),
           "updatedAt" = NOW()
       WHERE "taskId" = ${taskId}
+        AND (state = 'running' OR state = 'dispatched')
     `;
+
+    if (updateResult === 0) {
+      console.warn(`[CodeSwarm] Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
+      if (nodeId) {
+        await codeswarmDispatcher.onTaskCompleted(nodeId);
+      }
+      return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_already_terminal' });
+    }
 
     const taskInstance = await prisma.taskInstance.findFirst({
       where: { codeswarmTaskId: taskId },

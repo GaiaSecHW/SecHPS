@@ -221,7 +221,7 @@ export default function CreateApiKeyModal({
               此 Key 仅显示一次，请立即复制保存
             </ErrorAlert>
 
-            <div className="bg-[#0F172A] rounded-lg p-4 border border-green-700/30">
+            <div className="bg-dark-bg rounded-lg p-4 border border-green-700/30">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-400">API Key</span>
                 <button
@@ -275,7 +275,7 @@ export default function CreateApiKeyModal({
                     value={tenantId}
                     onChange={(e) => setTenantId(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-[#1E293B]"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-dark-surface"
                   >
                     <option value="">请选择租户</option>
                     {tenants.map((tenant) => (

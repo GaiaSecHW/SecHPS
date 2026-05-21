@@ -137,7 +137,7 @@ export default function CreateToolPage() {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="例如：read_file"
                 required
               />
@@ -153,7 +153,7 @@ export default function CreateToolPage() {
                 type="text"
                 value={formData.displayName}
                 onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="例如：读取文件"
                 required
               />
@@ -167,7 +167,7 @@ export default function CreateToolPage() {
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>
@@ -185,7 +185,7 @@ export default function CreateToolPage() {
               <select
                 value={formData.executor}
                 onChange={(e) => setFormData({ ...formData, executor: e.target.value })}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {EXECUTORS.map((exec) => (
                   <option key={exec.value} value={exec.value}>
@@ -203,7 +203,7 @@ export default function CreateToolPage() {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 rows={3}
                 placeholder="描述这个工具的功能和用途"
                 required
@@ -219,7 +219,7 @@ export default function CreateToolPage() {
                 type="number"
                 value={formData.timeout}
                 onChange={(e) => setFormData({ ...formData, timeout: parseInt(e.target.value) || 30000 })}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 min={1000}
                 step={1000}
               />
@@ -238,7 +238,7 @@ export default function CreateToolPage() {
             <textarea
               value={formData.parameters}
               onChange={(e) => setFormData({ ...formData, parameters: e.target.value })}
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
               rows={8}
               placeholder={`{
   "type": "object",
@@ -268,7 +268,7 @@ export default function CreateToolPage() {
             <textarea
               value={formData.executorConfig}
               onChange={(e) => setFormData({ ...formData, executorConfig: e.target.value })}
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
               rows={8}
               placeholder={`{
   "url": "http://example.com/api",

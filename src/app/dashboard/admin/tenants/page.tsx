@@ -304,7 +304,7 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
         )}
 
         {/* 添加用户区域 */}
-        <div className="border border-gray-700/50 rounded-lg p-4 bg-[#0F172A]">
+        <div className="border border-gray-700/50 rounded-lg p-4 bg-dark-bg">
           <h4 className="text-sm font-medium text-gray-300 mb-3">添加用户到租户</h4>
 
           {/* 用户搜索 */}
@@ -392,7 +392,7 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
           ) : (
             <div className="border border-gray-700/50 rounded-lg overflow-hidden">
               <table className="min-w-full divide-y divide-gray-700/50">
-                <thead className="bg-[#0F172A]">
+                <thead className="bg-dark-bg">
                   <tr>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">用户</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">邮箱</th>
@@ -563,7 +563,7 @@ export default function TenantsPage() {
           </div>
         ) : (
           <table className="min-w-full divide-y divide-gray-700/50">
-            <thead className="bg-[#0F172A]">
+            <thead className="bg-dark-bg">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">租户名称</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>

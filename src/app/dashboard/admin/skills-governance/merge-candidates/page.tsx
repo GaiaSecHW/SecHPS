@@ -376,7 +376,7 @@ function MergeCandidatesPageContent() {
                   {filteredCandidates.map((candidate) => (
                     <div
                       key={candidate.skillId}
-                      className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors"
+                      className="p-4 bg-dark-bg rounded-lg hover:bg-dark-surface-hover transition-colors"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-3">
@@ -456,7 +456,7 @@ function MergeCandidatesPageContent() {
                   {data?.pendingMergeRecords?.map((record) => (
                     <div
                       key={record.id}
-                      className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors"
+                      className="p-4 bg-dark-bg rounded-lg hover:bg-dark-surface-hover transition-colors"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-3">

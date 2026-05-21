@@ -1,10 +1,141 @@
 // src/lib/monitoring/health-check.ts
 
 import { prisma } from '@/lib/prisma';
-import type { HealthCheckResult, SystemHealthReport, HealthStatus } from '@/types/monitoring';
+import type { HealthCheckResult, SystemHealthReport, HealthStatus, InfrastructureService, InfrastructureInfo } from '@/types/monitoring';
 import { getAllCacheStats } from '@/lib/cache';
+import { parseDatabaseName } from '@/lib/system-info';
+import fs from 'fs';
 
 const START_TIME = Date.now();
+
+function maskPassword(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = '***';
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+async function checkInfrastructureDatabase(dbCheck: HealthCheckResult): Promise<InfrastructureService> {
+  const databaseUrl = process.env.DATABASE_URL || '';
+  const dbName = parseDatabaseName(databaseUrl);
+  let host = 'unknown';
+  let port = 'unknown';
+  try {
+    const parsed = new URL(databaseUrl);
+    host = parsed.hostname;
+    port = parsed.port;
+  } catch {}
+
+  return {
+    name: 'PostgreSQL',
+    type: 'database',
+    host,
+    port,
+    database: dbName,
+    configured: !!databaseUrl,
+    status: dbCheck.status === 'healthy' ? 'connected' : dbCheck.status === 'degraded' ? 'connected' : 'unreachable',
+    message: dbCheck.message,
+    responseTime: dbCheck.responseTime,
+  };
+}
+
+async function checkRedis(): Promise<InfrastructureService> {
+  const redisUrl = process.env.REDIS_URL || '';
+  if (!redisUrl) {
+    return { name: 'Redis', type: 'cache-queue', host: '', configured: false, status: 'not_configured' };
+  }
+  let host = 'unknown';
+  let port = 'unknown';
+  try {
+    const parsed = new URL(redisUrl);
+    host = parsed.hostname;
+    port = parsed.port;
+  } catch {}
+
+  const startTime = Date.now();
+  try {
+    const net = await import('net');
+    const socket = new net.Socket();
+    socket.setTimeout(3000);
+    await new Promise<void>((resolve, reject) => {
+      socket.on('connect', () => { socket.destroy(); resolve(); });
+      socket.on('timeout', () => { socket.destroy(); reject(new Error('timeout')); });
+      socket.on('error', reject);
+      socket.connect(parseInt(port), host);
+    });
+    return { name: 'Redis', type: 'cache-queue', host, port, configured: true, status: 'connected', responseTime: Date.now() - startTime };
+  } catch {
+    return { name: 'Redis', type: 'cache-queue', host, port, configured: true, status: 'unreachable', message: '无法连接到 Redis 服务' };
+  }
+}
+
+async function checkGitea(): Promise<InfrastructureService> {
+  const giteaUrl = process.env.GITEA_URL || '';
+  if (!giteaUrl) {
+    return { name: 'Gitea', type: 'git-storage', host: '', configured: false, status: 'not_configured' };
+  }
+  let host = 'unknown';
+  let port = 'unknown';
+  try {
+    const parsed = new URL(giteaUrl);
+    host = parsed.hostname;
+    port = parsed.port;
+  } catch {}
+
+  const startTime = Date.now();
+  try {
+    const res = await fetch(giteaUrl, { signal: AbortSignal.timeout(5000) });
+    return { name: 'Gitea', type: 'git-storage', host, port, configured: true, status: res.ok ? 'connected' : 'unreachable', responseTime: Date.now() - startTime, message: res.ok ? 'Gitea 服务正常' : `HTTP ${res.status}` };
+  } catch {
+    return { name: 'Gitea', type: 'git-storage', host, port, configured: true, status: 'unreachable', message: '无法连接到 Gitea 服务' };
+  }
+}
+
+async function checkMinIO(): Promise<InfrastructureService> {
+  const endpoint = process.env.MINIO_ENDPOINT || '';
+  const port = process.env.MINIO_PORT || '9000';
+  if (!endpoint) {
+    return { name: 'MinIO', type: 'object-storage', host: '', configured: false, status: 'not_configured' };
+  }
+
+  const startTime = Date.now();
+  try {
+    const mc = new (await import('minio')).Client({
+      endPoint: endpoint,
+      port: parseInt(port),
+      accessKey: process.env.MINIO_ACCESS_KEY || '',
+      secretKey: process.env.MINIO_SECRET_KEY || '',
+      useSSL: process.env.MINIO_USE_SSL === 'true',
+    });
+    const bucket = process.env.MINIO_BUCKET || 'codedmap-dbs';
+    await mc.bucketExists(bucket);
+    return {
+      name: 'MinIO', type: 'object-storage', host: endpoint, port,
+      configured: true, status: 'connected', responseTime: Date.now() - startTime,
+      message: `桶 "${bucket}" 可访问`,
+    };
+  } catch (err) {
+    return { name: 'MinIO', type: 'object-storage', host: endpoint, port, configured: true, status: 'unreachable', message: `无法连接: ${err instanceof Error ? err.message : 'unknown'}` };
+  }
+}
+
+async function checkNFS(): Promise<InfrastructureService> {
+  const mountPath = process.env.NFS_MOUNT_PATH || '';
+  if (!mountPath) {
+    return { name: 'NFS', type: 'file-storage', host: '', configured: false, status: 'not_configured' };
+  }
+  try {
+    fs.accessSync(mountPath, fs.constants.R_OK);
+    return { name: 'NFS', type: 'file-storage', host: mountPath, configured: true, status: 'connected', message: `路径 "${mountPath}" 可访问` };
+  } catch {
+    return { name: 'NFS', type: 'file-storage', host: mountPath, configured: true, status: 'unreachable', message: `路径 "${mountPath}" 不可访问` };
+  }
+}
 
 /**
  * 执行所有健康检查
@@ -16,12 +147,18 @@ export async function runHealthChecks(): Promise<SystemHealthReport> {
     checkCache(),
   ]);
 
-  // 计算整体状态
   const status = calculateOverallStatus(checks);
-
-  // 收集系统指标
   const memoryUsage = process.memoryUsage();
   const cacheStats = getAllCacheStats();
+
+  const dbCheck = checks.find(c => c.name === 'database')!;
+  const infrastructure: InfrastructureInfo = {
+    database: await checkInfrastructureDatabase(dbCheck),
+    redis: await checkRedis(),
+    gitea: await checkGitea(),
+    minio: await checkMinIO(),
+    nfs: await checkNFS(),
+  };
 
   return {
     status,
@@ -30,14 +167,15 @@ export async function runHealthChecks(): Promise<SystemHealthReport> {
     timestamp: new Date(),
     checks,
     metrics: {
-      cpu: 0, // Node.js 不直接提供 CPU 使用率
+      cpu: 0,
       memory: memoryUsage.heapUsed / memoryUsage.heapTotal,
-      dbConnections: 0, // PG 使用连接池
+      dbConnections: 0,
       cacheHitRate: Object.values(cacheStats).reduce(
         (sum, s) => sum + s.hitRate,
         0
       ) / Object.keys(cacheStats).length,
     },
+    infrastructure,
   };
 }
 

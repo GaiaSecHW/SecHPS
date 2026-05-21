@@ -237,7 +237,7 @@ export function CodedmapDebugPanel() {
               value={targetDir}
               onChange={(e) => setTargetDir(e.target.value)}
               placeholder="D:\work\nazhua-agent-opencode-0420\codedmap"
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-1">要分析的源代码根目录</p>
           </div>
@@ -252,7 +252,7 @@ export function CodedmapDebugPanel() {
               value={workspace}
               onChange={(e) => setWorkspace(e.target.value)}
               placeholder="D:\custom\workspace（留空则使用默认 {targetDir}/workspace）"
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-1">graph.db 和分析文件的输出目录</p>
           </div>
@@ -272,7 +272,7 @@ export function CodedmapDebugPanel() {
                     value={codedmapHome}
                     onChange={(e) => setCodedmapHome(e.target.value)}
                     placeholder="D:\work\codedmap（codedmap 安装目录）"
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
+                    className="w-full px-3 py-2 bg-dark-bg border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
                   />
                 </div>
                 <div>
@@ -282,7 +282,7 @@ export function CodedmapDebugPanel() {
                     value={joernHome}
                     onChange={(e) => setJoernHome(e.target.value)}
                     placeholder="D:\work\tools\joern\joern-cli"
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
+                    className="w-full px-3 py-2 bg-dark-bg border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
                   />
                 </div>
               </div>
@@ -293,7 +293,7 @@ export function CodedmapDebugPanel() {
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   placeholder="覆盖自动推断的项目名"
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
+                  className="w-full px-3 py-2 bg-dark-bg border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
                 />
               </div>
             </div>
@@ -346,7 +346,7 @@ export function CodedmapDebugPanel() {
       {/* ====== Real-time Logs ====== */}
       {showLogs && (
         <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-          <div className="px-6 py-3 flex items-center justify-between border-b border-gray-700/50 bg-[#162032] rounded-t-lg">
+          <div className="px-6 py-3 flex items-center justify-between border-b border-gray-700/50 bg-dark-surface-alt rounded-t-lg">
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4 text-green-400" />
               <span className="text-sm font-medium text-gray-100">构建日志</span>
@@ -360,7 +360,7 @@ export function CodedmapDebugPanel() {
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          <div className="h-80 overflow-y-auto bg-[#0F172A] p-4 font-mono text-xs">
+          <div className="h-80 overflow-y-auto bg-dark-bg p-4 font-mono text-xs">
             {logs.length === 0 && !isBuilding ? (
               <div className="text-gray-500">点击"执行构建"开始...</div>
             ) : (
@@ -423,7 +423,7 @@ export function CodedmapDebugPanel() {
             <div className="space-y-2">
               {cacheEntries.map((entry) => (
                 <div key={entry.targetProduct} className="border border-gray-700/50 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 bg-[#0F172A]">
+                  <div className="flex items-center justify-between px-4 py-3 bg-dark-bg">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <button
                         onClick={() => setExpandedCache(expandedCache === entry.targetProduct ? null : entry.targetProduct)}

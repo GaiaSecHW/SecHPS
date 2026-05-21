@@ -15,6 +15,9 @@ import {
   Loader2,
   HardDrive,
   Zap,
+  Network,
+  GitBranch,
+  FolderOpen,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 
@@ -29,6 +32,26 @@ interface HealthCheckResult {
   checkedAt: string;
 }
 
+interface InfrastructureService {
+  name: string;
+  type: string;
+  host: string;
+  port?: string;
+  database?: string;
+  configured: boolean;
+  status: 'connected' | 'unreachable' | 'not_configured';
+  message?: string;
+  responseTime?: number;
+}
+
+interface InfrastructureInfo {
+  database: InfrastructureService;
+  redis: InfrastructureService;
+  gitea: InfrastructureService;
+  minio: InfrastructureService;
+  nfs: InfrastructureService;
+}
+
 interface SystemHealthReport {
   status: 'healthy' | 'degraded' | 'unhealthy';
   version: string;
@@ -41,6 +64,7 @@ interface SystemHealthReport {
     dbConnections: number;
     cacheHitRate: number;
   };
+  infrastructure: InfrastructureInfo;
 }
 
 interface CacheStats {
@@ -97,6 +121,20 @@ const statusConfig = {
   healthy: { color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-800/40', icon: CheckCircle2, label: '正常' },
   degraded: { color: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-800/40', icon: AlertTriangle, label: '警告' },
   unhealthy: { color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800/40', icon: AlertCircle, label: '异常' },
+};
+
+const infraStatusConfig = {
+  connected: { color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-800/40', icon: CheckCircle2, label: '已连接' },
+  unreachable: { color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800/40', icon: AlertCircle, label: '不可达' },
+  not_configured: { color: 'text-gray-500', bg: 'bg-gray-900/20', border: 'border-gray-800/40', icon: AlertTriangle, label: '未配置' },
+};
+
+const infraIconMap: Record<string, typeof Database> = {
+  database: Database,
+  'cache-queue': Zap,
+  'git-storage': GitBranch,
+  'object-storage': HardDrive,
+  'file-storage': FolderOpen,
 };
 
 // ===== 主组件 =====
@@ -336,6 +374,61 @@ export default function MonitoringPage() {
           })}
         </div>
       </div>
+
+      {/* ===== 基础设施连接 ===== */}
+      {health?.infrastructure && (
+        <div>
+          <h2 className="text-base font-semibold text-gray-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <Network size={16} className="text-cyan-400" />
+            基础设施连接
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {(['database', 'redis', 'gitea', 'minio', 'nfs'] as const).map(key => {
+              const svc = health.infrastructure[key];
+              const infra = infraStatusConfig[svc.status];
+              const InfraIcon = infra.icon;
+              const TypeIcon = infraIconMap[svc.type] || Server;
+              return (
+                <div key={key} className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <TypeIcon size={16} className="text-gray-400" />
+                      <h3 className="text-sm font-medium text-gray-200">{svc.name}</h3>
+                    </div>
+                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${infra.bg} ${infra.border} border ${infra.color}`}>
+                      <InfraIcon size={12} />
+                      {infra.label}
+                    </div>
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    {svc.database && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">数据库</span>
+                        <span className="text-gray-300 font-medium">{svc.database}</span>
+                      </div>
+                    )}
+                    {svc.host && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">地址</span>
+                        <span className="text-gray-300">{svc.port ? `${svc.host}:${svc.port}` : svc.host}</span>
+                      </div>
+                    )}
+                    {svc.responseTime !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">响应</span>
+                        <span className="text-gray-300">{formatDuration(svc.responseTime)}</span>
+                      </div>
+                    )}
+                    {svc.message && svc.status !== 'connected' && (
+                      <p className="text-gray-500 mt-1">{svc.message}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ===== 缓存与数据库 ===== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

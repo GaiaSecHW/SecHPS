@@ -294,7 +294,7 @@ export default function NewImpactPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700/50">
-              <thead className="bg-[#0F172A]">
+              <thead className="bg-dark-bg">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Skill 名称
@@ -320,7 +320,7 @@ export default function NewImpactPage() {
                 {analyses.map((analysis) => (
                   <tr
                     key={analysis.id}
-                    className="hover:bg-[#0F172A] transition-colors cursor-pointer"
+                    className="hover:bg-dark-bg transition-colors cursor-pointer"
                     onClick={() => setSelectedAnalysis(analysis)}
                   >
                     <td className="px-4 py-4">
@@ -557,7 +557,7 @@ export default function NewImpactPage() {
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto p-6 space-y-6">
               {/* Basic Info */}
-              <div className="bg-[#0F172A] rounded-lg p-4 space-y-3">
+              <div className="bg-dark-bg rounded-lg p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <span className="text-xs text-gray-500">Skill ID</span>

@@ -6,7 +6,7 @@ const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// 瞬时连接错误码：服务端关闭连接 / 连接失败 / 超时
+// 瞬时连接错误码：服务端关闭连接 / 连接失败 / 超时 / 连接池耗尽
 const TRANSIENT_ERROR_CODES = new Set(['P1017', 'P1001', 'P1002', 'P1008']);
 
 /**
@@ -49,7 +49,32 @@ export const prisma =
   });
 
 // 连接断开时自动重连
-prisma.$connect().catch(() => {});
+prisma.$connect().then(() => ensureMaxConnections()).catch(() => {});
+
+async function ensureMaxConnections() {
+  const requiredMax = 1000;
+  try {
+    const result = await prisma.$queryRaw<{ current_value: number; pending_restart: boolean }[]>`
+      SELECT setting::int AS current_value, pending_restart AS pending_restart FROM pg_settings WHERE name = 'max_connections'
+    `;
+    const current = result[0]?.current_value ?? 0;
+    const pendingRestart = result[0]?.pending_restart ?? false;
+    if (current < requiredMax) {
+      console.warn(`[DB] max_connections=${current}, 需要调整到 ${requiredMax}`);
+      await prisma.$executeRawUnsafe(`ALTER SYSTEM SET max_connections = ${requiredMax}`);
+      if (pendingRestart) {
+        console.warn(`[DB] max_connections 需要重启 PostgreSQL 才能生效（已设置 ALTER SYSTEM, 当前值仍为 ${current}）`);
+      } else {
+        await prisma.$executeRaw`SELECT pg_reload_conf()`;
+        console.log(`[DB] max_connections 已调整为 ${requiredMax}`);
+      }
+    } else {
+      console.log(`[DB] max_connections=${current}, 满足要求`);
+    }
+  } catch (e) {
+    console.warn('[DB] 检查/调整 max_connections 失败:', e);
+  }
+}
 
 // 定期刷新连接池，防止远程 PostgreSQL / 防火墙回收空闲连接
 // 用 $executeRaw 而非 $queryRaw 避免结果解析开销

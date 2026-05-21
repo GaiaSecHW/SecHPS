@@ -367,13 +367,13 @@ function AutonomousEvolutionContent() {
               <div className="absolute right-0 mt-1 w-44 bg-dark-surface border border-gray-700/50 rounded-lg shadow-lg z-10">
                 <button
                   onClick={() => handleExtract('incremental')}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-[#0F172A]"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-dark-bg"
                 >
                   增量提取（推荐）
                 </button>
                 <button
                   onClick={() => handleExtract('full')}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-[#0F172A] text-orange-600"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-dark-bg text-orange-600"
                 >
                   全量重新提取
                 </button>
@@ -541,7 +541,7 @@ function AutonomousEvolutionContent() {
                   </button>
                   <button
                     onClick={() => handleBatchInject('disable')}
-                    className="px-3 py-1 text-xs bg-[#0F172A] text-gray-400 border border-gray-700/50 rounded hover:bg-dark-surface-hover"
+                    className="px-3 py-1 text-xs bg-dark-bg text-gray-400 border border-gray-700/50 rounded hover:bg-dark-surface-hover"
                   >
                     批量停用
                   </button>
@@ -610,7 +610,7 @@ function AutonomousEvolutionContent() {
                     {exp.isInjected && (
                       <button
                         onClick={() => handleToggleInject(exp.id)}
-                        className="px-2 py-1 text-xs bg-[#0F172A] text-gray-400 border border-gray-700/50 rounded hover:bg-dark-surface-hover"
+                        className="px-2 py-1 text-xs bg-dark-bg text-gray-400 border border-gray-700/50 rounded hover:bg-dark-surface-hover"
                       >
                         停用
                       </button>
@@ -641,7 +641,7 @@ function AutonomousEvolutionContent() {
           <button
             disabled={page <= 1}
             onClick={() => setPage(p => p - 1)}
-            className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+            className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-dark-bg"
           >
             上一页
           </button>
@@ -649,7 +649,7 @@ function AutonomousEvolutionContent() {
           <button
             disabled={page >= totalPages}
             onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+            className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-dark-bg"
           >
             下一页
           </button>
@@ -715,13 +715,13 @@ function AutonomousEvolutionContent() {
               <button
                 disabled={runLogsPage <= 1}
                 onClick={() => { const p = runLogsPage - 1; setRunLogsPage(p); fetchRunLogs(p); }}
-                className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+                className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-dark-bg"
               >上一页</button>
               <span className="px-3 py-1 text-sm text-gray-400">{runLogsPage} / {runLogsTotalPages}</span>
               <button
                 disabled={runLogsPage >= runLogsTotalPages}
                 onClick={() => { const p = runLogsPage + 1; setRunLogsPage(p); fetchRunLogs(p); }}
-                className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+                className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-dark-bg"
               >下一页</button>
             </div>
           )}

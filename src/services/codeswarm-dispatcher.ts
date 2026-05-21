@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import Redis, { Command } from 'ioredis';
 import { prisma } from '@/lib/prisma';
 
 const STREAM_KEY = 'codeswarm:task:queue';
@@ -23,6 +23,7 @@ class CodeswarmDispatcher {
   private offlineCheckTimer: ReturnType<typeof setInterval> | null = null;
   private timeoutCheckTimer: ReturnType<typeof setInterval> | null = null;
   private pendingRetryTimer: ReturnType<typeof setInterval> | null = null;
+  private streamCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   async init() {
     if (this.initialized) return;
@@ -57,6 +58,21 @@ class CodeswarmDispatcher {
         await this.redis.ping();
       } catch {
         throw new Error('Redis 连接失败');
+      }
+
+      // 验证 Redis 数据库编号，防止 URL 解析错误导致连接到错误数据库
+      try {
+        const clientInfo = await this.redis.client('INFO');
+        const dbMatch = clientInfo.match(/db=(\d+)/);
+        const expectedDb = this.parseDbFromUrl(redisUrl);
+        const actualDb = dbMatch ? parseInt(dbMatch[1]) : 0;
+        if (expectedDb !== null && actualDb !== expectedDb) {
+          console.warn(`[CodeSwarm] Redis 数据库不匹配: URL 指定 db=${expectedDb}, 实际连接 db=${actualDb}, 执行 SELECT ${expectedDb}`);
+          await this.redis.select(expectedDb);
+        }
+        console.log(`[CodeSwarm] Redis 已连接 db=${actualDb}`);
+      } catch (e) {
+        console.warn('[CodeSwarm] Redis 数据库验证失败（非致命）:', e);
       }
 
       // 创建消费者组（如果不存在）
@@ -316,27 +332,43 @@ const taskPayload = JSON.stringify({
         if (!messages || messages.length === 0) continue;
 
         for (const [, msgs] of messages) {
-          // 并行分发：充分利用多 Worker 并发能力
           await Promise.allSettled(
             msgs.map(async ([msgId, fields]) => {
-              const dbTaskId = fields[1]; // fields = ['dbTaskId', value]
+              const dbTaskId = fields[1];
               if (!dbTaskId) return;
 
               const dispatched = await this.dispatchOne(dbTaskId);
 
-              // 始终 ACK，防止消息卡在 pending 状态
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                // 分发失败：重新加入 Stream 等待下次调度
+                // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
+                const isDbConnError = this.isDbConnectionError(dbTaskId);
+                if (isDbConnError) {
+                  console.warn('[CodeSwarm] DB 连接不足，延迟 10 秒后重入队');
+                  await this.sleep(10000);
+                }
                 await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
               }
             })
           );
         }
-      } catch (e) {
-        console.error('[CodeSwarm] 消费循环错误:', e);
-        await this.sleep(2000);
+      } catch (e: any) {
+        const errMsg = e?.message || String(e);
+        if (errMsg.includes('NOGROUP')) {
+          console.warn('[CodeSwarm] NOGROUP 错误，尝试重建 Consumer Group...');
+          const rebuilt = await this.ensureConsumerGroup();
+          if (rebuilt) {
+            console.log('[CodeSwarm] Consumer Group 重建成功，继续消费');
+          }
+          await this.sleep(2000);
+        } else if (errMsg.includes('too many clients') || errMsg.includes('Too many database connections')) {
+          console.warn('[CodeSwarm] DB 连接耗尽，等待 15 秒后重试...');
+          await this.sleep(15000);
+        } else {
+          console.error('[CodeSwarm] 消费循环错误:', e);
+          await this.sleep(2000);
+        }
       }
     }
   }
@@ -379,8 +411,14 @@ const taskPayload = JSON.stringify({
 
       console.log(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       return true;
-    } catch (e) {
-      console.error('[CodeSwarm] 分发失败:', dbTaskId, e);
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      if (errMsg.includes('too many clients') || errMsg.includes('Too many database connections')) {
+        console.warn('[CodeSwarm] DB 连接耗尽，任务暂时跳过:', dbTaskId);
+        this.lastDbErrorTaskId = dbTaskId;
+      } else {
+        console.error('[CodeSwarm] 分发失败:', dbTaskId, e);
+      }
       return false;
     }
   }
@@ -448,6 +486,102 @@ const taskPayload = JSON.stringify({
     return new Promise(r => setTimeout(r, ms));
   }
 
+  private parseDbFromUrl(url: string): number | null {
+    try {
+      const match = url.match(/\/(\d+)(?:\?|$)/);
+      return match ? parseInt(match[1]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async ensureConsumerGroup(): Promise<boolean> {
+    if (!this.redis) return false;
+    try {
+      await this.redis.xgroup('CREATE', STREAM_KEY, CONSUMER_GROUP, '0', 'MKSTREAM');
+      console.log('[CodeSwarm] Consumer Group 已重建');
+      return true;
+    } catch (e: any) {
+      if (e.message.includes('BUSYGROUP')) return true;
+      console.error('[CodeSwarm] 重建 Consumer Group 失败:', e);
+      return false;
+    }
+  }
+
+  private lastDbErrorTaskId: string | null = null;
+
+  private isDbConnectionError(dbTaskId: string): boolean {
+    if (this.lastDbErrorTaskId === dbTaskId) {
+      this.lastDbErrorTaskId = null;
+      return true;
+    }
+    return false;
+  }
+
+  private redisExec(...args: (string | number | Buffer)[]): Promise<any> {
+    const command = new Command(args[0] as string, args.slice(1));
+    return this.redis!.sendCommand(command) as Promise<any>;
+  }
+
+  private async cleanupStaleConsumers() {
+    if (!this.redis) return;
+
+    try {
+      const consumers = await this.redisExec('XINFO', 'CONSUMERS', STREAM_KEY, CONSUMER_GROUP) as any[];
+      let deletedCount = 0;
+      let claimedCount = 0;
+
+      // ioredis XINFO CONSUMERS 返回扁平数组：[name, value, name, value, ...]
+      for (let i = 0; i < consumers.length; i += 10) {
+        const name = consumers[i + 1];
+        const pending = Number(consumers[i + 3]);
+        const idle = Number(consumers[i + 5]);
+        const nameStr = typeof name === 'string' ? name : name?.toString() || '';
+
+        if (nameStr === CONSUMER_NAME) continue;
+
+        if (idle > 600_000) {
+          if (pending > 0) {
+            try {
+              const pendingInfo = await this.redisExec(
+                'XPENDING', STREAM_KEY, CONSUMER_GROUP, nameStr, '-', '+', String(pending)
+              ) as any[];
+
+              for (let j = 0; j < pendingInfo.length; j += 4) {
+                const msgId = pendingInfo[j];
+                if (!msgId) continue;
+                const idStr = typeof msgId === 'string' ? msgId : msgId.toString();
+
+                await this.redisExec('XCLAIM', STREAM_KEY, CONSUMER_GROUP, CONSUMER_NAME, '0', idStr);
+                await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, idStr);
+                claimedCount++;
+              }
+            } catch (claimErr) {
+              console.warn('[CodeSwarm] claim pending 消息失败:', claimErr);
+            }
+          }
+
+          try {
+            await this.redisExec('XGROUP', 'DELCONSUMER', STREAM_KEY, CONSUMER_GROUP, nameStr);
+            deletedCount++;
+          } catch (delErr) {
+            console.warn('[CodeSwarm] 删除死消费者失败:', delErr);
+          }
+        }
+      }
+
+      try {
+        await this.redisExec('XTRIM', STREAM_KEY, 'MAXLEN', '~', 200);
+      } catch { /* non-critical */ }
+
+      if (deletedCount > 0 || claimedCount > 0) {
+        console.log(`[CodeSwarm] Stream 清理完成: 删除 ${deletedCount} 个死消费者, 清理 ${claimedCount} 条 pending 消息`);
+      }
+    } catch (e) {
+      console.error('[CodeSwarm] Stream 清理失败:', e);
+    }
+  }
+
   // ---- Phase 3: 健壮性增强 ----
 
   // 启动定时任务：掉线检测 + 超时扫描
@@ -458,6 +592,8 @@ const taskPayload = JSON.stringify({
     this.timeoutCheckTimer = setInterval(() => this.checkTimeoutTasks(), 30_000);
     // 每 30 秒恢复可能卡在 pending 的消息
     this.pendingRetryTimer = setInterval(() => this.recoverPendingMessages(), 30_000);
+    // 每 5 分钟清理死消费者和过期 pending 消息
+    this.streamCleanupTimer = setInterval(() => this.cleanupStaleConsumers(), 300_000);
   }
 
   // 3.1 Worker 掉线检测 + 任务重调度
@@ -472,12 +608,6 @@ const taskPayload = JSON.stringify({
         this.workers.delete(nodeId);
 
         if (hadTasks) {
-          try {
-            await fetch(`http://${worker.address}/task/cancel`, {
-              method: 'POST',
-              signal: AbortSignal.timeout(5000),
-            });
-          } catch { /* Worker 可能已离线 */ }
           this.rescheduleWorkerTasks(worker).catch(e =>
             console.error('[CodeSwarm] 重调度任务失败:', e)
           );
@@ -552,6 +682,8 @@ const taskPayload = JSON.stringify({
 
   private async rescheduleWorkerTasks(worker: WorkerInfo) {
     try {
+      const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+
       // 更新 DB：Worker 离线
       await prisma.codeswarmWorker.update({
         where: { id: worker.id },
@@ -568,13 +700,26 @@ const taskPayload = JSON.stringify({
       });
 
       for (const task of stuckTasks) {
+        // 尝试向 Worker 发送 cancel 请求（多地址 failover）
+        for (const addr of addresses) {
+          try {
+            await fetch(`http://${addr}/task/cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId: task.taskId }),
+              signal: AbortSignal.timeout(5000),
+            });
+            break;
+          } catch { /* Worker 可能已离线 */ }
+        }
+
         // 改回 queued
         await prisma.codeswarmTask.update({
           where: { id: task.id },
           data: {
             state: 'queued',
             CodeswarmWorker: { disconnect: true },
-            preferredWorkerNodeId: null,  // 清理：原 Worker 已掉线
+            preferredWorkerNodeId: null,
             updatedAt: new Date()
           },
         });
@@ -685,6 +830,7 @@ const taskPayload = JSON.stringify({
     if (this.offlineCheckTimer) clearInterval(this.offlineCheckTimer);
     if (this.timeoutCheckTimer) clearInterval(this.timeoutCheckTimer);
     if (this.pendingRetryTimer) clearInterval(this.pendingRetryTimer);
+    if (this.streamCleanupTimer) clearInterval(this.streamCleanupTimer);
     this.teardownRedis();
   }
 }

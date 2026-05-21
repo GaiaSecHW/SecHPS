@@ -214,7 +214,7 @@ function CategoriesManagementContent() {
             {categories.map((category, index) => (
               <div
                 key={index}
-                className="flex items-center gap-4 p-4 bg-[#0F172A] rounded-lg border border-gray-700/50 hover:border-gray-600 transition-colors"
+                className="flex items-center gap-4 p-4 bg-dark-bg rounded-lg border border-gray-700/50 hover:border-gray-600 transition-colors"
               >
                 <GripVertical size={18} className="text-gray-400 cursor-move flex-shrink-0" />
                 
@@ -256,7 +256,7 @@ function CategoriesManagementContent() {
             ))}
 
             {categories.length === 0 && (
-              <div className="text-center py-12 text-gray-500 bg-[#0F172A] rounded-lg border border-dashed border-gray-600">
+              <div className="text-center py-12 text-gray-500 bg-dark-bg rounded-lg border border-dashed border-gray-600">
                 暂无分类，点击"添加分类"按钮创建新分类
               </div>
             )}

@@ -121,6 +121,26 @@ export interface HealthCheckResult {
   checkedAt: Date;
 }
 
+export interface InfrastructureService {
+  name: string;
+  type: string;
+  host: string;
+  port?: string;
+  database?: string;
+  configured: boolean;
+  status: 'connected' | 'unreachable' | 'not_configured';
+  message?: string;
+  responseTime?: number;
+}
+
+export interface InfrastructureInfo {
+  database: InfrastructureService;
+  redis: InfrastructureService;
+  gitea: InfrastructureService;
+  minio: InfrastructureService;
+  nfs: InfrastructureService;
+}
+
 // 系统健康报告
 export interface SystemHealthReport {
   status: HealthStatus;
@@ -134,6 +154,7 @@ export interface SystemHealthReport {
     dbConnections: number;
     cacheHitRate: number;
   };
+  infrastructure: InfrastructureInfo;
 }
 
 // 监控仪表盘数据
