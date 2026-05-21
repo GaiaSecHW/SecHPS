@@ -440,22 +440,26 @@ export class WorkerDaemon {
         timestamp: new Date().toISOString(),
       });
 
-      await this.postResult(payload, {
+      this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status,
         result: isCancelled ? undefined : (result.stdout || undefined),
         error: isCancelled ? 'Task cancelled by user' : (result.exitCode !== 0 ? result.stderr || `Process exited with code ${result.exitCode}` : undefined),
         reportContent: isCancelled ? undefined : reportContent,
+      }).catch(err => {
+        this.server.log.warn({ taskId, error: err }, 'postResult (success path) failed (non-blocking)');
       });
     } catch (error) {
       const isCancelled = this.cancelledTasks.has(taskId);
       this.server.log.error({ taskId, error, isCancelled }, 'Task failed');
-      await this.postResult(payload, {
+      this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status: 'failed',
         error: isCancelled ? 'Task cancelled by user' : (error instanceof Error ? error.message : String(error)),
+      }).catch(err => {
+        this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed (non-blocking)');
       });
     } finally {
       this.cancelledTasks.delete(taskId);
