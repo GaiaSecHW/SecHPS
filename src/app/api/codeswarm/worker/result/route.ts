@@ -40,14 +40,12 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
     if (output.includes('```json')) {
       const matches = output.match(/```json\s*([\s\S]*?)\s*```/g);
       if (matches) {
-        console.log(`[VulnParse] 找到 ${matches.length} 个 ```json 块`);
         for (const match of matches) {
           const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
           if (inner.includes('vulnerabilities')) {
 try {
               JSON.parse(inner);
               jsonStr = inner;
-              console.log(`[VulnParse] ```json 块中找到 vulnerabilities, 长度: ${jsonStr.length}`);
               break;
             } catch {
               continue;
@@ -55,7 +53,7 @@ try {
           }
         }
       } else {
-        console.log(`[VulnParse] ```json 块正则无匹配`);
+        // ```json 块正则无匹配
       }
     }
 
