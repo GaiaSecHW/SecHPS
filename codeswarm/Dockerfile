@@ -1,8 +1,9 @@
 # ============================================================================
 # CodeSwarm Worker - Multi-stage Docker Build
 #
-# Build context MUST be the project root (parent of codeswarm/):
-#   docker build -f codeswarm/Dockerfile -t codeswarm-worker:latest .
+# Build context is the codeswarm/ directory itself:
+#   docker build -f Dockerfile -t codeswarm-worker:latest .
+#   (run from within the codeswarm/ directory, or use docker-compose)
 #
 # Runtime env vars:
 #   NODE_ID             - Worker node identifier (auto-generated if empty)
@@ -27,21 +28,21 @@ WORKDIR /build/codeswarm
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Copy workspace root config
-COPY codeswarm/package.json codeswarm/pnpm-workspace.yaml codeswarm/pnpm-lock.yaml codeswarm/tsconfig.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 
 # Copy package manifests (leverage Docker layer cache)
-COPY codeswarm/packages/types/package.json ./packages/types/package.json
-COPY codeswarm/packages/acp/package.json ./packages/acp/package.json
-COPY codeswarm/packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
-COPY codeswarm/packages/worker/package.json ./packages/worker/package.json
+COPY packages/types/package.json ./packages/types/package.json
+COPY packages/acp/package.json ./packages/acp/package.json
+COPY packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
+COPY packages/worker/package.json ./packages/worker/package.json
 
 RUN pnpm install --no-frozen-lockfile
 
 # Copy source & build
-COPY codeswarm/packages/types/ ./packages/types/
-COPY codeswarm/packages/acp/ ./packages/acp/
-COPY codeswarm/packages/sdk-adapter/ ./packages/sdk-adapter/
-COPY codeswarm/packages/worker/ ./packages/worker/
+COPY packages/types/ ./packages/types/
+COPY packages/acp/ ./packages/acp/
+COPY packages/sdk-adapter/ ./packages/sdk-adapter/
+COPY packages/worker/ ./packages/worker/
 
 RUN pnpm run build
 
@@ -80,8 +81,8 @@ RUN curl -fsSL "https://github.com/joernio/joern/releases/download/${JOERN_VERSI
 
 ENV JOERN_HOME=/opt/joern-cli
 
-# Copy codedmap source and install with all dependencies
-COPY codedmap/ /opt/codedmap/
+# Copy codedmap source (from plugins directory) and install with all dependencies
+COPY plugins/codedmap/ /opt/codedmap/
 RUN pip install --no-cache-dir --break-system-packages uv && \
     uv venv /opt/codedmap-venv && \
     . /opt/codedmap-venv/bin/activate && \

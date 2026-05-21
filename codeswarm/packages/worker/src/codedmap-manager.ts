@@ -7,7 +7,7 @@ import * as minioClient from './minio-client.js';
 const IS_WIN = os.platform() === 'win32';
 
 // Platform-aware defaults: Windows uses local dev paths, Linux uses /opt/ paths
-const CODEDMAP_HOME = process.env.CODEDMAP_HOME || (IS_WIN ? path.resolve(process.cwd(), '..', '..', '..', 'codedmap') : '/opt/codedmap');
+const CODEDMAP_HOME = process.env.CODEDMAP_HOME || (IS_WIN ? path.resolve(process.cwd(), '..', '..', 'plugins', 'codedmap') : '/opt/codedmap');
 const JOERN_HOME = process.env.JOERN_HOME || (IS_WIN ? 'D:\\work\\tools\\joern\\joern-cli' : '/opt/joern/joern-cli');
 const JAVA_HOME = process.env.JAVA_HOME || (IS_WIN ? '' : '/usr/lib/jvm/java-19-openjdk');
 const PYTHON_CMD = IS_WIN ? 'py' : 'python3';

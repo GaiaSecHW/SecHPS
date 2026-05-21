@@ -124,13 +124,14 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 ### CodeSwarm（分布式调度）
 
 - Redis 队列驱动的任务调度系统
-- `codeswarm/` — Worker 进程 + ACP 通信协议 + 共享类型
-- Worker 回调地址: `NEXT_PUBLIC_BASE_URL`
+- `codeswarm/` — Worker 进程 + ACP 通信协议 + 共享类型 + CodeMap 插件
+- Worker 独立配置: `codeswarm/.env.example`
+- Worker 回调地址: `NEXT_PUBLIC_BASE_URL`（主服务器侧配置）
 - 本地测试: `src/app/api/codeswarm/local-test/`
 
 ### CodeMap（代码分析引擎）
 
-- `codedmap/` — 独立 Python 项目
+- `codeswarm/plugins/codedmap/` — 独立 Python 项目（污点分析、Joern 集成）
 - 污点分析、数据流分析、Joern 集成
 - Neo4j / SQLite 存储驱动
 - C/C++ 和 Python 规则集
@@ -165,13 +166,13 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 
 ## 环境变量
 
-`.env` 必需: `DATABASE_URL`、`JWT_SECRET`、`NODE_ENV`。完整列表见 `.env.example`。
+**主服务器** `.env` 必需: `DATABASE_URL`、`JWT_SECRET`、`NODE_ENV`。完整列表见 `.env.example`。
+
+**CodeSwarm Worker** 独立配置见 `codeswarm/.env.example`（Worker 专属变量: `ORCHESTRATOR_URL`、`MINIO_*`、`CODEDMAP_HOME`、`JOERN_HOME` 等）。
 
 关键可选配置:
-- `REDIS_URL` — CodeSwarm 调度队列
 - `NEXT_PUBLIC_BASE_URL` — Worker 回调地址
 - `GITEA_*` — Gitea 文件同步
-- `NFS_*` — NFS 文件存储
 - `MINIO_*` — MinIO 对象存储
 
 ## Linux 部署
