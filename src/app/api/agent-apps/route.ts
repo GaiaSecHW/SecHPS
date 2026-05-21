@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
           name: true,
         },
       },
+      User: {
+        select: {
+          name: true,
+          username: true,
+        },
+      },
     };
 
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
@@ -51,7 +57,51 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ apps });
+    // Attach metrics per app
+    const appIds = apps.map((a: any) => a.id);
+    const metrics = appIds.length > 0
+      ? await prisma.$queryRawUnsafe(`
+          SELECT
+            ti."agentId" AS "agentId",
+            COUNT(ti.id)::int AS "runCount",
+            COUNT(ti.id) FILTER (WHERE ti.status = 'completed')::int AS "successCount",
+            MAX(ti."completedAt") AS "lastRunAt",
+            COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE)::int AS "vulnCount",
+            COUNT(v.id) FILTER (WHERE v.vulnerable IS FALSE)::int AS "alertCount",
+            COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE AND v.status IN ('confirmed','fixed'))::int AS "confirmedVuln",
+            COUNT(v.id) FILTER (WHERE v.vulnerable IS FALSE AND v.status IN ('confirmed','fixed'))::int AS "confirmedNonVuln"
+          FROM "TaskInstance" ti
+          LEFT JOIN "Vulnerability" v ON v."taskId" = ti.id
+          WHERE ti."agentId" = ANY($1::text[])
+          GROUP BY ti."agentId"
+        `, appIds) as any[]
+      : [];
+
+    const metricsMap = new Map(metrics.map((m: any) => [m.agentId, m]));
+
+    const appsWithMetrics = apps.map((app: any) => {
+      const m = metricsMap.get(app.id);
+      const confirmedVuln = m?.confirmedVuln || 0;
+      const confirmedNonVuln = m?.confirmedNonVuln || 0;
+      const falsePositiveRate = (confirmedVuln + confirmedNonVuln) > 0
+        ? confirmedVuln / (confirmedVuln + confirmedNonVuln)
+        : null;
+      return {
+        ...app,
+        _metrics: m
+          ? {
+              runCount: m.runCount,
+              successRate: m.runCount > 0 ? m.successCount / m.runCount : null,
+              lastRunAt: m.lastRunAt ?? null,
+              vulnCount: m.vulnCount,
+              alertCount: m.alertCount,
+              falsePositiveRate,
+            }
+          : { runCount: 0, successRate: null, lastRunAt: null, vulnCount: 0, alertCount: 0, falsePositiveRate: null },
+      };
+    });
+
+    return NextResponse.json({ apps: appsWithMetrics });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '获取应用列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取应用列表失败' }, { status: 500 });

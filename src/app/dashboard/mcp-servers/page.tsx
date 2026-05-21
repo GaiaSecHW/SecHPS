@@ -385,7 +385,7 @@ function McpServersContent() {
             <Server size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">MCP 服务器配置</h1>
+            <h1 className="text-xl font-semibold text-white">MCP市场</h1>
             <p className="text-sm text-gray-400 mt-0.5">管理 MCP 服务器，支持私有和共享配置</p>
           </div>
         </div>

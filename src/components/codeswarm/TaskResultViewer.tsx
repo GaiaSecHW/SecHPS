@@ -452,8 +452,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
                     {/* Events Stream */}
                     {(() => {
-                      const events = taskEvents[task.taskId] || task.events;
-                      if (!events || events.length === 0) return null;
+                      const rawEvents = taskEvents[task.taskId] || task.events;
+                      if (!rawEvents || rawEvents.length === 0) return null;
 
                       const cleanText = (t: string, max = 150): string => {
                         if (!t) return '';
@@ -463,6 +463,22 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         return t.length > max ? t.slice(0, max) + '...' : t;
                       };
 
+                      // Merge consecutive chunk events into one
+                      const CHUNK_TYPES = new Set(['agent_message_chunk', 'log_chunk', 'agent_log_chunk']);
+                      const events: any[] = [];
+                      for (const ev of rawEvents) {
+                        if (CHUNK_TYPES.has(ev.type)) {
+                          const prev = events[events.length - 1];
+                          if (prev?._merged && CHUNK_TYPES.has(prev.type)) {
+                            prev.content = (prev.content || '') + (ev.content || '');
+                          } else {
+                            events.push({ ...ev, _merged: true });
+                          }
+                        } else {
+                          events.push(ev);
+                        }
+                      }
+
                       const getEventDisplay = (event: any) => {
                         const t = event.type;
                         if (t === 'skill_start') return { badge: 'Skill', detail: event.skill || '', color: 'bg-purple-900/50 text-purple-400' };
@@ -471,7 +487,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         if (t === 'tool_call_update') return { badge: 'Result', detail: cleanText(event.output || '', 100), color: 'bg-blue-900/50 text-blue-300' };
                         if (t === 'error') return { badge: 'Error', detail: event.message || '', color: 'bg-red-900/50 text-red-400' };
                         if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', detail: event.phase || event.message || '', color: 'bg-cyan-900/50 text-cyan-400' };
-                        if (t === 'log_chunk' || t === 'agent_message_chunk') return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-gray-700 text-gray-400' };
+                        if (CHUNK_TYPES.has(t)) return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-gray-700 text-gray-400' };
                         return { badge: t, detail: event.content || event.message || '', color: 'bg-gray-700 text-gray-300' };
                       };
 
@@ -486,7 +502,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                                 const { badge, detail, color } = getEventDisplay(event);
                                 return (
                                   <div key={i} className="flex items-start space-x-1.5">
-                                    <span className="text-gray-600 shrink-0">{new Date(event.timestamp).toLocaleTimeString()}</span>
+                                    <span className="text-gray-600 shrink-0">{new Date(event.timestamp || event._createdAt).toLocaleTimeString()}</span>
                                     <span className={`px-1 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
                                     {detail && <span className="text-gray-400 truncate">{detail}</span>}
                                   </div>

@@ -13,6 +13,7 @@ import {
   MessageSquare,
   LogOut,
   Cog,
+  ClipboardCheck,
   User,
   Clock,
   Award,
@@ -173,13 +174,13 @@ function DashboardLayoutContent({
                 {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
 
                 <NavLink href="/dashboard/skills" icon={<Award size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  Skills 管理
+                  Skill市场
                 </NavLink>
                 <NavLink href="/dashboard/mcp-servers" icon={<Server size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  MCP 服务器
+                  MCP市场
                 </NavLink>
                 <NavLink href="/dashboard/agent-apps" icon={<Box size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  Agent应用开发
+                  Agent市场
                 </NavLink>
                 <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   工作流编排
@@ -191,19 +192,22 @@ function DashboardLayoutContent({
               <>
                 {!sidebarCollapsed && (
                   <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">进化与回流</p>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">数据与进化</p>
                   </div>
                 )}
                 {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
 
                 <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  智能体进化
+                  智能体进化<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
                 </NavLink>
                 <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   知识图谱
                 </NavLink>
                 <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   数据回流
+                </NavLink>
+                <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
+                  测评基准<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
                 </NavLink>
               </>
             )}
@@ -234,12 +238,6 @@ function DashboardLayoutContent({
                 </NavLink>
                 <NavLink href="/dashboard/admin/monitoring" icon={<Activity size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   系统监控
-                </NavLink>
-                <NavLink href="/dashboard/config" icon={<Cog size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  系统配置
-                </NavLink>
-                <NavLink href="/dashboard/admin/broadcast" icon={<Megaphone size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  通知广播
                 </NavLink>
                 <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   漏洞管理

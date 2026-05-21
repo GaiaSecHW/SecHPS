@@ -499,7 +499,7 @@ function SkillsPageContent() {
             <Award size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">Skills 管理</h1>
+            <h1 className="text-xl font-semibold text-white">Skill市场</h1>
             <p className="text-sm text-gray-400 mt-0.5">共 <span className="text-primary-400 font-medium">{totalSkills}</span> 个 Skills</p>
           </div>
         </div>
