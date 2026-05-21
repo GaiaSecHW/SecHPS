@@ -277,7 +277,7 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
         <div>
           <h4 className="text-xs font-medium text-gray-400 mb-1">执行结果</h4>
           <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
-            {csTask.result.slice(0, 4000)}{csTask.result.length > 4000 ? '\n...(truncated)' : ''}
+            {csTask.result}
           </pre>
         </div>
       )}
@@ -285,7 +285,7 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
         <div>
           <h4 className="text-xs font-medium text-gray-400 mb-1">安全报告</h4>
           <pre className="bg-dark-surface-hover p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
-            {csTask.reportContent.slice(0, 3000)}{csTask.reportContent.length > 3000 ? '\n...(truncated)' : ''}
+            {csTask.reportContent}
           </pre>
         </div>
       )}
