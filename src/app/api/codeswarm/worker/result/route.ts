@@ -7,7 +7,7 @@ import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import eventBus from '@/lib/event-bus';
 import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
 
-const PARSE_TIMEOUT_SEC = 600;
+const PARSE_TIMEOUT_SEC = 3600;
 
 const INSTRUCTION_PHASE1 = '执行 audit-report-parser skill 解析漏洞报告';
 const INSTRUCTION_PHASE2 = '读取 Report 文件夹内的报告文件，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion, rawReport 字段。仅输出可解析的 JSON，不要额外说明。';
