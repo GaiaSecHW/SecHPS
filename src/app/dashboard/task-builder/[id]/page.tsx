@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink, Download } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink, Download, Folder } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -447,6 +447,15 @@ export default function TaskDetailPage() {
               <p className="text-sm font-medium text-gray-100">{formatDate(task.updatedAt)}</p>
             </div>
           </div>
+          {task.projectPath && (
+            <div className="flex items-center gap-2">
+              <Folder size={18} className="text-gray-400" />
+              <div>
+                <p className="text-xs text-gray-500">工作区目录</p>
+                <p className="text-sm font-medium text-gray-100">{task.projectPath.split('/').pop()}</p>
+              </div>
+            </div>
+          )}
           {task.startedAt && (
             <div className="flex items-center gap-2">
               <Play size={18} className="text-gray-400" />

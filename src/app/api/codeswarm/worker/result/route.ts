@@ -42,8 +42,13 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
         for (const match of matches) {
           const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
           if (inner.includes('vulnerabilities')) {
-            jsonStr = inner;
-            break;
+            try {
+              JSON.parse(inner);
+              jsonStr = inner;
+              break;
+            } catch {
+              continue;
+            }
           }
         }
       }
