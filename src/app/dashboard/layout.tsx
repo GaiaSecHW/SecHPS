@@ -188,7 +188,7 @@ function DashboardLayoutContent({
               {collapsed && <div className="pt-3 mx-3 border-t border-gray-800/60" />}
 
               <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={collapsed}>
-                智能体进化
+                智能体进化<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
               </NavLink>
               <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={collapsed}>
                 知识图谱
@@ -197,7 +197,7 @@ function DashboardLayoutContent({
                 数据回流
               </NavLink>
               <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={collapsed}>
-                测评基准
+                测评基准<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
               </NavLink>
             </>
           )}
