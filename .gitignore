@@ -75,6 +75,7 @@ dev.db
 /.sisyphus
 /.playwright-mcp
 /.sisyphus
+/.omo/
 /tmp
 /prisma/migrations
 /scripts

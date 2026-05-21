@@ -269,6 +269,16 @@ function main() {
     console.log('✅ static 目录已复制到 standalone/.next/static');
   }
   
+  // 同步 .env 到 standalone 目录（确保 npm start 能通过 --env-file 加载）
+  const envSrc = path.join(ROOT_DIR, '.env');
+  const envDest = path.join(STANDALONE_DIR, '.env');
+  if (fs.existsSync(envSrc)) {
+    fs.copyFileSync(envSrc, envDest);
+    console.log('\n✅ .env 已同步到 standalone 目录');
+  } else {
+    console.log('\n⚠️  根目录 .env 不存在，请部署时手动创建');
+  }
+
   console.log(`📁 输出目录: ${STANDALONE_DIR}`);
 }
 

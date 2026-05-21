@@ -111,8 +111,9 @@ src/
 ├── types/                      # 类型定义
 └── middleware.ts               # Next.js 中间件
 
-codedmap/                       # Python 代码安全分析引擎
-codeswarm/                      # 分布式 Worker 系统
+codedmap/                       # → 已移至 codeswarm/plugins/codedmap/
+codeswarm/                      # 分布式 Worker 系统（含 CodeMap 插件）
+  └── plugins/codedmap/         # Python 代码安全分析引擎
 prisma/schema.prisma            # 数据库 Schema（60+ 模型）
 scripts/                        # 构建/迁移脚本
 plugins/                        # 插件目录

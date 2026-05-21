@@ -29,25 +29,25 @@ npm run rollback:agent-team             # 回滚 AgentTeam 迁移
 
 ```bash
 # 启动服务
-screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'   # 启动 Web 应用
-nohup pnpm --filter @codeswarm/worker dev > codeswarm/worker.log 2>&1 &  # 启动 Worker
+screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'   # 启动 Web 应用（自动加载 .env）
+screen -dmS worker1 bash -c 'cd codeswarm/packages/worker && PORT=8090 NODE_ID=worker-1 MAX_CONCURRENT=5 ORCHESTRATOR_URL=http://<主机IP>:3000 node --env-file=../../../.env dist/index.js > /tmp/worker1.log 2>&1; exec bash'  # 启动 Worker（注意 ORCHESTRATOR_URL 指向实际可达地址）
 
 # 停止服务
 screen -S sechps -X quit                                             # 停止 Web 应用
-pkill -f "tsx.*index.ts"                                             # 停止 Worker 进程
+screen -S worker1 -X quit                                            # 停止 Worker 进程
 
 # 查看日志
 tail -f app.log                      # Web 应用日志
-tail -f codeswarm/worker.log         # Worker 日志
+tail -f /tmp/worker1.log             # Worker 日志
 screen -r sechps                     # 进入 Web 应用 screen 会话
 
 # 健康检查
 curl -s http://localhost:3000/api/global/health   # Web 应用状态
-curl -s http://127.0.0.1:8090/health              # Worker 状态（如有）
+curl -s http://localhost:8090/health              # Worker 状态
 
 # 重启流程
 screen -S sechps -X quit && screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'
-pkill -f "tsx.*index.ts" && nohup pnpm --filter @codeswarm/worker dev > codeswarm/worker.log 2>&1 &
+screen -S worker1 -X quit && screen -dmS worker1 bash -c 'cd codeswarm/packages/worker && PORT=8090 NODE_ID=worker-1 MAX_CONCURRENT=5 ORCHESTRATOR_URL=http://<主机IP>:3000 node --env-file=../../../.env dist/index.js > /tmp/worker1.log 2>&1; exec bash'
 ```
 
 **语言规则**: 用中文回答
@@ -124,13 +124,14 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 ### CodeSwarm（分布式调度）
 
 - Redis 队列驱动的任务调度系统
-- `codeswarm/` — Worker 进程 + ACP 通信协议 + 共享类型
-- Worker 回调地址: `NEXT_PUBLIC_BASE_URL`
+- `codeswarm/` — Worker 进程 + ACP 通信协议 + 共享类型 + CodeMap 插件
+- Worker 独立配置: `codeswarm/.env.example`
+- Worker 回调地址: `NEXT_PUBLIC_BASE_URL`（主服务器侧配置）
 - 本地测试: `src/app/api/codeswarm/local-test/`
 
 ### CodeMap（代码分析引擎）
 
-- `codedmap/` — 独立 Python 项目
+- `codeswarm/plugins/codedmap/` — 独立 Python 项目（污点分析、Joern 集成）
 - 污点分析、数据流分析、Joern 集成
 - Neo4j / SQLite 存储驱动
 - C/C++ 和 Python 规则集
@@ -155,8 +156,11 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 ## 构建注意事项
 
 - `npm run build` = `next build && node scripts/postbuild.js`
-- postbuild 复制: `.next/`、`prisma/`、`plugins/` → `.next/standalone/`
+- postbuild 复制: `.next/`、`prisma/`、`plugins/`、`.env` → `.next/standalone/`
 - 不复制: `data/`、`uploads/`（运行时动态）
+- `npm start` 使用 `node --env-file=.env .next/standalone/server.js`，自动加载根目录 `.env`
+- standalone 目录下的 `.env` 由 postbuild 同步，修改根目录 `.env` 后需 `npm run build` 或手动 `cp .env .next/standalone/.env`
+- `.env` 中 `PORT` 为 Web 应用端口（默认 3000），Worker 的 `PORT=8090` 在其启动命令中硬编码
 
 ## 默认账户
 
@@ -165,13 +169,15 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 
 ## 环境变量
 
-`.env` 必需: `DATABASE_URL`、`JWT_SECRET`、`NODE_ENV`。完整列表见 `.env.example`。
+**主服务器** `.env` 必需: `DATABASE_URL`、`JWT_SECRET`、`NODE_ENV`、`REDIS_URL`。完整列表见 `.env.example`。
+
+**CodeSwarm Worker** 独立配置见 `codeswarm/.env.example`（Worker 专属变量: `ORCHESTRATOR_URL`、`MINIO_*`、`CODEDMAP_HOME`、`JOERN_HOME` 等）。Worker 启动命令中的 `--env-file=../../../.env` 会加载主服务器 `.env`，`ORCHESTRATOR_URL` 等变量通过启动命令参数覆盖。
 
 关键可选配置:
-- `REDIS_URL` — CodeSwarm 调度队列
-- `NEXT_PUBLIC_BASE_URL` — Worker 回调地址
+- `NEXT_PUBLIC_BASE_URL` — Worker 回调地址（必须指向 Web 应用可达地址）
+- `REDIS_URL` — Redis 连接（CodeSwarm 调度队列，指定 db 编号如 `/3`）
+- `PORT` — Web 应用端口（默认 3000，Worker 端口在启动命令硬编码为 8090）
 - `GITEA_*` — Gitea 文件同步
-- `NFS_*` — NFS 文件存储
 - `MINIO_*` — MinIO 对象存储
 
 ## Linux 部署
@@ -187,3 +193,6 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 | 漏洞状态类型不匹配 | 使用 `false-positive`（连字符） |
 | SkillImprovement taskId 冲突 | 使用 `upsert` 代替 `create` |
 | Agent SDK 二进制缺失 | 不用 `--production` 安装，手动补装对应平台包 |
+| Worker 心跳失败/任务排队 | 检查 Worker 的 `ORCHESTRATOR_URL` 是否指向 Web 应用可达地址 |
+| standalone 不加载 .env | `npm start` 已改为 `node --env-file=.env`，确保根目录有 `.env` |
+| Web 应用启动端口冲突 | `.env` 中 `PORT` 为 Web 应用端口（默认 3000），Worker 端口 8090 在启动命令硬编码 |
