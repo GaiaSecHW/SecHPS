@@ -171,6 +171,27 @@ function main() {
 
   console.log(`\n✨ 完成！共处理 ${copiedCount}/${Object.keys(DIR_COPY_RULES).length} 个目录`);
 
+  // 同步 server chunks 到 standalone（Next.js standalone 模式追踪不全）
+  const srcChunksDir = path.join(ROOT_DIR, '.next', 'server', 'chunks');
+  const destChunksDir = path.join(STANDALONE_DIR, '.next', 'server', 'chunks');
+  if (fs.existsSync(srcChunksDir)) {
+    console.log('\n📦 同步 server chunks 到 standalone...');
+    if (!fs.existsSync(destChunksDir)) {
+      fs.mkdirSync(destChunksDir, { recursive: true });
+    }
+    const srcFiles = fs.readdirSync(srcChunksDir);
+    let syncedCount = 0;
+    for (const file of srcFiles) {
+      const srcPath = path.join(srcChunksDir, file);
+      const destPath = path.join(destChunksDir, file);
+      if (!fs.existsSync(destPath)) {
+        fs.copyFileSync(srcPath, destPath);
+        syncedCount++;
+      }
+    }
+    console.log(`✅ 同步了 ${syncedCount} 个缺失的 chunk 文件（总计 ${srcFiles.length}）`);
+  }
+
   // 清理 Windows/macOS 专用文件（只保留 Linux）
   // 如果 KEEP_WINDOWS_FILES=true 或当前是 Windows 平台，则保留 Windows 文件
   if (KEEP_WINDOWS) {

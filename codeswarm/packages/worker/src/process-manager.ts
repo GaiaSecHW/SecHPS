@@ -216,7 +216,7 @@ export class ProcessManager {
         toolCall: (tool: string, input: unknown, title?: string) => {
           const actualToolName = (title || tool).toLowerCase();
           console.log(`[ProcessMgr] EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
-          console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 100)}`);
+          console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
 
           const isSkillCall = actualToolName === 'skill'
             || (typeof input === 'object' && input !== null && ('skill' in input || 'skill_name' in input));
@@ -354,133 +354,6 @@ export class ProcessManager {
       }
 
       console.log(`[ProcessMgr]   command: ${clientConfig.command || 'opencode (default)'}`);
-
-      console.log(`[ProcessMgr] Step B: Creating ACPClient...`);
-      client = new ACPClient();
-      console.log(`[ProcessMgr] ACPClient created`);
-
-      console.log(`[ProcessMgr] Step C: Registering event handlers...`);
-      client.on({
-        text: (content: string) => {
-          console.log(`[ProcessMgr] EVENT text: "${content.substring(0, 50)}..."`);
-          stdout += content;
-          if (onEvent) {
-            onEvent({
-              type: 'agent_message_chunk',
-              content,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        },
-        toolCall: (tool: string, input: unknown, title?: string) => {
-          const actualToolName = (title || tool).toLowerCase();
-          console.log(`[ProcessMgr] EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
-          console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
-
-          const isSkillCall = actualToolName === 'skill'
-            || (typeof input === 'object' && input !== null && ('skill' in input || 'skill_name' in input));
-
-          if (isSkillCall && onEvent) {
-            let skillName = extractSkillName(input) || 'unknown';
-
-            if (skillName === 'unknown' && client) {
-              const textBuffer = client.getTextBuffer();
-              console.log(`[ProcessMgr] Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`);
-              skillName = inferSkillNameFromContext(textBuffer) || 'unknown';
-            }
-
-            if (currentSkill && currentSkill !== skillName) {
-              onEvent({
-                type: 'skill_complete',
-                skill: currentSkill,
-                timestamp: new Date().toISOString(),
-              });
-            }
-
-            currentSkill = skillName;
-            onEvent({
-              type: 'skill_start',
-              skill: skillName,
-              content: `开始执行 Skill: ${skillName}`,
-              timestamp: new Date().toISOString(),
-            });
-          }
-
-          if ((actualToolName === 'agent' || actualToolName === 'task') && onEvent) {
-            const description = (input as any)?.description || '';
-            const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
-            if (skillMatch && skillMatch[1]) {
-              const skillName = skillMatch[1];
-              console.log(`[ProcessMgr] 检测到 Agent 执行 Skill: ${skillName}`);
-
-              if (currentSkill && currentSkill !== skillName) {
-                onEvent({
-                  type: 'skill_complete',
-                  skill: currentSkill,
-                  timestamp: new Date().toISOString(),
-                });
-              }
-
-              currentSkill = skillName;
-              onEvent({
-                type: 'skill_start',
-                skill: skillName,
-                content: `Agent 执行 Skill: ${skillName}`,
-                timestamp: new Date().toISOString(),
-              });
-            }
-          }
-
-          if (onEvent) {
-            onEvent({
-              type: 'tool_call',
-              tool: actualToolName,
-              input,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        },
-        toolCallUpdate: (output: string) => {
-          console.log(`[ProcessMgr] EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
-
-          // Secondary skill name extraction from tool output (e.g., "Launching skill: review")
-          if (currentSkill === 'unknown' && output) {
-            const launchMatch = output.match(/(?:Launching|Invoking|Running|Executing)\s+skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
-            if (launchMatch && launchMatch[1]) {
-              console.log(`[ProcessMgr] Skill name resolved from output: ${launchMatch[1]}`);
-              currentSkill = launchMatch[1];
-              if (onEvent) {
-                onEvent({
-                  type: 'skill_start',
-                  skill: currentSkill,
-                  content: `Skill 名称已修正: ${currentSkill}`,
-                  timestamp: new Date().toISOString(),
-                });
-              }
-            }
-          }
-
-          if (onEvent) {
-            onEvent({
-              type: 'tool_call_update',
-              output,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        },
-        error: (message: string) => {
-          console.log(`[ProcessMgr] EVENT error: ${message}`);
-          stderr += message;
-          if (onEvent) {
-            onEvent({
-              type: 'error',
-              message,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        },
-      });
-      console.log(`[ProcessMgr] Event handlers registered`);
 
       await client.start(clientConfig);
       console.log(`[ProcessMgr] Step D DONE: client.start() completed`);

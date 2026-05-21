@@ -608,12 +608,6 @@ const taskPayload = JSON.stringify({
         this.workers.delete(nodeId);
 
         if (hadTasks) {
-          try {
-            await fetch(`http://${worker.address}/task/cancel`, {
-              method: 'POST',
-              signal: AbortSignal.timeout(5000),
-            });
-          } catch { /* Worker 可能已离线 */ }
           this.rescheduleWorkerTasks(worker).catch(e =>
             console.error('[CodeSwarm] 重调度任务失败:', e)
           );
@@ -688,6 +682,8 @@ const taskPayload = JSON.stringify({
 
   private async rescheduleWorkerTasks(worker: WorkerInfo) {
     try {
+      const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+
       // 更新 DB：Worker 离线
       await prisma.codeswarmWorker.update({
         where: { id: worker.id },
@@ -704,13 +700,26 @@ const taskPayload = JSON.stringify({
       });
 
       for (const task of stuckTasks) {
+        // 尝试向 Worker 发送 cancel 请求（多地址 failover）
+        for (const addr of addresses) {
+          try {
+            await fetch(`http://${addr}/task/cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId: task.taskId }),
+              signal: AbortSignal.timeout(5000),
+            });
+            break;
+          } catch { /* Worker 可能已离线 */ }
+        }
+
         // 改回 queued
         await prisma.codeswarmTask.update({
           where: { id: task.id },
           data: {
             state: 'queued',
             CodeswarmWorker: { disconnect: true },
-            preferredWorkerNodeId: null,  // 清理：原 Worker 已掉线
+            preferredWorkerNodeId: null,
             updatedAt: new Date()
           },
         });

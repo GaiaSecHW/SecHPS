@@ -35,6 +35,8 @@ export class WorkerDaemon {
   private static readonly HEARTBEAT_MAX_FAIL_WARN = 5;
   /** Track task IDs currently being executed to prevent duplicate processing. */
   private readonly activeTasks = new Map<string, TaskPayload>();
+  /** Track task IDs cancelled via /task/cancel to avoid duplicate result posts. */
+  private readonly cancelledTasks = new Set<string>();
 
   constructor(config: WorkerDaemonConfig) {
     this.config = config;
@@ -111,7 +113,8 @@ export class WorkerDaemon {
 
       this.server.log.info({ taskId }, 'Received cancel request');
 
-      // 1. Terminate the process (with force kill timeout)
+      this.cancelledTasks.add(taskId);
+
       try {
         await this.processMgr.terminate(taskId);
         this.server.log.info({ taskId }, 'Process terminated successfully');
@@ -119,23 +122,7 @@ export class WorkerDaemon {
         this.server.log.warn({ taskId, error: err }, 'Terminate failed, but will continue cleanup');
       }
 
-      // 2. Notify platform that task was cancelled
-      try {
-        await this.postResult(payload, {
-          taskId,
-          nodeId: this.config.nodeId,
-          status: 'failed',
-          error: 'Task cancelled by user',
-        });
-      } catch (err) {
-        this.server.log.warn({ taskId, error: err }, 'Failed to notify platform of cancellation');
-      }
-
-      // 3. Remove from active tasks and release semaphore
-      this.activeTasks.delete(taskId);
-      this.semaphore.release();
-
-      this.server.log.info({ taskId }, 'Task cancelled and resources released');
+      this.server.log.info({ taskId }, 'Task marked as cancelled, executeTask will handle cleanup');
       return reply.status(200).send({ taskId, message: 'Task cancelled successfully' });
     });
 
@@ -441,14 +428,15 @@ export class WorkerDaemon {
 
       const reportContent = this.collectReport(workspacePath);
 
-      const status: TaskResultStatus = result.exitCode === 0 ? 'completed' : 'failed';
+      const isCancelled = this.cancelledTasks.has(taskId);
+      const status: TaskResultStatus = isCancelled ? 'failed' : (result.exitCode === 0 ? 'completed' : 'failed');
 
       // ========== PHASE COMPLETE: 执行任务 ==========
       onEvent({
         type: 'phase_complete',
         phase: 'executing',
         success: status === 'completed',
-        message: status === 'completed' ? '任务执行完成' : `任务执行失败: exitCode=${result.exitCode}`,
+        message: isCancelled ? '任务已取消' : (status === 'completed' ? '任务执行完成' : `任务执行失败: exitCode=${result.exitCode}`),
         timestamp: new Date().toISOString(),
       });
 
@@ -456,19 +444,21 @@ export class WorkerDaemon {
         taskId,
         nodeId: this.config.nodeId,
         status,
-        result: result.stdout || undefined,
-        error: result.exitCode !== 0 ? result.stderr || `Process exited with code ${result.exitCode}` : undefined,
-        reportContent,
+        result: isCancelled ? undefined : (result.stdout || undefined),
+        error: isCancelled ? 'Task cancelled by user' : (result.exitCode !== 0 ? result.stderr || `Process exited with code ${result.exitCode}` : undefined),
+        reportContent: isCancelled ? undefined : reportContent,
       });
     } catch (error) {
-      this.server.log.error({ taskId, error }, 'Task failed');
+      const isCancelled = this.cancelledTasks.has(taskId);
+      this.server.log.error({ taskId, error, isCancelled }, 'Task failed');
       await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status: 'failed',
-        error: error instanceof Error ? error.message : String(error),
+        error: isCancelled ? 'Task cancelled by user' : (error instanceof Error ? error.message : String(error)),
       });
     } finally {
+      this.cancelledTasks.delete(taskId);
       // Codedmap is fully async — do NOT await it here.
       // Errors are handled inside the promise chain (lines 232-243).
       // NFS passthrough mode skips cleanup anyway, so no risk of

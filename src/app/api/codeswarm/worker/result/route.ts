@@ -323,7 +323,7 @@ export async function POST(request: Request) {
 
     const finalState = status === 'completed' ? 'completed' : 'failed';
 
-    await prisma.$executeRaw`
+    const updateResult = await prisma.$executeRaw`
       UPDATE "CodeswarmTask"
       SET state = ${finalState},
           result = ${result || null},
@@ -332,7 +332,16 @@ export async function POST(request: Request) {
           "completedAt" = NOW(),
           "updatedAt" = NOW()
       WHERE "taskId" = ${taskId}
+        AND (state = 'running' OR state = 'dispatched')
     `;
+
+    if (updateResult === 0) {
+      console.warn(`[CodeSwarm] Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
+      if (nodeId) {
+        await codeswarmDispatcher.onTaskCompleted(nodeId);
+      }
+      return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_already_terminal' });
+    }
 
     const taskInstance = await prisma.taskInstance.findFirst({
       where: { codeswarmTaskId: taskId },
