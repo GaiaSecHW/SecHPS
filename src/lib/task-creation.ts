@@ -12,26 +12,21 @@ export async function validateFileStructure(
   files: { name: string; buffer: Buffer }[],
   inputRequirements: string,
 ): Promise<{ valid: boolean; reason?: string }> {
-  // 1. 获取系统配置的校验模型
-  const activeConfig = await prisma.opencodeConfig.findFirst({
+  // 使用默认模型配置（isDefault=true，否则取第一个激活的）
+  const defaultModel = await prisma.modelConfig.findFirst({
+    where: { isDefault: true, isActive: true },
+    select: { apiKey: true, apiBaseUrl: true, providerType: true, models: true },
+  }) || await prisma.modelConfig.findFirst({
     where: { isActive: true },
-    select: { fileValidationModel: true },
+    select: { apiKey: true, apiBaseUrl: true, providerType: true, models: true },
   });
 
-  if (!activeConfig?.fileValidationModel) {
-    return { valid: true }; // 没配置校验模型，跳过
+  if (!defaultModel?.apiKey) {
+    return { valid: true }; // 没有可用模型配置，跳过
   }
 
-  const [configId, modelName] = activeConfig.fileValidationModel.split('::');
-  if (!configId || !modelName) {
-    return { valid: true }; // 格式不对，跳过
-  }
-
-  // 2. 获取模型配置和 apiKey
-  const modelConfig = await prisma.modelConfig.findUnique({
-    where: { id: configId },
-    select: { apiKey: true, apiBaseUrl: true, providerType: true },
-  });
+  const modelConfig = defaultModel;
+  const modelName = (defaultModel.models as string).split(',')[0]?.trim();
 
   if (!modelConfig?.apiKey) {
     return { valid: true }; // 没有模型配置或 apiKey，跳过

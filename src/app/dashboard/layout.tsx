@@ -34,7 +34,7 @@ import {
   ChevronRight,
   Coins,
   GitBranch,
-  Megaphone,
+  Megaphone, // eslint-disable-line @typescript-eslint/no-unused-vars
   ClipboardList,
   Box,
   Key,
@@ -232,18 +232,6 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/admin/monitoring" icon={<Activity size={18} />} collapsed={collapsed}>
                 系统监控
               </NavLink>
-              <NavLink href="/dashboard/config" icon={<Cog size={18} />} collapsed={collapsed}>
-                系统配置
-              </NavLink>
-              <NavLink href="/dashboard/admin/broadcast" icon={<Megaphone size={18} />} collapsed={collapsed}>
-                通知广播
-              </NavLink>
-              {/* <NavLink href="/dashboard/plugins" icon={<Puzzle size={18} />} collapsed={collapsed}>
-                插件管理
-              </NavLink> */}
-              {/* <NavLink href="/dashboard/admin/vulnerability-patterns" icon={<Shield size={18} />} collapsed={collapsed}>
-                漏洞模式
-              </NavLink> */}
               <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={18} />} collapsed={collapsed}>
                 漏洞管理
               </NavLink>
