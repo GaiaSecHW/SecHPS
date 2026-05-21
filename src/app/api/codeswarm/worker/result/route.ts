@@ -35,17 +35,22 @@ interface ParsedVulnerabilityReport {
 function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
   try {
     let jsonStr = '';
+    console.log(`[VulnParse] parseVulnerabilityJson 输出长度: ${output.length}, 前200字符: ${output.substring(0, 200)}`);
 
     if (output.includes('```json')) {
       const matches = output.match(/```json\s*([\s\S]*?)\s*```/g);
       if (matches) {
+        console.log(`[VulnParse] 找到 ${matches.length} 个 ```json 块`);
         for (const match of matches) {
           const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
           if (inner.includes('vulnerabilities')) {
             jsonStr = inner;
+            console.log(`[VulnParse] ```json 块中找到 vulnerabilities, 长度: ${jsonStr.length}`);
             break;
           }
         }
+      } else {
+        console.log(`[VulnParse] ```json 块正则无匹配`);
       }
     }
 
@@ -60,25 +65,36 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
           if (braceCount === 0) { endIdx = i + 1; break; }
         }
         jsonStr = output.slice(startIdx, endIdx);
+        console.log(`[VulnParse] 从 vulnerabilities 关键词提取 JSON, 长度: ${jsonStr.length}, 起始位置: ${startIdx}`);
       }
     }
 
-    if (!jsonStr) return null;
-
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) return null;
-
-    for (const v of parsed.vulnerabilities) {
-      if (!v.title || !v.type) return null;
+    if (!jsonStr) {
+      console.log(`[VulnParse] 未提取到 JSON 字符串, 输出不含 ```json 或 "vulnerabilities"`);
+      return null;
     }
 
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
+      console.log(`[VulnParse] JSON 解析成功但 vulnerabilities 为空或非数组: ${JSON.stringify(parsed).substring(0, 200)}`);
+      return null;
+    }
+
+    for (const v of parsed.vulnerabilities) {
+      if (!v.title || !v.type) {
+        console.log(`[VulnParse] 漏洞条目缺少 title/type: ${JSON.stringify(v).substring(0, 200)}`);
+        return null;
+      }
+    }
+
+    console.log(`[VulnParse] 解析成功: ${parsed.vulnerabilities.length} 条漏洞, evaluationId=${parsed.evaluationId || '无'}`);
     return {
       evaluationId: parsed.evaluationId ?? '',
       skillExecutionId: parsed.skillExecutionId ?? '',
       vulnerabilities: parsed.vulnerabilities,
     };
   } catch (e) {
-    console.error('[VulnParse] JSON 解析失败:', e);
+    console.error('[VulnParse] JSON 解析失败:', e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -96,36 +112,56 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
     }
 
     let cmd: string;
+    let finalArgs: string[];
+    let useShell = false;
+
     if (isWindows) {
       const appData = process.env.APPDATA || '';
       const exePath = path.join(appData, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
       cmd = fs.existsSync(exePath) ? exePath : 'opencode';
+      finalArgs = args;
+      useShell = true;
     } else {
-      cmd = 'opencode';
+      cmd = 'bash';
+      finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
     }
 
-    console.log(`[VulnParse:${taskId}] 执行: ${cmd} run --agent build "${instruction.slice(0, 50)}..."`);
+    console.log(`[VulnParse:${taskId}] 执行: cmd=${cmd}, args=${isWindows ? finalArgs.join(' ') : finalArgs[1]?.substring(0, 80)}`);
 
     let stdout = '';
     let stderr = '';
 
-    childProcess = spawn(cmd, args, {
+    childProcess = spawn(cmd, finalArgs, {
       cwd: projectPath,
       env: env as NodeJS.ProcessEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
+      shell: useShell,
+    });
+
+    childProcess.on('spawn', () => {
+      console.log(`[VulnParse:${taskId}] 进程已启动, pid=${childProcess?.pid}`);
+    });
+
+    childProcess.on('error', (err) => {
+      console.error(`[VulnParse:${taskId}] 进程启动错误: ${err.message}`);
     });
 
     childProcess.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
     childProcess.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
 
     const exitCode = await new Promise<number | null>((resolve) => {
-      childProcess?.on('exit', (code) => resolve(code ?? 1));
-      childProcess?.on('error', () => resolve(1));
+      childProcess?.on('exit', (code) => {
+        console.log(`[VulnParse:${taskId}] 进程退出, code=${code}, stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
+        resolve(code ?? 1);
+      });
+      childProcess?.on('error', () => {
+        console.error(`[VulnParse:${taskId}] 进程 error 事件, stderr=${stderr.substring(0, 200)}`);
+        resolve(1);
+      });
 
       setTimeout(() => {
         if (childProcess && childProcess.exitCode === null) {
-          console.log(`[VulnParse:${taskId}] 执行超时终止`);
+          console.log(`[VulnParse:${taskId}] 执行超时终止 (已收集 stdout=${stdout.length}, stderr=${stderr.length})`);
           childProcess.kill('SIGTERM');
           resolve(124);
         }
@@ -133,13 +169,19 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
     });
 
     if (exitCode !== 0) {
-      console.error(`[VulnParse:${taskId}] 执行失败: exit=${exitCode}`);
+      console.error(`[VulnParse:${taskId}] 执行失败: exit=${exitCode}, stderr=${stderr.substring(0, 500)}`);
       return null;
     }
+
+    console.log(`[VulnParse:${taskId}] 执行成功: stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
+    console.log(`[VulnParse:${taskId}] stdout预览: ${stdout.substring(0, 300)}`);
+    console.log(`[VulnParse:${taskId}] stderr预览: ${stderr.substring(0, 300)}`);
 
     const report = parseVulnerabilityJson(stdout) || parseVulnerabilityJson(stderr);
     if (report) {
       console.log(`[VulnParse:${taskId}] 解析成功: ${report.vulnerabilities.length} 条漏洞`);
+    } else {
+      console.log(`[VulnParse:${taskId}] 解析失败: stdout和stderr均未提取到有效漏洞 JSON`);
     }
     return report;
   } finally {
@@ -222,23 +264,33 @@ function executeVulnerabilityParseAsync(
 
       let report: ParsedVulnerabilityReport | null = null;
 
-      await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', 'opencode run --agent build "执行 audit-report-parser skill 解析漏洞报告"');
+      await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', `opencode run --agent build "${INSTRUCTION_PHASE1}"`);
+      console.log(`[VulnParse:${taskId}] Phase 1 开始: instruction="${INSTRUCTION_PHASE1}"`);
       report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE1);
 
       if (report) {
         const durationMs = Date.now() - startTime;
-        console.log(`[VulnParse:${taskId}] Skill 解析成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
-        await createParseLog(taskInstanceId, 'success', `Skill 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s`);
+        console.log(`[VulnParse:${taskId}] Phase 1 成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
+        const vulnTitles = report.vulnerabilities.slice(0, 3).map(v => `${v.severity || '?'}: ${v.title}`).join('; ');
+        await createParseLog(taskInstanceId, 'success', `Skill 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s, 示例: ${vulnTitles}`);
+      } else {
+        console.log(`[VulnParse:${taskId}] Phase 1 失败: Skill 未返回有效漏洞数据`);
+        await createParseLog(taskInstanceId, 'warn', 'Phase 1 Skill 解析未返回有效数据', '将启动 Phase 2 Fallback');
       }
 
       if (!report) {
-        await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', '使用 opencode --agent build 直接解析报告');
+        await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', `opencode run --agent build "${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
+        console.log(`[VulnParse:${taskId}] Phase 2 开始: instruction="${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
         report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE2);
 
         if (report) {
           const durationMs = Date.now() - startTime;
-          console.log(`[VulnParse:${taskId}] AI Fallback 解析成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
-          await createParseLog(taskInstanceId, 'info', `AI Fallback 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s`);
+          console.log(`[VulnParse:${taskId}] Phase 2 成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
+          const vulnTitles = report.vulnerabilities.slice(0, 3).map(v => `${v.severity || '?'}: ${v.title}`).join('; ');
+          await createParseLog(taskInstanceId, 'success', `AI Fallback 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s, 示例: ${vulnTitles}`);
+        } else {
+          console.log(`[VulnParse:${taskId}] Phase 2 失败: AI Fallback 也未返回有效漏洞数据`);
+          await createParseLog(taskInstanceId, 'warn', 'Phase 2 AI Fallback 解析未返回有效数据');
         }
       }
 
@@ -277,6 +329,8 @@ function executeVulnerabilityParseAsync(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vulnRequestBody),
       });
+
+      console.log(`[VulnParse:${taskId}] 漏洞入库响应: status=${vulnRes.status}, ok=${vulnRes.ok}`);
 
       const vulnResult = await vulnRes.json();
 
