@@ -28,6 +28,11 @@ export class WorkerDaemon {
   private readonly semaphore: Semaphore;
   private readonly codedmapMgr: CodedmapManager;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeatRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatFailCount = 0;
+  private heartbeatInProgress = false;
+  private static readonly HEARTBEAT_RETRY_DELAYS = [1000, 2000, 4000, 8000];
+  private static readonly HEARTBEAT_MAX_FAIL_WARN = 5;
   /** Track task IDs currently being executed to prevent duplicate processing. */
   private readonly activeTasks = new Map<string, TaskPayload>();
 
@@ -149,6 +154,10 @@ export class WorkerDaemon {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    if (this.heartbeatRetryTimer) {
+      clearTimeout(this.heartbeatRetryTimer);
+      this.heartbeatRetryTimer = null;
+    }
 
     // Notify platform for all active tasks before terminating
     for (const [taskId, payload] of this.activeTasks) {
@@ -177,12 +186,59 @@ export class WorkerDaemon {
   }
 
   private startHeartbeat(): void {
-    // Send first heartbeat immediately
-    this.sendHeartbeat();
-    // Then every 30 seconds
+    this.sendHeartbeatWithRetry();
     this.heartbeatTimer = setInterval(() => {
-      this.sendHeartbeat();
+      this.sendHeartbeatWithRetry();
     }, 30_000);
+  }
+
+  private sendHeartbeatWithRetry(): void {
+    if (this.heartbeatInProgress) return;
+    this.heartbeatInProgress = true;
+    
+    this.sendHeartbeat()
+      .then((success) => {
+        this.heartbeatInProgress = false;
+        if (success) {
+          this.heartbeatFailCount = 0;
+          if (this.heartbeatRetryTimer) {
+            clearTimeout(this.heartbeatRetryTimer);
+            this.heartbeatRetryTimer = null;
+          }
+        } else {
+          this.scheduleHeartbeatRetry();
+        }
+      })
+      .catch(() => {
+        this.heartbeatInProgress = false;
+        this.scheduleHeartbeatRetry();
+      });
+  }
+
+  private scheduleHeartbeatRetry(): void {
+    this.heartbeatFailCount++;
+    
+    if (this.heartbeatFailCount >= WorkerDaemon.HEARTBEAT_MAX_FAIL_WARN) {
+      this.server.log.warn(
+        { failCount: this.heartbeatFailCount },
+        `Heartbeat 连续失败 ${this.heartbeatFailCount} 次，Worker 可能被判定离线`
+      );
+    }
+    
+    const delayIndex = Math.min(
+      this.heartbeatFailCount - 1,
+      WorkerDaemon.HEARTBEAT_RETRY_DELAYS.length - 1
+    );
+    const delay = WorkerDaemon.HEARTBEAT_RETRY_DELAYS[delayIndex];
+    
+    this.server.log.info(
+      { failCount: this.heartbeatFailCount, retryDelay: delay },
+      `Heartbeat 失败，${delay}ms 后重试`
+    );
+    
+    this.heartbeatRetryTimer = setTimeout(() => {
+      this.sendHeartbeatWithRetry();
+    }, delay);
   }
 
   /** Get all local IPv4 addresses, excluding loopback. */
@@ -197,12 +253,11 @@ export class WorkerDaemon {
         }
       }
     }
-    // Always include localhost as fallback
     addresses.push(`localhost:${this.config.port}`);
     return [...new Set(addresses)];
   }
 
-  private async sendHeartbeat(): Promise<void> {
+  private async sendHeartbeat(): Promise<boolean> {
     try {
       const addresses = this.getLocalAddresses();
       const systemType = os.platform() === 'win32' ? 'windows' : os.platform() === 'darwin' ? 'darwin' : 'linux';
@@ -218,12 +273,19 @@ export class WorkerDaemon {
           systemType,
           arch,
         }),
+        signal: AbortSignal.timeout(5000),
       });
-      if (!resp.ok) {
-        this.server.log.warn({ status: resp.status }, 'Heartbeat failed');
+      
+      if (resp.ok) {
+        this.server.log.debug('Heartbeat 成功');
+        return true;
       }
+      
+      this.server.log.warn({ status: resp.status }, 'Heartbeat failed');
+      return false;
     } catch (err) {
       this.server.log.warn({ error: err }, 'Heartbeat request failed');
+      return false;
     }
   }
 

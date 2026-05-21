@@ -553,9 +553,7 @@ export default function TaskDetailPage() {
             <h2 className="text-lg font-semibold text-gray-100">执行结果</h2>
           </div>
           <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap">
-            {task.executionResult.length > 5000 
-              ? task.executionResult.slice(0, 5000) + '\n...(内容过长，已截断)'
-              : task.executionResult}
+            {task.executionResult}
           </pre>
         </div>
       )}
@@ -567,9 +565,7 @@ export default function TaskDetailPage() {
             <h2 className="text-lg font-semibold text-gray-100">安全报告</h2>
           </div>
           <pre className="bg-gray-900 text-yellow-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96">
-            {task.reportPath.length > 3000
-              ? task.reportPath.slice(0, 3000) + '\n...(内容过长，已截断)'
-              : task.reportPath}
+            {task.reportPath}
           </pre>
         </div>
       )}
@@ -897,9 +893,7 @@ function LogsGroupedDisplay({ logs, formatDate }: { logs: TaskExecutionLog[], fo
             <div className="border-t border-green-500/10">
               <div className="p-4 max-h-[500px] overflow-y-auto bg-[#0a0f0a]/50">
                 <div className="text-gray-200">
-                  {renderAgentText(groupedLogs.agentOutput.text.length > 15000
-                    ? groupedLogs.agentOutput.text.slice(0, 15000) + '\n\n... (内容过长，已截断)'
-                    : groupedLogs.agentOutput.text)}
+                  {renderAgentText(groupedLogs.agentOutput.text)}
                 </div>
               </div>
             </div>

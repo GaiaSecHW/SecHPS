@@ -519,7 +519,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">执行结果</h4>
                         <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
-                          {task.result.slice(0, 3000)}{task.result.length > 3000 ? '\n...(truncated)' : ''}
+                          {task.result}
                         </pre>
                       </div>
                     )}
@@ -529,7 +529,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">安全报告</h4>
                         <pre className="bg-dark-surface-hover p-3 rounded-lg text-xs overflow-x-auto max-h-48">
-                          {task.reportContent.slice(0, 2000)}{task.reportContent.length > 2000 ? '\n...(truncated)' : ''}
+                          {task.reportContent}
                         </pre>
                       </div>
                     )}
