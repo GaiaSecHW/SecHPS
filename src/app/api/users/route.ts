@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestAsync, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { generateId, ID_PREFIXES } from '@/lib/id-generator';
 import { PERMISSIONS } from '@/types/permissions';
@@ -29,7 +29,7 @@ function validatePassword(password: string): { valid: boolean; error?: string } 
 export async function GET(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.USER_READ });
+    const auth = await authenticateRequestAsync(request, { requiredPermission: PERMISSIONS.USER_READ });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.USER_CREATE });
+    const auth = await authenticateRequestAsync(request, { requiredPermission: PERMISSIONS.USER_CREATE });
     if (!auth.success) {
       return authErrorResponse(auth);
     }

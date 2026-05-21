@@ -184,11 +184,26 @@ function DashboardLayoutContent({
                 <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   工作流编排
                 </NavLink>
+              </>
+            )}
+
+            {(user?.isIcsTenant || user?.roles?.includes('admin')) && (
+              <>
+                {!sidebarCollapsed && (
+                  <div className="pt-5 pb-1 px-4">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">进化与回流</p>
+                  </div>
+                )}
+                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
+
                 <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   智能体进化
                 </NavLink>
                 <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   知识图谱
+                </NavLink>
+                <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
+                  数据回流
                 </NavLink>
               </>
             )}

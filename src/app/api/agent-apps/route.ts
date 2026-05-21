@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestAsync, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
@@ -17,7 +17,7 @@ import {
 } from '@/lib/gitea-org-repo';
 
 export async function GET(request: NextRequest) {
-  const auth = authenticateRequestEnhanced(request);
+  const auth = await authenticateRequestAsync(request);
   if (!auth.success) return authErrorResponse(auth);
 
   const { tenant, payload } = auth as AuthSuccessResult;
@@ -59,10 +59,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = authenticateRequestEnhanced(request);
+  const auth = await authenticateRequestAsync(request);
   if (!auth.success) return authErrorResponse(auth);
 
   const { tenant, payload } = auth as AuthSuccessResult;
+  
+  console.log('[AgentApp] Creating agent app, userId:', payload.userId, 'username:', payload.username);
 
   try {
     const formData = await request.formData();
@@ -176,6 +178,8 @@ export async function POST(request: NextRequest) {
     }
 
     const agentHarnessPath = repoName;
+    
+    console.log('[AgentApp] Before create, userId:', payload.userId, 'appId:', appId, 'tenantId:', tenantId);
 
     const app = await prisma.agentApp.create({
       data: {

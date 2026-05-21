@@ -246,9 +246,11 @@ export async function pushToOrgRepoViaGit(
     let remoteBranch = 'main';
     try {
       const remote = await git.remote(['show', 'origin']);
-      const headBranchMatch = remote.match(/HEAD branch:\s*(\S+)/);
-      if (headBranchMatch && headBranchMatch[1]) {
-        remoteBranch = headBranchMatch[1];
+      if (typeof remote === 'string') {
+        const headBranchMatch = remote.match(/HEAD branch:\s*(\S+)/);
+        if (headBranchMatch && headBranchMatch[1]) {
+          remoteBranch = headBranchMatch[1];
+        }
       }
     } catch {
       remoteBranch = 'main';

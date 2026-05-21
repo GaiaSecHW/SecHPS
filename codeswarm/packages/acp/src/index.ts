@@ -68,6 +68,8 @@ export class ACPClient {
   // Text buffer for skill name inference
   private _textBuffer: string[] = [];
   private _maxTextBuffer = 5;
+  // Abort controller for sendPrompt
+  private _abortController: AbortController | null = null;
 
   constructor() {
     this.exitCodePromise = new Promise(resolve => {
@@ -237,11 +239,36 @@ export class ACPClient {
   /** Send a prompt and wait for completion */
   async sendPrompt(prompt: string): Promise<StopReason> {
     if (!this.sessionId || !this.connection) throw new Error('No active session');
-    const result = await this.connection.prompt({
-      sessionId: this.sessionId,
-      prompt: [{ type: 'text', text: prompt }],
-    });
-    return result.stopReason;
+    if (this.destroyed) throw new Error('Client was destroyed');
+    
+    // Create abort controller for this request
+    this._abortController = new AbortController();
+    
+    try {
+      const result = await Promise.race([
+        this.connection.prompt({
+          sessionId: this.sessionId,
+          prompt: [{ type: 'text', text: prompt }],
+        }),
+        new Promise<never>((_, reject) => {
+          // Reject when destroyed
+          const checkDestroyed = setInterval(() => {
+            if (this.destroyed) {
+              clearInterval(checkDestroyed);
+              reject(new Error('Prompt cancelled by destroy'));
+            }
+          }, 100);
+          // Also reject when abort controller is aborted
+          this._abortController?.signal.addEventListener('abort', () => {
+            clearInterval(checkDestroyed);
+            reject(new Error('Prompt aborted'));
+          });
+        }),
+      ]);
+      return result.stopReason;
+    } finally {
+      this._abortController = null;
+    }
   }
 
   /** Execute a command via spawn (fallback when ACP command is not available) */
@@ -262,8 +289,31 @@ export class ACPClient {
   /** Destroy the client and kill the process */
   async destroy(): Promise<void> {
     this.destroyed = true;
+    
+    // Abort any pending prompt
+    if (this._abortController) {
+      this._abortController.abort();
+    }
+    
     if (this.process && this.process.exitCode === null) {
-      this.process.kill();
+      // First try SIGTERM, then SIGKILL after 5 seconds
+      this.process.kill('SIGTERM');
+      
+      // Force kill after timeout
+      const forceKillTimeout = setTimeout(() => {
+        if (this.process && this.process.exitCode === null) {
+          console.log('[ACP] Process did not exit, force killing with SIGKILL');
+          this.process.kill('SIGKILL');
+        }
+      }, 5000);
+      
+      // Wait for process to exit (up to 6 seconds)
+      await Promise.race([
+        this.exitCodePromise,
+        new Promise<void>(resolve => setTimeout(resolve, 6000))
+      ]).catch(() => {});
+      
+      clearTimeout(forceKillTimeout);
     }
     this.process = null;
     this.connection = null;

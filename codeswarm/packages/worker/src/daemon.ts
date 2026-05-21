@@ -88,6 +88,52 @@ export class WorkerDaemon {
       maxConcurrent: this.config.maxConcurrent,
     }));
 
+    // Cancel task endpoint
+    this.server.post('/task/cancel', async (request, reply) => {
+      const body = request.body as { taskId?: string };
+      const taskId = body?.taskId;
+      
+      if (!taskId) {
+        return reply.status(400).send({ error: 'Missing taskId' });
+      }
+
+      // Check if task is active
+      const payload = this.activeTasks.get(taskId);
+      if (!payload) {
+        this.server.log.warn({ taskId }, 'Task not active, cannot cancel');
+        return reply.status(404).send({ error: 'Task not active', taskId });
+      }
+
+      this.server.log.info({ taskId }, 'Received cancel request');
+
+      // 1. Terminate the process (with force kill timeout)
+      try {
+        await this.processMgr.terminate(taskId);
+        this.server.log.info({ taskId }, 'Process terminated successfully');
+      } catch (err) {
+        this.server.log.warn({ taskId, error: err }, 'Terminate failed, but will continue cleanup');
+      }
+
+      // 2. Notify platform that task was cancelled
+      try {
+        await this.postResult(payload, {
+          taskId,
+          nodeId: this.config.nodeId,
+          status: 'failed',
+          error: 'Task cancelled by user',
+        });
+      } catch (err) {
+        this.server.log.warn({ taskId, error: err }, 'Failed to notify platform of cancellation');
+      }
+
+      // 3. Remove from active tasks and release semaphore
+      this.activeTasks.delete(taskId);
+      this.semaphore.release();
+
+      this.server.log.info({ taskId }, 'Task cancelled and resources released');
+      return reply.status(200).send({ taskId, message: 'Task cancelled successfully' });
+    });
+
     await this.server.listen({ port: this.config.port, host: '0.0.0.0' });
     this.startHeartbeat();
     // Ensure MinIO bucket exists at startup
@@ -209,7 +255,9 @@ export class WorkerDaemon {
 
       const onEvent = (event: AgentEvent) => {
         console.log(`[Daemon] Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
-        this.postEvent(payload, [event]).catch(() => {});
+        this.postEvent(payload, [event]).catch(err => {
+          this.server.log.warn({ taskId, event: event.type, error: err }, 'Failed to post event');
+        });
       };
 
       // ========== PHASE 1: 构建环境 ==========
@@ -394,13 +442,19 @@ export class WorkerDaemon {
   private async postEvent(payload: TaskPayload, events: unknown[]): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
     try {
-      await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
+      const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
       });
-    } catch {
-      // Callback target not available, log and continue
+      
+      if (!response.ok) {
+        this.server.log.warn({ taskId: payload.taskId, status: response.status }, 'Event post failed');
+      } else {
+        this.server.log.debug({ taskId: payload.taskId, eventCount: events.length }, 'Events posted');
+      }
+    } catch (err) {
+      this.server.log.warn({ taskId: payload.taskId, error: err, callbackUrl }, 'Failed to post events to platform');
     }
   }
 

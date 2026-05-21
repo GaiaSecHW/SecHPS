@@ -482,7 +482,14 @@ function CreateUserModal({
 
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || '创建用户失败');
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          document.cookie = 'auth-token=; path=/; max-age=0';
+          window.location.href = '/login';
+          return;
+        }
+        setError(data.error || data.details?.error || '创建用户失败');
         setLoading(false);
         return;
       }

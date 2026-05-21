@@ -9,6 +9,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import type { JWTPayload } from '@/lib/auth';
 import type { TenantContext } from '@/lib/tenant';
 import { getTenantContext } from '@/lib/tenant';
+import { prisma } from '@/lib/prisma';
 
 /**
  * 认证结果类型
@@ -208,4 +209,41 @@ export function authenticateRequestEnhanced(
   }
 
   return result;
+}
+
+/**
+ * 异步认证请求（验证用户是否存在于数据库）
+ * 当数据库用户与 token 不匹配时返回 401
+ *
+ * @param request - Next.js Request 对象
+ * @param options - 认证选项
+ * @returns 认证结果
+ */
+export async function authenticateRequestAsync(
+  request: Request,
+  options?: AuthenticateOptions
+): Promise<AuthResult | AuthSuccessResult> {
+  const result = authenticateRequestEnhanced(request, options);
+
+  if (!result.success) {
+    return result;
+  }
+
+  const successResult = result as AuthSuccessResult;
+
+  // 验证用户是否存在于数据库
+  const userExists = await prisma.user.findUnique({
+    where: { id: successResult.userId },
+    select: { id: true },
+  });
+
+  if (!userExists) {
+    return {
+      success: false,
+      error: '用户不存在，请重新登录',
+      statusCode: 401,
+    };
+  }
+
+  return successResult;
 }
