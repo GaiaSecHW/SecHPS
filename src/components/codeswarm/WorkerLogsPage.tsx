@@ -339,7 +339,11 @@ export function WorkerLogsPage() {
 
               <div className="flex-1 min-h-0 bg-dark-surface border border-gray-700/50 rounded-lg flex flex-col">
                 <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
-                  <div className="flex items-center gap-2"><Play size={14} className="text-blue-400" /><span className="text-sm font-medium text-gray-200">执行过程日志</span><span className="text-xs text-gray-500">({processLogs.length} 条)</span></div>
+                  <div className="flex items-center gap-2">
+                    <Play size={14} className="text-blue-400" />
+                    <span className="text-sm font-medium text-gray-200">执行过程日志</span>
+                    <span className="text-xs text-gray-500">({processLogs.length} 条)</span>
+                  </div>
                   {logsLoading && <LoadingSpinner size="sm" />}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 font-mono text-sm min-h-0">
