@@ -25,6 +25,7 @@ lerna-debug.log*
 .DS_Store
 *.pem
 AgentHarness/
+AgentHarness_management/
 
 # Debug
 debug/
