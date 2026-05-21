@@ -108,7 +108,7 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
   try {
     const args: string[] = ['run', '--agent', 'build', instruction];
 
-    const env: Record<string, string> = { TERM: 'dumb', NO_COLOR: '1' };
+    const env: Record<string, string> = { TERM: 'dumb', NO_COLOR: '1', OPENCODE_DISABLE_PROJECT_CONFIG: '1' };
     if (process.env.NODE_ENV) env.NODE_ENV = process.env.NODE_ENV;
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
