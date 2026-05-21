@@ -29,7 +29,7 @@ interface ParsedVulnerabilityReport {
   }>;
 }
 
-const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
+const LOCAL_TEST_VULN_TASK_ID = '19190d8a-286c-49a4-ad65-494153ef218b';
 
 async function getTaskContext(taskId: string): Promise<{ productName: string; taskName: string }> {
   const taskInstance = await prisma.taskInstance.findUnique({
