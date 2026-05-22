@@ -31,7 +31,6 @@ export async function POST(request: Request) {
         arch: arch || null,
         status: 'online',
         maxConcurrent: maxConcurrent || 5,
-        currentTasks: currentTasks || 0,
         lastHeartbeat: new Date(),
         updatedAt: new Date(),
       },
@@ -49,6 +48,15 @@ export async function POST(request: Request) {
       },
     });
 
+    // currentTasks 用 GREATEST 保证 DB 值不小于 Worker 上报值
+    // 防止心跳覆盖刚分发但 Worker 尚未确认的任务计数
+    const reportedTasks = currentTasks || 0;
+    await prisma.$executeRaw`
+      UPDATE "CodeswarmWorker"
+      SET "currentTasks" = GREATEST("currentTasks", ${reportedTasks})
+      WHERE "nodeId" = ${nodeId}
+    `;
+
     // 异步清理：删除 24 小时前已离线的 Worker 记录（避免数据库残留）
     prisma.codeswarmWorker.deleteMany({
       where: {
@@ -57,9 +65,18 @@ export async function POST(request: Request) {
       },
     }).catch(() => {});
 
-    // 同地址冲突清理：标记同地址的其他 online worker 为 offline（防止重启产生重复节点）
+    // 同地址冲突清理：标记同地址的其他 online worker 为 offline 并重调度其任务
     if (address) {
-      prisma.codeswarmWorker.updateMany({
+      const conflictingWorkers = await prisma.codeswarmWorker.findMany({
+        where: {
+          address,
+          status: 'online',
+          nodeId: { not: nodeId },
+          currentTasks: { gt: 0 },
+        },
+        select: { id: true },
+      });
+      await prisma.codeswarmWorker.updateMany({
         where: {
           address,
           status: 'online',
@@ -67,6 +84,11 @@ export async function POST(request: Request) {
         },
         data: { status: 'offline', currentTasks: 0 },
       }).catch(() => {});
+      for (const cw of conflictingWorkers) {
+        codeswarmDispatcher.rescheduleWorkerTasksById(cw.id).catch(e =>
+          console.error('[CodeSwarm] 同地址冲突 Worker 任务重调度失败:', e)
+        );
+      }
     }
 
     // 首次注册或无 token 时分配新 token

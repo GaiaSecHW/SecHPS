@@ -40,12 +40,14 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
     if (output.includes('```json')) {
       const matches = output.match(/```json\s*([\s\S]*?)\s*```/g);
       if (matches) {
+
         for (const match of matches) {
           const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
           if (inner.includes('vulnerabilities')) {
 try {
               JSON.parse(inner);
               jsonStr = inner;
+
               break;
             } catch {
               continue;
@@ -53,7 +55,7 @@ try {
           }
         }
       } else {
-        // ```json 块正则无匹配
+// ```json 块正则无匹配
       }
     }
 
@@ -73,7 +75,7 @@ try {
     }
 
     if (!jsonStr) {
-      console.log(`[VulnParse] 未提取到 JSON 字符串, 输出不含 ```json 或 "vulnerabilities"`);
+      console.log(`[VulnParse] 未提取到 JSON 字符串, 输出不含 \`\`\`json 或 "vulnerabilities"`);
       return null;
     }
 
@@ -327,7 +329,7 @@ function executeVulnerabilityParseAsync(
         vulnerabilities: report.vulnerabilities,
       };
 
-      const vulnRes = await fetch(`http://localhost:${process.env.PORT || 8090}/api/v1/vulnerabilities`, {
+      const vulnRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/v1/vulnerabilities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vulnRequestBody),
@@ -375,19 +377,47 @@ export async function POST(request: Request) {
 
     const finalState = status === 'completed' ? 'completed' : 'failed';
 
-    const updateResult = await prisma.$executeRaw`
-      UPDATE "CodeswarmTask"
-      SET state = ${finalState},
-          result = ${result || null},
-          error = ${error || null},
-          "reportContent" = ${reportContent || null},
-          "completedAt" = NOW(),
-          "updatedAt" = NOW()
-      WHERE "taskId" = ${taskId}
-        AND (state = 'running' OR state = 'dispatched')
-    `;
+    // Atomically update CodeswarmTask + TaskInstance in one transaction
+    const txResult = await prisma.$transaction(async (tx) => {
+      const updateResult = await tx.$executeRaw`
+        UPDATE "CodeswarmTask"
+        SET state = ${finalState},
+            result = ${result || null},
+            error = ${error || null},
+            "reportContent" = ${reportContent || null},
+            "completedAt" = NOW(),
+            "updatedAt" = NOW()
+        WHERE "taskId" = ${taskId}
+          AND (state = 'running' OR state = 'dispatched')
+      `;
 
-    if (updateResult === 0) {
+      if (updateResult === 0) {
+        return { alreadyTerminal: true, taskInstance: null };
+      }
+
+      const taskInstance = await tx.taskInstance.findFirst({
+        where: { codeswarmTaskId: taskId },
+        select: { id: true },
+      });
+
+      if (taskInstance) {
+        await tx.taskInstance.update({
+          where: { id: taskInstance.id },
+          data: {
+            status: finalState,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+            errorMessage: error || null,
+            executionResult: result || null,
+            reportPath: reportContent || null,
+          },
+        });
+      }
+
+      return { alreadyTerminal: false, taskInstance };
+    });
+
+    if (txResult.alreadyTerminal) {
       console.warn(`[CodeSwarm] Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
       if (nodeId) {
         await codeswarmDispatcher.onTaskCompleted(nodeId);
@@ -395,24 +425,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_already_terminal' });
     }
 
-    const taskInstance = await prisma.taskInstance.findFirst({
-      where: { codeswarmTaskId: taskId },
-      select: { id: true },
-    });
+    const taskInstance = txResult.taskInstance;
 
     if (taskInstance) {
-      await prisma.taskInstance.update({
-        where: { id: taskInstance.id },
-        data: {
-          status: finalState,
-          completedAt: new Date(),
-          updatedAt: new Date(),
-          errorMessage: error || null,
-          executionResult: result || null,
-          reportPath: reportContent || null,
-        },
-      });
-
       await prisma.taskExecutionLog.create({
         data: {
           id: `log-${Date.now()}-complete`,

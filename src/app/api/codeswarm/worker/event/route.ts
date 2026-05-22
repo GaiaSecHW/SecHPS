@@ -61,9 +61,17 @@ export async function POST(request: Request) {
       for (const event of eventList) {
         if (event.type === 'session_created' && event.message) {
           await prisma.$executeRaw`
-            UPDATE "CodeswarmTask" SET "sessionId" = ${event.message}, "updatedAt" = NOW()
-            WHERE "taskId" = ${taskId}
-          `.catch(e => console.error('[CodeSwarm] 更新 sessionId 失败:', e));
+            UPDATE "CodeswarmTask" SET "sessionId" = ${event.message}, state = 'running', "updatedAt" = NOW()
+            WHERE "taskId" = ${taskId} AND state = 'dispatched'
+          `.catch(e => console.error('[CodeSwarm] 更新 sessionId/状态 失败:', e));
+        } else if (event.type === 'phase_start') {
+          const eventData = event.data || event;
+          if (eventData.phase === 'executing') {
+            await prisma.$executeRaw`
+              UPDATE "CodeswarmTask" SET state = 'running', "updatedAt" = NOW()
+              WHERE "taskId" = ${taskId} AND state = 'dispatched'
+            `.catch(e => console.error('[CodeSwarm] 更新 running 状态失败:', e));
+          }
         }
       }
 

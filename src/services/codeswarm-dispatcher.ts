@@ -648,8 +648,13 @@ const taskPayload = JSON.stringify({
     }
   }
 
-  private async rescheduleWorkerTasksById(workerId: string) {
+  async rescheduleWorkerTasksById(workerId: string) {
     try {
+      const worker = await prisma.codeswarmWorker.findUnique({
+        where: { id: workerId },
+        select: { address: true },
+      });
+
       const stuckTasks = await prisma.codeswarmTask.findMany({
         where: {
           workerId,
@@ -657,6 +662,27 @@ const taskPayload = JSON.stringify({
         },
         select: { id: true, taskId: true },
       });
+
+      // 先向 Worker 发送取消请求，让其停止执行
+      if (worker?.address) {
+        const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+        for (const task of stuckTasks) {
+          for (const addr of addresses) {
+            try {
+              await fetch(`http://${addr}/task/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ taskId: task.taskId }),
+                signal: AbortSignal.timeout(5000),
+              });
+              console.log(`[CodeSwarm] 已向 Worker ${addr} 发送取消请求: ${task.taskId}`);
+              break;  // 第一个可达地址成功即可
+            } catch (e) {
+              console.warn(`[CodeSwarm] 取消请求发送失败 ${addr}:`, e);
+            }
+          }
+        }
+      }
 
       for (const task of stuckTasks) {
         await prisma.codeswarmTask.update({
