@@ -67,6 +67,9 @@ export class WorkerDaemon {
         return reply.status(409).send({ error: 'Task already being executed', taskId: payload.taskId });
       }
 
+      // Mark task as active BEFORE async execution to close the dedup race window
+      this.activeTasks.set(payload.taskId, payload);
+
       this.executeTask(payload)
         .catch(err => {
           this.server.log.error({ taskId: payload.taskId, error: err }, 'Task execution failed');
@@ -287,9 +290,6 @@ export class WorkerDaemon {
     let buildResult = null;
     let codedmapPromise: Promise<void> | null = null;
 
-    // Mark task as active (for deduplication)
-    this.activeTasks.set(taskId, payload);
-
     try {
       console.log(`[Daemon] ========== TASK START ==========`);
       console.log(`[Daemon] taskId: ${taskId}`);
@@ -362,8 +362,10 @@ export class WorkerDaemon {
           const errMsg = codedmapErr instanceof Error ? codedmapErr.message : String(codedmapErr);
           console.error(`[Daemon] Codedmap preprocessing failed: ${errMsg}`);
           onEvent({
-            type: 'log_chunk',
-            content: `[Codedmap] 知识图谱预处理失败（Agent 可继续执行）: ${errMsg}`,
+            type: 'phase_complete',
+            phase: 'codedmap',
+            success: false,
+            message: `知识图谱预处理失败（Agent 可继续执行）: ${errMsg}`,
             timestamp: new Date().toISOString(),
             level: 'worker',
           });
@@ -440,6 +442,59 @@ export class WorkerDaemon {
         timestamp: new Date().toISOString(),
       });
 
+      // ========== 推送 stderr 中的 LLM/API 错误事件 ==========
+      // ACP 协议的 error handler 可能不会捕获 LLM rate limit 等错误，
+      // 这些错误只在 opencode 进程的 stderr 中出现。解析并推送，确保前端可见。
+      if (status === 'failed' && !isCancelled && result.stderr) {
+        const LLM_ERROR_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+          { pattern: /Rate limit exceeded/i, label: 'LLM 速率限制' },
+          { pattern: /FreeUsageLimitError/i, label: 'LLM 用量限制' },
+          { pattern: /429/i, label: 'HTTP 429 速率限制' },
+          { pattern: /AuthenticationError/i, label: '认证错误' },
+          { pattern: /API key.*invalid/i, label: 'API Key 无效' },
+          { pattern: /quota exceeded/i, label: '配额超限' },
+          { pattern: /ECONNREFUSED/i, label: '连接拒绝' },
+          { pattern: /ENOTFOUND/i, label: '域名解析失败' },
+          { pattern: /timeout.*exceeded/i, label: '超时' },
+        ];
+
+        const stderrLines = result.stderr.split('\n').filter(line => line.trim());
+        const matchedLabels: string[] = [];
+
+        for (const line of stderrLines) {
+          for (const { pattern, label } of LLM_ERROR_PATTERNS) {
+            if (pattern.test(line)) {
+              onEvent({
+                type: 'error',
+                message: `[${label}] ${line.trim()}`,
+                timestamp: new Date().toISOString(),
+                level: 'worker',
+              });
+              matchedLabels.push(label);
+              break;
+            }
+          }
+        }
+
+        // fallback: stderr 有内容但无已知模式
+        if (matchedLabels.length === 0 && result.stderr.trim().length > 10) {
+          onEvent({
+            type: 'error',
+            message: `任务执行失败 (exitCode=${result.exitCode}): ${result.stderr.substring(0, 500)}`,
+            timestamp: new Date().toISOString(),
+            level: 'worker',
+          });
+        }
+      } else if (status === 'failed' && !isCancelled && !result.stderr) {
+        // fallback: stderr 为空但进程失败
+        onEvent({
+          type: 'error',
+          message: `任务执行失败，进程退出码: ${result.exitCode}`,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
+      }
+
       this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
@@ -452,12 +507,24 @@ export class WorkerDaemon {
       });
     } catch (error) {
       const isCancelled = this.cancelledTasks.has(taskId);
+      const errorMsg = isCancelled ? 'Task cancelled by user' : (error instanceof Error ? error.message : String(error));
       this.server.log.error({ taskId, error, isCancelled }, 'Task failed');
+
+      // 推送 error 事件到 Orchestrator（catch 块中 onEvent 不可访问，直接用 postEvent）
+      this.postEvent(payload, [{
+        type: 'error',
+        message: errorMsg,
+        timestamp: new Date().toISOString(),
+        level: 'worker',
+      }]).catch(err => {
+        this.server.log.warn({ taskId, error: err }, 'Failed to post error event from catch block');
+      });
+
       this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status: 'failed',
-        error: isCancelled ? 'Task cancelled by user' : (error instanceof Error ? error.message : String(error)),
+        error: errorMsg,
       }).catch(err => {
         this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed (non-blocking)');
       });
@@ -502,6 +569,7 @@ export class WorkerDaemon {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
+        signal: AbortSignal.timeout(10000),
       });
       
       if (!response.ok) {
@@ -532,6 +600,7 @@ export class WorkerDaemon {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(result),
+          signal: AbortSignal.timeout(30000),
         });
 
         if (resp.ok) {
