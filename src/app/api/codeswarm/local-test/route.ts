@@ -115,7 +115,7 @@ function runOpencodeParse(
 ): Promise<ParsedVulnerabilityReport | null> {
   return new Promise((resolve) => {
     let childProcess: ChildProcess | null = null;
-    const args: string[] = ['run', '--agent', 'build', instruction];
+    const args: string[] = ['run', instruction];
     const env: NodeJS.ProcessEnv = { ...process.env, TERM: 'dumb', NO_COLOR: '1' };
 
     let cmd: string;
@@ -136,10 +136,10 @@ function runOpencodeParse(
       useShell = true;
     } else {
       cmd = 'bash';
-      finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
+      finalArgs = ['-c', `opencode run "${instruction}"`];
     }
 
-    addLog('info', `执行: opencode run --agent build "${instruction.slice(0, 50)}..."`);
+    addLog('info', `执行: opencode run "${instruction.slice(0, 50)}..."`);
 
     let stdout = '';
     let stderr = '';

@@ -84,6 +84,12 @@ try {
     try {
       parsed = JSON.parse(jsonStr);
     } catch (parseErr) {
+      // Repair 0: remove trailing commas (most common LLM JSON error)
+      if (!parsed) {
+        const noTrailingCommas = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+        try { parsed = JSON.parse(noTrailingCommas); } catch { /* continue */ }
+        if (parsed) { console.log('[VulnParse] JSON repaired by removing trailing commas'); }
+      }
       // Repair 1: remove trailing content after last closing brace
       const lastBrace = jsonStr.lastIndexOf('}');
       if (lastBrace > 0 && lastBrace < jsonStr.length - 1) {
@@ -141,7 +147,7 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
   let childProcess: ChildProcess | null = null;
 
   try {
-    const args: string[] = ['run', '--agent', 'build', instruction];
+    const args: string[] = ['run', instruction];
 
     const env: Record<string, string> = { TERM: 'dumb', NO_COLOR: '1', OPENCODE_DISABLE_PROJECT_CONFIG: '1' };
     if (process.env.NODE_ENV) env.NODE_ENV = process.env.NODE_ENV;
@@ -161,7 +167,7 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
       useShell = true;
     } else {
       cmd = 'bash';
-      finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
+      finalArgs = ['-c', `opencode run "${instruction}"`];
     }
 
     console.log(`[VulnParse:${taskId}] 执行: cmd=${cmd}, args=${isWindows ? finalArgs.join(' ') : finalArgs[1]?.substring(0, 80)}`);
@@ -302,7 +308,7 @@ function executeVulnerabilityParseAsync(
 
       let report: ParsedVulnerabilityReport | null = null;
 
-      await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', `opencode run --agent build "${INSTRUCTION_PHASE1}"`);
+      await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', `opencode run "${INSTRUCTION_PHASE1}"`);
       console.log(`[VulnParse:${taskId}] Phase 1 开始: instruction="${INSTRUCTION_PHASE1}"`);
       report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE1);
 
@@ -317,7 +323,7 @@ function executeVulnerabilityParseAsync(
       }
 
       if (!report) {
-        await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', `opencode run --agent build "${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
+        await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', `opencode run "${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
         console.log(`[VulnParse:${taskId}] Phase 2 开始: instruction="${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
         report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE2);
 
