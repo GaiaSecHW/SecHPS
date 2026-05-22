@@ -30,22 +30,20 @@ ARG VERSION
 
 WORKDIR /app
 
+# Copy Prisma schema BEFORE npm ci (postinstall hook runs prisma generate)
+COPY prisma/ ./prisma/
+
 # Copy dependency manifests first (leverage Docker layer cache)
 COPY package.json package-lock.json ./
 
 # CRITICAL: Do NOT add --omit=optional or --production flags.
 # @anthropic-ai/claude-agent-sdk requires optional native-binary deps.
+# postinstall hook auto-runs prisma generate (schema already copied above)
 RUN npm ci
 
 # Copy build-time config files
 COPY next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
 COPY tailwind.config.ts ./
-
-# Copy Prisma schema (needed for client generation before next build)
-COPY prisma/ ./prisma/
-
-# Generate Prisma Client (must run before next build)
-RUN npx prisma generate
 
 # Copy application source code
 COPY src/ ./src/
