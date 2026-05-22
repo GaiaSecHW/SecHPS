@@ -28,6 +28,14 @@ FROM node:20-bookworm AS builder
 ARG BUILD_DATE
 ARG VERSION
 
+# Dummy DATABASE_URL for build-time PrismaClient instantiation.
+# Next.js "Collecting page data" step validates PrismaClient constructor,
+# which requires a datasource URL. This dummy value satisfies the validation
+# without connecting to any real database during build.
+# Runtime DATABASE_URL is injected via env vars at deploy time.
+ARG DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+ENV DATABASE_URL=$DATABASE_URL
+
 WORKDIR /app
 
 # Copy Prisma schema BEFORE npm ci (postinstall hook runs prisma generate)
@@ -78,6 +86,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=""
 
 # Create non-root user for security
 RUN addgroup --system nodejs && \
