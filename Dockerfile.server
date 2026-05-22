@@ -28,13 +28,16 @@ FROM node:20-bookworm AS builder
 ARG BUILD_DATE
 ARG VERSION
 
-# Dummy DATABASE_URL for build-time PrismaClient instantiation.
-# Next.js "Collecting page data" step validates PrismaClient constructor,
-# which requires a datasource URL. This dummy value satisfies the validation
-# without connecting to any real database during build.
-# Runtime DATABASE_URL is injected via env vars at deploy time.
+# Dummy env vars for build-time module instantiation.
+# Next.js "Collecting page data" step evaluates route modules which:
+#   - Instantiate PrismaClient (requires DATABASE_URL format validation)
+#   - Import auth.ts which calls getJwtSecret() (requires JWT_SECRET, else process.exit(1))
+# These dummy values satisfy build-time checks without real database/JWT operations.
+# Runtime values are injected via env vars at deploy time.
 ARG DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+ARG JWT_SECRET=build-time-dummy-secret-do-not-use-in-production
 ENV DATABASE_URL=$DATABASE_URL
+ENV JWT_SECRET=$JWT_SECRET
 
 WORKDIR /app
 
@@ -87,6 +90,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=""
+ENV JWT_SECRET=""
 
 # Create non-root user for security
 RUN addgroup --system nodejs && \
