@@ -284,6 +284,20 @@ export async function POST(
     });
   } catch (error) {
     console.error('执行任务失败:', error);
+    // 回滚 TaskInstance 状态，防止卡在 running
+    try {
+      await prisma.taskInstance.updateMany({
+        where: { id, status: 'running' },
+        data: {
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : '执行任务失败',
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    } catch (rollbackErr) {
+      console.error('回滚 TaskInstance 状态失败:', rollbackErr);
+    }
     return NextResponse.json({ error: '执行任务失败' }, { status: 500 });
   }
 }

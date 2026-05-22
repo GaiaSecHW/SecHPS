@@ -349,7 +349,7 @@ function executeTaskAsync(
         vulnerabilities: report.vulnerabilities,
       };
 
-      const vulnRes = await fetch(`http://localhost:${process.env.PORT || 8090}/api/v1/vulnerabilities`, {
+      const vulnRes = await fetch(`http://localhost:${process.env.PORT || 3000}/api/v1/vulnerabilities`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vulnRequestBody),
