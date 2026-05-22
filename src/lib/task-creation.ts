@@ -156,19 +156,25 @@ async function copyDirectoryRecursive(src: string, dest: string): Promise<void> 
   }
 }
 
-/**
- * 从本地 AgentHarness 目录拷贝 Agent 文件到任务目录
- * @param repoName Agent 的 repoName（对应 agentApp.agentHarnessPath）
- * @param destDir 目标目录（任务目录）
- * @returns 是否成功拷贝
- */
 export async function copyAgentHarnessFromLocal(repoName: string, destDir: string): Promise<boolean> {
   const agentHarnessBase = process.env.AGENT_HARNESS_LOCAL_PATH || './AgentHarness';
   const sourceDir = join(process.cwd(), agentHarnessBase, repoName);
 
   if (!existsSync(sourceDir)) {
-    console.log(`[TaskCreation] 本地 AgentHarness 目录不存在: ${sourceDir}`);
-    return false;
+    console.log(`[TaskCreation] 本地 AgentHarness 目录不存在: ${sourceDir}, 尝试从 Gitea 拉取`);
+    const { cloneOrPullOrgRepo, isConfigured } = await import('@/lib/gitea-org-repo');
+    if (isConfigured()) {
+      const syncResult = await cloneOrPullOrgRepo(repoName);
+      if (syncResult.success) {
+        console.log(`[TaskCreation] 从 Gitea 拉取 AgentHarness 成功: ${repoName} (${syncResult.method})`);
+      } else {
+        console.error(`[TaskCreation] 从 Gitea 拉取 AgentHarness 失败: ${syncResult.error}`);
+        return false;
+      }
+    } else {
+      console.log(`[TaskCreation] Gitea 未配置，无法拉取 AgentHarness`);
+      return false;
+    }
   }
 
   try {

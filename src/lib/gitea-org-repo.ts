@@ -454,6 +454,136 @@ export async function deleteOrgRepo(repoName: string): Promise<boolean> {
   }
 }
 
+/**
+ * 从 Gitea 组织仓库克隆或拉取到本地 AgentHarness 目录
+ * 如果本地目录已存在且有 .git，执行 git pull
+ * 如果不存在，执行 git clone
+ */
+export async function cloneOrPullOrgRepo(
+  repoName: string,
+  branch: string = 'main'
+): Promise<{ success: boolean; method: string; error?: string }> {
+  if (!isConfigured()) {
+    return { success: false, method: 'clone', error: 'Gitea 配置不完整' };
+  }
+
+  const localPath = join(process.cwd(), AGENT_HARNESS_LOCAL_PATH, repoName);
+  const gitDir = join(localPath, '.git');
+
+  const isHttps = GITEA_ORG_URL.startsWith('https://');
+  const giteaHost = GITEA_ORG_URL.replace(/^https?:\/\//, '');
+  const protocol = isHttps ? 'https' : 'http';
+  const repoUrl = `${protocol}://${GITEA_ORG_TOKEN}@${giteaHost}/${GITEA_ORG_NAME}/${repoName}.git`;
+
+  process.env.GIT_SSL_NO_VERIFY = '1';
+
+  if (existsSync(gitDir)) {
+    const git: SimpleGit = simpleGit(localPath);
+
+    try {
+      await git.remote(['set-url', 'origin', repoUrl]);
+
+      const currentBranch = await git.revparse(['--abbrev-ref', 'HEAD']);
+      if (currentBranch.trim() !== branch) {
+        try {
+          await git.checkout(branch);
+        } catch {
+          await git.checkoutLocalBranch(branch);
+        }
+      }
+
+      const result = await git.pull('origin', branch);
+      const changes = result.summary?.changes || 0;
+
+      console.log(`[GiteaOrg] pull 成功: ${repoName} (${changes} 个变更)`);
+      return { success: true, method: 'pull' };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[GiteaOrg] pull 失败: ${repoName} - ${errorMsg}`);
+      return { success: false, method: 'pull', error: errorMsg };
+    }
+  }
+
+  try {
+    await mkdir(join(process.cwd(), AGENT_HARNESS_LOCAL_PATH), { recursive: true });
+
+    const git: SimpleGit = simpleGit();
+    await git.clone(repoUrl, localPath, ['-b', branch]);
+
+    console.log(`[GiteaOrg] clone 成功: ${repoName} -> ${localPath}`);
+    return { success: true, method: 'clone' };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[GiteaOrg] clone 失败: ${repoName} - ${errorMsg}`);
+
+    try {
+      await rm(localPath, { recursive: true, force: true });
+    } catch {
+    }
+
+    return { success: false, method: 'clone', error: errorMsg };
+  }
+}
+
+/**
+ * 批量同步所有 AgentApp 的 AgentHarness 从 Gitea 到本地
+ * 遍历数据库中所有有 agentHarnessPath 的 AgentApp，逐个执行 cloneOrPullOrgRepo
+ */
+export async function syncAllAgentHarnessFromGitea(): Promise<{
+  total: number;
+  success: number;
+  failed: number;
+  errors: Array<{ repoName: string; error: string }>;
+}> {
+  if (!isConfigured()) {
+    console.warn('[GiteaOrg] 配置不完整，无法同步');
+    return { total: 0, success: 0, failed: 0, errors: [{ repoName: '', error: 'Gitea 配置不完整' }] };
+  }
+
+  const { prisma } = await import('@/lib/prisma');
+
+  const apps = await prisma.agentApp.findMany({
+    select: { id: true, name: true, agentHarnessPath: true },
+  });
+
+  const appsWithHarness = apps.filter(app => app.agentHarnessPath);
+
+  console.log(`[GiteaOrg] 开始同步 AgentHarness: ${appsWithHarness.length} 个仓库`);
+
+  const results: Array<{ repoName: string; result: { success: boolean; method: string; error?: string } }> = [];
+  const errors: Array<{ repoName: string; error: string }> = [];
+
+  for (const app of appsWithHarness) {
+    const repoName = app.agentHarnessPath!;
+    console.log(`[GiteaOrg] 同步 ${app.name} (${repoName})...`);
+
+    const repoExists = await checkOrgRepoExists(repoName);
+    if (!repoExists) {
+      console.warn(`[GiteaOrg] 远端仓库不存在: ${repoName}, 跳过`);
+      errors.push({ repoName, error: '远端仓库不存在' });
+      continue;
+    }
+
+    const result = await cloneOrPullOrgRepo(repoName);
+    results.push({ repoName, result });
+
+    if (!result.success) {
+      errors.push({ repoName, error: result.error || '未知错误' });
+    }
+  }
+
+  const successCount = results.filter(r => r.result.success).length;
+
+  console.log(`[GiteaOrg] 同步完成: ${successCount}/${appsWithHarness.length} 成功`);
+
+  return {
+    total: appsWithHarness.length,
+    success: successCount,
+    failed: errors.length,
+    errors,
+  };
+}
+
 export function getRepoUrl(repoName: string): string {
   return `${GITEA_ORG_URL}/${GITEA_ORG_NAME}/${repoName}`;
 }

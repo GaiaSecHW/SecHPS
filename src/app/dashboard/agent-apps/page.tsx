@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen, Bot, Terminal, User, Calendar, Play, ShieldAlert, Bell, Percent, Globe, Lock, CheckCircle, Clock } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen, Bot, Terminal, User, Calendar, Play, ShieldAlert, Bell, Percent, Globe, Lock, CheckCircle, Clock, GitPullRequest } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
 import { PipelineViewModal } from '@/components/agent-apps/PipelineViewModal';
@@ -46,6 +46,7 @@ export default function AgentAppsPage() {
   const [apps, setApps] = useState<AgentApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AgentApp | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -97,6 +98,30 @@ export default function AgentAppsPage() {
     setTimeout(() => setRefreshing(false), 500);
   };
 
+  const handleSyncFromGitea = async () => {
+    if (!confirm('确定要从 Gitea 同步所有 AgentHarness 仓库吗？')) return;
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/agent-apps/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || '同步失败');
+      }
+
+      const result = await response.json();
+      toast.success(`同步完成: ${result.successCount}/${result.total} 成功`);
+      fetchApps();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '同步失败');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleCreateApp = () => {
     setIsCreateModalOpen(true);
@@ -301,15 +326,25 @@ export default function AgentAppsPage() {
             <BookOpen size={16} />
             开发者指南
           </button>
-          <button
-             onClick={handleRefresh}
-             disabled={refreshing}
-             className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
-           >
-             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-             刷新
-           </button>
-           <button
+<button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+              刷新
+            </button>
+            {isAdmin && (
+              <button
+                onClick={handleSyncFromGitea}
+                disabled={syncing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-all"
+              >
+                {syncing ? <RefreshCw size={16} className="animate-spin" /> : <GitPullRequest size={16} />}
+                同步仓库
+              </button>
+            )}
+            <button
              onClick={handleCreateApp}
              className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
            >
