@@ -87,6 +87,7 @@
     "yaml": "^2.8.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/react": "^16.3.2",
     "@types/adm-zip": "^0.5.8",
     "@types/async-lock": "^1.4.2",
