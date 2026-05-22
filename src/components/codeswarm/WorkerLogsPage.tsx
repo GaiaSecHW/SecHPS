@@ -62,17 +62,28 @@ interface TaskDetail extends Task {
 interface ExecutionPhase {
   id: string;
   name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
   time?: string;
   icon: React.ReactNode;
 }
 
-const EXECUTION_PHASES: ExecutionPhase[] = [
+interface TimelineGroup {
+  type: 'sequential' | 'parallel';
+  phases: ExecutionPhase[];
+}
+
+const PRE_PHASES: ExecutionPhase[] = [
   { id: 'queued', name: '任务入队', status: 'pending', icon: <Clock className="w-4 h-4" /> },
   { id: 'dispatched', name: '分发Worker', status: 'pending', icon: <Send className="w-4 h-4" /> },
   { id: 'building', name: '构建环境', status: 'pending', icon: <Activity className="w-4 h-4" /> },
+];
+
+const PARALLEL_PHASES: ExecutionPhase[] = [
   { id: 'codedmap', name: '知识图谱', status: 'pending', icon: <Database className="w-4 h-4" /> },
   { id: 'executing', name: '执行命令', status: 'pending', icon: <Play className="w-4 h-4" /> },
+];
+
+const POST_PHASES: ExecutionPhase[] = [
   { id: 'completed', name: '执行完成', status: 'pending', icon: <CheckCircle className="w-4 h-4" /> },
 ];
 
@@ -211,31 +222,56 @@ export function WorkerLogsPage() {
 
   const getGroupContent = (group: LogEntry[]): string => group.map(log => getLogContent(log)).join('');
 
-  const buildTimeline = (): ExecutionPhase[] => {
-    if (!taskDetail) return EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
-    const phases: ExecutionPhase[] = EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
+  const buildTimeline = (): TimelineGroup[] => {
+    const pre = PRE_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
+    const parallel = PARALLEL_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
+    const post = POST_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
+
+    if (!taskDetail) return [
+      { type: 'sequential', phases: pre },
+      { type: 'parallel', phases: parallel },
+      { type: 'sequential', phases: post },
+    ];
+
     const state = taskDetail.state;
     const hasCodedmapStart = logs.some(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_start' || d.type === 'phase_start') && d.phase === 'codedmap'; } catch { return false; } });
     const codedmapCompleteEvent = logs.find(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_complete' || d.type === 'phase_complete') && d.phase === 'codedmap'; } catch { return false; } });
     const codedmapSuccess = codedmapCompleteEvent ? (() => { try { return JSON.parse(codedmapCompleteEvent.data).success !== false; } catch { return true; } })() : false;
+    const hasExecutingStart = logs.some(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_start' || d.type === 'phase_start') && d.phase === 'executing'; } catch { return false; } });
+    const executingCompleteEvent = logs.find(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_complete' || d.type === 'phase_complete') && d.phase === 'executing'; } catch { return false; } });
+    const executingSuccess = executingCompleteEvent ? (() => { try { return JSON.parse(executingCompleteEvent.data).success !== false; } catch { return true; } })() : false;
 
-    phases[0].status = 'completed';
-    phases[0].time = taskDetail.createdAt;
-    if (state === 'queued') return phases;
-    phases[1].status = 'completed';
-    phases[1].time = taskDetail.startedAt || taskDetail.createdAt;
-    if (state === 'dispatched') { phases[2].status = 'running'; return phases; }
-    if (state === 'building') { phases[2].status = 'running'; return phases; }
-    phases[2].status = 'completed';
+    // Pre phases: queued → dispatched → building
+    pre[0].status = 'completed'; pre[0].time = taskDetail.createdAt;
+    if (state === 'queued') return [{ type: 'sequential', phases: pre }, { type: 'parallel', phases: parallel }, { type: 'sequential', phases: post }];
+    pre[1].status = 'completed'; pre[1].time = taskDetail.startedAt || taskDetail.createdAt;
+    if (state === 'dispatched') { pre[2].status = 'running'; return [{ type: 'sequential', phases: pre }, { type: 'parallel', phases: parallel }, { type: 'sequential', phases: post }]; }
+    if (state === 'building') { pre[2].status = 'running'; return [{ type: 'sequential', phases: pre }, { type: 'parallel', phases: parallel }, { type: 'sequential', phases: post }]; }
+    pre[2].status = 'completed';
+
+    // Parallel phases: codedmap and executing independently
     if (hasCodedmapStart) {
-      if (codedmapCompleteEvent) { phases[3].status = codedmapSuccess ? 'completed' : 'failed'; phases[3].time = codedmapCompleteEvent.createdAt; }
-      else phases[3].status = 'running';
-    } else phases[3].status = 'completed';
-    if (['running', 'dispatched'].includes(state) || (state === 'failed' && !taskDetail.completedAt)) { phases[4].status = state === 'failed' ? 'failed' : 'running'; return phases; }
-    phases[4].status = state === 'completed' ? 'completed' : 'failed';
-    phases[5].status = state === 'completed' ? 'completed' : 'failed';
-    if (taskDetail.completedAt) phases[5].time = taskDetail.completedAt;
-    return phases;
+      if (codedmapCompleteEvent) { parallel[0].status = codedmapSuccess ? 'completed' : 'failed'; parallel[0].time = codedmapCompleteEvent.createdAt; }
+      else parallel[0].status = 'running';
+    } else {
+      parallel[0].status = 'skipped';
+    }
+
+    if (state === 'completed') { parallel[1].status = executingSuccess ? 'completed' : 'failed'; }
+    else if (state === 'failed') { parallel[1].status = 'failed'; }
+    else if (hasExecutingStart && executingCompleteEvent) { parallel[1].status = executingSuccess ? 'completed' : 'failed'; parallel[1].time = executingCompleteEvent.createdAt; }
+    else if (hasExecutingStart || ['running', 'dispatched'].includes(state) || (state === 'failed' && !taskDetail.completedAt)) { parallel[1].status = 'running'; }
+    else { parallel[1].status = 'running'; }
+
+    // Post phases: completed
+    post[0].status = state === 'completed' ? 'completed' : state === 'failed' ? 'failed' : 'pending';
+    if (taskDetail.completedAt) post[0].time = taskDetail.completedAt;
+
+    return [
+      { type: 'sequential', phases: pre },
+      { type: 'parallel', phases: parallel },
+      { type: 'sequential', phases: post },
+    ];
   };
 
   const processLogs = logs.filter(log => !['task_completed', 'task_failed'].includes(log.type));
@@ -310,15 +346,45 @@ export function WorkerLogsPage() {
                 <>
                   <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-4">
                     <h3 className="text-xs font-medium text-gray-500 uppercase mb-3">执行时间线</h3>
-                    <div className="flex items-center">{timeline.map((phase, i) => (
-                      <div key={phase.id} className="flex items-center flex-1">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>{phase.icon}</div>
-                          <span className={`text-xs mt-1.5 ${phase.status === 'pending' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
-                        </div>
-                        {i < timeline.length - 1 && <div className={`flex-1 h-0.5 mx-1 ${phase.status === 'completed' ? 'bg-emerald-600' : 'bg-gray-600'}`} />}
-                      </div>
-                    ))}</div>
+                    <div className="flex items-stretch">
+                      {timeline.map((group, gi) => {
+                        if (group.type === 'sequential') {
+                          return group.phases.map((phase, pi) => (
+                            <div key={phase.id} className="flex items-center flex-1">
+                              <div className="flex flex-col items-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>{phase.icon}</div>
+                                <span className={`text-xs mt-1.5 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
+                                {phase.status === 'skipped' && <span className="text-[10px] text-gray-500">(跳过)</span>}
+                              </div>
+                              {!(gi === timeline.length - 1 && pi === group.phases.length - 1) && <div className={`flex-1 h-0.5 mx-1 ${phase.status === 'completed' ? 'bg-emerald-600' : 'bg-gray-600'}`} />}
+                            </div>
+                          ));
+                        }
+                        // Parallel group: fork-merge display
+                        return (
+                          <div key={`parallel-${gi}`} className="flex-1 flex flex-col">
+                            <div className="flex-1 flex items-center justify-center h-4">
+                              <div className="w-full border-t-2 border-l-2 border-r-2 border-b-0 border-gray-600 rounded-t-sm h-full" />
+                            </div>
+                            <div className="flex gap-2 py-1">
+                              {group.phases.map(phase => (
+                                <div key={phase.id} className="flex-1 flex flex-col items-center">
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>
+                                    <span className="scale-75">{phase.icon}</span>
+                                  </div>
+                                  <span className={`text-[11px] mt-1 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
+                                  {phase.status === 'skipped' && <span className="text-[10px] text-gray-500">(跳过)</span>}
+                                  {phase.status === 'running' && <span className="text-[10px] text-blue-400 animate-pulse">并行中</span>}
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex-1 flex items-center justify-center h-4">
+                              <div className="w-full border-b-2 border-l-2 border-r-2 border-t-0 border-gray-600 rounded-b-sm h-full" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-4">
