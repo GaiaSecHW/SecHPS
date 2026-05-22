@@ -18,6 +18,34 @@ export interface BuildResult {
 
 export type BuildProgressCallback = (message: string) => void;
 
+/**
+ * Derive a provider ID from a model name.
+ * - "alibaba-cn/MiniMax/MiniMax-M2.7" → "alibaba-cn"
+ * - "MiniMax/MiniMax-M2.5" → "MiniMax"
+ * - "MiniMax-M2.7" (no slash) → "minimax" (first word, lowercase)
+ * - "DeepSeek-V3" → "deepseek"
+ */
+function deriveProviderId(model: string): string {
+  if (model.includes('/')) {
+    return model.split('/')[0];
+  }
+  // Bare model name: extract first word segment as provider ID
+  const firstWord = model.split(/[-._]/)[0];
+  return firstWord.toLowerCase();
+}
+
+/**
+ * Normalize model name to opencode's `provider/model` format.
+ * - "alibaba-cn/MiniMax/MiniMax-M2.7" → "alibaba-cn/MiniMax/MiniMax-M2.7" (unchanged)
+ * - "MiniMax-M2.7" → "minimax/MiniMax-M2.7"
+ * - "DeepSeek-V3" → "deepseek/DeepSeek-V3"
+ */
+function normalizeModelName(model: string): string {
+  if (model.includes('/')) return model;
+  const providerId = deriveProviderId(model);
+  return `${providerId}/${model}`;
+}
+
 function mapRemotePathToLocal(remotePath: string): string {
   const pathMapping = process.env.PATH_MAPPING;
   if (!pathMapping) {
@@ -113,19 +141,23 @@ export class EnvironmentFactory {
               progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
             }
 
-            if (payload.model || payload.apiKey) {
-              progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}`);
+            if (payload.model || payload.apiKey || payload.apiBaseUrl) {
+              progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}, apiBaseUrl=${payload.apiBaseUrl || 'none'}`);
               if (payload.model) {
-                config.model = payload.model;
+                config.model = normalizeModelName(payload.model);
               }
               if (payload.apiKey && payload.model) {
-                const providerId = payload.model.split('/')[0];
+                const providerId = deriveProviderId(payload.model);
                 if (providerId) {
                   config.provider = {
                     ...(config.provider || {}),
                     [providerId]: {
                       ...(config.provider?.[providerId] || {}),
-                      apiKey: payload.apiKey,
+                      options: {
+                        ...(config.provider?.[providerId]?.options || {}),
+                        apiKey: payload.apiKey,
+                        ...(payload.apiBaseUrl ? { baseURL: payload.apiBaseUrl } : {}),
+                      },
                     },
                   };
                 }
@@ -160,19 +192,24 @@ export class EnvironmentFactory {
                   progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
                 }
 
-                if (payload.model || payload.apiKey) {
-                  progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}`);
+                if (payload.model || payload.apiKey || payload.apiBaseUrl) {
+                  progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}, apiBaseUrl=${payload.apiBaseUrl || 'none'}`);
                   if (payload.model) {
-                    config.model = payload.model;
+                    config.model = normalizeModelName(payload.model);
                   }
                   if (payload.apiKey && payload.model) {
-                    const providerId = payload.model.split('/')[0];
+                    const providerId = deriveProviderId(payload.model);
                     if (providerId) {
                       config.provider = {
                         ...(config.provider || {}),
                         [providerId]: {
                           ...(config.provider?.[providerId] || {}),
-                          apiKey: payload.apiKey,
+                          ...(payload.apiBaseUrl ? { api: 'openai' } : {}),
+                          options: {
+                            ...(config.provider?.[providerId]?.options || {}),
+                            apiKey: payload.apiKey,
+                            ...(payload.apiBaseUrl ? { baseURL: payload.apiBaseUrl } : {}),
+                          },
                         },
                       };
                     }
@@ -239,8 +276,21 @@ export class EnvironmentFactory {
       if (engine !== 'claudecode') {
         const opencodeConfig: Record<string, any> = {};
         if (payload.model) {
-          opencodeConfig.model = payload.model;
-          progress(`配置模型: ${payload.model}`);
+          opencodeConfig.model = normalizeModelName(payload.model);
+          progress(`配置模型: ${opencodeConfig.model} (normalized from ${payload.model})`);
+        }
+        if (payload.apiKey && payload.model) {
+          const providerId = deriveProviderId(payload.model);
+          opencodeConfig.provider = {
+            [providerId]: {
+              ...(payload.apiBaseUrl ? { api: 'openai' } : {}),
+              options: {
+                apiKey: payload.apiKey,
+                ...(payload.apiBaseUrl ? { baseURL: payload.apiBaseUrl } : {}),
+              },
+            },
+          };
+          progress(`配置 provider: ${providerId} (apiKey + baseURL)`);
         }
         if (payload.mcps && payload.mcps.length > 0) {
           const mcpObjects = payload.mcps.filter((m): m is Exclude<typeof m, string> => typeof m !== 'string');

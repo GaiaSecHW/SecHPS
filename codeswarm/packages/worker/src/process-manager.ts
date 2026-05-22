@@ -178,14 +178,22 @@ export class ProcessManager {
         mergedEnv.ANTHROPIC_API_KEY = apiKey;
         console.log(`[ProcessMgr] Added ANTHROPIC_API_KEY to env`);
       }
-      // Set model and apiBaseUrl for both engines (task payload overrides settings.json)
+      // Set model and apiBaseUrl via env vars (primarily for claudecode engine;
+      // for opencode engine, model routing is driven by opencode.json provider config
+      // which environment.ts injects with apiKey + baseURL in options)
       if (model) {
         mergedEnv.ANTHROPIC_MODEL = model;
         console.log(`[ProcessMgr] Added ANTHROPIC_MODEL=${model} to env`);
       }
       if (apiBaseUrl) {
-        mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
-        console.log(`[ProcessMgr] Added ANTHROPIC_BASE_URL=${apiBaseUrl} to env`);
+        // ANTHROPIC_BASE_URL is Anthropic-specific; for opencode engine with
+        // custom endpoints, apiBaseUrl is injected into opencode.json by environment.ts
+        if (engine === 'claudecode') {
+          mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
+          console.log(`[ProcessMgr] Added ANTHROPIC_BASE_URL=${apiBaseUrl} to env (claudecode engine)`);
+        } else {
+          console.log(`[ProcessMgr] apiBaseUrl=${apiBaseUrl} handled via opencode.json provider config (opencode engine)`);
+        }
       }
       if (engine === 'claudecode') {
         // claudecode engine: sync CLAUDE_API_KEY for claude-agent-acp
