@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   TaskPayloadSchema,
@@ -45,6 +46,55 @@ export class WorkerDaemon {
     this.processMgr = new ProcessManager();
     this.semaphore = new Semaphore(config.maxConcurrent);
     this.codedmapMgr = new CodedmapManager();
+  }
+
+  /**
+   * Check if required engine binaries are available in PATH.
+   * Logs availability status for each engine so admins can diagnose
+   * spawn failures before tasks are dispatched.
+   */
+  private checkBinaries(): { opencode: boolean; claudecode: boolean } {
+    const binaries = {
+      opencode: 'opencode',
+      claudecode: 'claude-agent-acp',
+    };
+    const result: Record<string, boolean> = {};
+
+    for (const [engine, binary] of Object.entries(binaries)) {
+      try {
+        const resolved = execSync(`which ${binary} 2>/dev/null`, {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        result[engine] = true;
+        this.server.log.info({ engine, binary, path: resolved }, `Engine binary available`);
+      } catch {
+        result[engine] = false;
+        this.server.log.warn(
+          { engine, binary },
+          `Engine binary NOT found — tasks with engine=${engine} will fail at spawn (ENOENT). Install: ${engine === 'opencode' ? 'npm i -g opencode-ai' : 'npm i -g @agentclientprotocol/claude-agent-acp'}`,
+        );
+      }
+    }
+
+    const availableEngines = Object.entries(result)
+      .filter(([, ok]) => ok)
+      .map(([engine]) => engine);
+    const missingEngines = Object.entries(result)
+      .filter(([, ok]) => !ok)
+      .map(([engine]) => engine);
+
+    if (availableEngines.length > 0) {
+      this.server.log.info({ availableEngines }, `Available engine binaries`);
+    }
+    if (missingEngines.length > 0) {
+      this.server.log.warn(
+        { missingEngines },
+        `Missing engine binaries — tasks using these engines will fail until the binaries are installed`,
+      );
+    }
+
+    return result as { opencode: boolean; claudecode: boolean };
   }
 
   async start(): Promise<void> {
@@ -130,6 +180,7 @@ export class WorkerDaemon {
     });
 
     await this.server.listen({ port: this.config.port, host: '0.0.0.0' });
+    this.checkBinaries();
     this.startHeartbeat();
     // Ensure MinIO bucket exists at startup
     ensureBucket().catch(err => {
