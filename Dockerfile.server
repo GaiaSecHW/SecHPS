@@ -1,0 +1,118 @@
+# ============================================================================
+# SecHPS Server - Multi-stage Docker Build
+#
+# Build context: project root
+#   docker build -f Dockerfile.server -t sechps:latest .
+#
+# Runtime env vars (see .env.example for full list):
+#   DATABASE_URL       - PostgreSQL connection string (REQUIRED)
+#   JWT_SECRET         - JWT signing key (REQUIRED)
+#   NODE_ENV           - production
+#   REDIS_URL          - Redis for CodeSwarm scheduling
+#   NEXT_PUBLIC_BASE_URL - Worker callback URL
+#   GITEA_*            - Gitea file sync config
+#   MINIO_*            - MinIO object storage config
+#   PORT               - HTTP port (default 3000)
+#
+# Important:
+#   - Do NOT use --omit=optional or --production for npm install
+#     (@anthropic-ai/claude-agent-sdk has platform-native binaries)
+#   - Prisma binaryTargets include debian-openssl-3.0.x (matches bookworm)
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build Next.js standalone output
+# ---------------------------------------------------------------------------
+FROM node:20-bookworm AS builder
+
+ARG BUILD_DATE
+ARG VERSION
+
+WORKDIR /app
+
+# Copy dependency manifests first (leverage Docker layer cache)
+COPY package.json package-lock.json ./
+
+# CRITICAL: Do NOT add --omit=optional or --production flags.
+# @anthropic-ai/claude-agent-sdk requires optional native-binary deps.
+RUN npm ci
+
+# Copy build-time config files
+COPY next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
+COPY tailwind.config.ts ./
+
+# Copy Prisma schema (needed for client generation before next build)
+COPY prisma/ ./prisma/
+
+# Generate Prisma Client (must run before next build)
+RUN npx prisma generate
+
+# Copy application source code
+COPY src/ ./src/
+
+# Copy plugins (postbuild will include in standalone output)
+COPY plugins/ ./plugins/
+
+# Copy skills data (postbuild will include in standalone output)
+COPY skills/ ./skills/
+
+# Copy postbuild script (called by npm run build)
+COPY scripts/postbuild.js ./scripts/postbuild.js
+
+# Build Next.js standalone output + run postbuild
+# postbuild handles: anthropic SDK copy, chunk sync, platform cleanup, static placement
+RUN npm run build
+
+# ---------------------------------------------------------------------------
+# Stage 2: Minimal production runtime
+# ---------------------------------------------------------------------------
+FROM node:20-bookworm-slim AS runner
+
+ARG BUILD_DATE
+ARG VERSION
+
+LABEL org.opencontainers.image.created=$BUILD_DATE
+LABEL org.opencontainers.image.version=$VERSION
+LABEL org.opencontainers.image.title=SecHPS
+LABEL org.opencontainers.image.description="AI-driven security testing platform"
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Create non-root user for security
+RUN addgroup --system nodejs && \
+    adduser --system --ingroup nodejs nextjs
+
+# Install curl for healthcheck (bookworm-slim doesn't include it)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# --- Copy standalone build output ---
+# postbuild has already arranged the complete runtime structure:
+#   server.js, .next/, node_modules/, prisma/, plugins/, skills/
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/ ./
+
+# .next/static is NOT traced by standalone mode (Next.js docs require manual copy)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static/ ./.next/static/
+
+# --- Create runtime directories (data volumes, populated at deploy time) ---
+RUN mkdir -p /app/data/skills \
+              /app/uploads \
+              /app/skill_management \
+              /app/AgentHarness && \
+    chown -R nextjs:nodejs /app/data /app/uploads /app/skill_management /app/AgentHarness
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/api/global/health || exit 1
+
+USER nextjs
+
+ENTRYPOINT ["node", "server.js"]
