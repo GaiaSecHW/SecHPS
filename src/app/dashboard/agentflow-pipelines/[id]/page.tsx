@@ -33,8 +33,18 @@ function EditorContent() {
   const [availableSkills, setAvailableSkills] = useState<Array<{ name: string; displayName: string }>>([]);
   const [availableMcps, setAvailableMcps] = useState<Array<{ name: string }>>([]);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
 
   const selectedNode = nodes.find(n => n.id === selectedNodeId);
+
+  useEffect(() => {
+    const updateSidebarWidth = () => {
+      setSidebarWidth(window.innerWidth < 1024 ? 64 : 240);
+    };
+    updateSidebarWidth();
+    window.addEventListener('resize', updateSidebarWidth);
+    return () => window.removeEventListener('resize', updateSidebarWidth);
+  }, []);
 
   useEffect(() => {
     const fetchPipeline = async () => {
@@ -321,8 +331,11 @@ function EditorContent() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-white">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+    <div
+      className="fixed bg-gray-900 text-white flex flex-col z-10"
+      style={{ top: 56, left: sidebarWidth, right: 0, bottom: 0 }}
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={handleGoBack}
@@ -363,10 +376,12 @@ function EditorContent() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <NodePalette onAddNode={() => {}} />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="w-56 flex-shrink-0">
+          <NodePalette onAddNode={() => {}} />
+        </div>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 min-w-0 relative">
           <ReactFlow
             nodes={nodes}
             edges={styledEdges}
@@ -418,6 +433,7 @@ function EditorContent() {
           availableModels={availableModels}
           availableSkills={availableSkills}
           availableMcps={availableMcps}
+          className="w-72 lg:w-80 flex-shrink-0"
         />
       </div>
     </div>

@@ -313,59 +313,19 @@ export default function SkillCreateWizardPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0F172A]">
-      {/* Header */}
-      <div className="bg-dark-surface border-b border-gray-700/50">
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (confirm('确定要退出向导吗？')) router.push('/dashboard/skills');
-              }}
-              className="p-1.5 text-gray-400 hover:text-gray-100 hover:bg-gray-700/30 rounded transition-colors"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold text-white">Skill 引导创建</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={saveAsDraft}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 transition-colors"
-            >
-              <Save size={14} />
-              保存
-            </button>
-            <button
-              onClick={() => setShowDrafts(!showDrafts)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 transition-colors relative"
-            >
-              <FolderOpen size={14} />
-              草稿
-              {drafts.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-purple-600 text-white text-xs rounded">
-                  {drafts.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full">
       {/* 草稿列表下拉 */}
       {showDrafts && (
-        <div className="absolute top-[52px] right-5 z-50 w-[300px] bg-dark-surface border border-gray-700/50 rounded-lg shadow-xl">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
-            <h3 className="text-sm font-medium text-gray-100">草稿列表</h3>
-            <button onClick={() => setShowDrafts(false)} className="text-gray-400 hover:text-gray-200">
+        <div className="fixed top-20 right-8 z-50 w-[300px] bg-dark-surface border border-dark-border rounded-lg shadow-xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-dark-border">
+            <h3 className="text-sm font-medium text-dark-text">草稿列表</h3>
+            <button onClick={() => setShowDrafts(false)} className="text-dark-text-muted hover:text-dark-text transition-colors">
               ✕
             </button>
           </div>
           <div className="p-3 max-h-[200px] overflow-auto">
             {drafts.length === 0 ? (
-              <p className="text-xs text-gray-500">暂无草稿</p>
+              <p className="text-xs text-dark-text-muted">暂无草稿</p>
             ) : (
               <div className="space-y-2">
                 {drafts.map((draft) => (
@@ -374,17 +334,17 @@ export default function SkillCreateWizardPage() {
                     onClick={() => loadDraft(draft.id)}
                     className={`flex items-center justify-between p-2.5 rounded border cursor-pointer transition-colors ${
                       currentDraftId === draft.id
-                        ? 'border-purple-500 bg-purple-500/10'
-                        : 'border-gray-700/50 bg-gray-800/50 hover:bg-gray-700/30'
+                        ? 'border-indigo-500 bg-indigo-500/10'
+                        : 'border-dark-border bg-dark-surface-hover/50 hover:bg-dark-surface-hover'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm text-gray-100 truncate">{draft.name}</span>
-                      <p className="text-xs text-gray-500">{formatDate(draft.savedAt)}</p>
+                      <span className="text-sm text-dark-text truncate">{draft.name}</span>
+                      <p className="text-xs text-dark-text-muted">{formatDate(draft.savedAt)}</p>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteDraft(draft.id); }}
-                      className="p-1 text-gray-400 hover:text-red-400 rounded"
+                      className="p-1 text-dark-text-muted hover:text-red-400 rounded"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -396,38 +356,58 @@ export default function SkillCreateWizardPage() {
         </div>
       )}
 
-      {/* Steps Progress */}
-      <div className="bg-dark-surface border-b border-gray-700/50">
-        <div className="px-5 py-3">
-          <div className="flex items-center gap-2">
-            {WIZARD_STEPS.map((step, index) => {
-              const isActive = step.id === currentStep;
-              const isCompleted = index < currentStepIndex;
-              return (
-                <button
-                  key={step.id}
-                  onClick={() => handleGoToStep(step.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    isActive
-                      ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/25'
-                      : isCompleted
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  {isCompleted ? <CheckCircle2 size={14} /> : <span>{index + 1}</span>}
-                  <span className="hidden sm:inline">{step.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
       {/* Main Content */}
       <div className="flex-1 overflow-auto p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-dark-surface border border-gray-700/50 rounded-xl">
+        <div className="max-w-4xl mx-auto space-y-4">
+          {/* Steps + Actions row */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              {WIZARD_STEPS.map((step, index) => {
+                const isActive = step.id === currentStep;
+                const isCompleted = index < currentStepIndex;
+                return (
+                  <button
+                    key={step.id}
+                    onClick={() => handleGoToStep(step.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      isActive
+                        ? 'bg-indigo-600 text-white'
+                        : isCompleted
+                        ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-dark-surface-hover text-dark-text-muted hover:text-dark-text-secondary'
+                    }`}
+                  >
+                    {isCompleted ? <CheckCircle2 size={14} /> : <span>{index + 1}</span>}
+                    <span className="hidden sm:inline">{step.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={saveAsDraft}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-dark-text-muted hover:text-dark-text hover:bg-dark-surface-hover transition-colors"
+              >
+                <Save size={14} />
+                <span className="hidden md:inline">保存</span>
+              </button>
+              <button
+                onClick={() => setShowDrafts(!showDrafts)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-dark-text-muted hover:text-dark-text hover:bg-dark-surface-hover transition-colors"
+              >
+                <FolderOpen size={14} />
+                <span className="hidden md:inline">草稿</span>
+                {drafts.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-indigo-600 text-white text-xs rounded">
+                    {drafts.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Step content */}
+          <div className="bg-dark-surface border border-dark-border rounded-xl">
             <div className="p-4">
               {currentStep === 'intent' && (
                 <IntentStep data={wizardData.intent} onChange={(intent) => saveData({ intent })} onNext={handleNext} />

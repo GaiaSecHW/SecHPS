@@ -89,8 +89,8 @@ export function QueueMonitor({
     <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-4">
       {/* 标题和刷新按钮 */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-100 flex items-center">
-          <Zap size={20} className="mr-2 text-primary-500" />
+        <h3 className="text-base font-medium text-dark-text flex items-center">
+          <Zap size={16} className="mr-2 text-indigo-400" />
           调度队列状态
         </h3>
         <button

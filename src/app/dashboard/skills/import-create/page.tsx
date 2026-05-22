@@ -471,22 +471,10 @@ export default function ImportCreateSkillPage() {
   const validItemsCount = skillItems.filter(item => item.parsed).length;
 
   return (
-    <div className="bg-[#0F172A]">
-      {/* Header */}
-      <div className="bg-dark-surface border-b border-gray-700/50">
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-1.5 text-gray-400 hover:text-gray-100 hover:bg-gray-700/30 rounded transition-colors"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold text-white">导入创建 Skill</h1>
-            </div>
-          </div>
-          {skillItems.length > 0 && (
+    <div className="max-w-2xl mx-auto py-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {skillItems.length > 0 && (
+          <div className="flex items-center justify-end">
             <button
               type="button"
               onClick={() => {
@@ -494,29 +482,23 @@ export default function ImportCreateSkillPage() {
                 setBatchMode(false);
                 setError('');
               }}
-              className="text-xs text-gray-400 hover:text-gray-300"
+              className="text-sm text-dark-text-muted hover:text-dark-text transition-colors"
             >
               清空重选
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="p-5">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
+          </div>
+        )}
+        {error && (
               <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
                 {error}
               </div>
             )}
 
-            <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-4">
+            <div className="bg-dark-surface border border-dark-border rounded-xl p-4">
               {/* 上传区域 */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  上传 Skill 文件 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1.5">
+                  上传 Skill 文件 <span className="text-red-400">*</span>
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -530,24 +512,24 @@ export default function ImportCreateSkillPage() {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-md hover:from-green-500 hover:to-teal-400 transition-all"
+                    className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all"
                   >
                     <Plus size={14} className="mr-1" />
                     选择文件
                   </button>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-dark-text-muted">
                     支持多选 ZIP 或 .md 文件
                   </span>
                 </div>
-                <p className="mt-1.5 text-xs text-gray-500">
+                <p className="mt-1.5 text-xs text-dark-text-muted">
                   ZIP 需直接包含 SKILL.md 文件
                 </p>
               </div>
 
               {skillItems.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                <div className="mt-4 pt-4 border-t border-dark-border">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-300">
+                    <h3 className="text-sm font-medium text-dark-text-secondary">
                       文件列表 ({validItemsCount}/{skillItems.length} 个有效)
                     </h3>
                     {skillItems.length > 1 && (
@@ -559,14 +541,14 @@ export default function ImportCreateSkillPage() {
                     {skillItems.map(item => (
                       <div
                         key={item.id}
-                        className={`p-2.5 rounded-md border ${
+                        className={`p-2.5 rounded-lg border ${
                           item.status === 'success' 
                             ? 'border-green-500/50 bg-green-900/20' 
                             : item.status === 'failed'
                             ? 'border-red-500/50 bg-red-900/20'
                             : item.error
                             ? 'border-yellow-500/50 bg-yellow-900/20'
-                            : 'border-gray-600 bg-dark-bg'
+                            : 'border-dark-border bg-dark-bg'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -581,7 +563,7 @@ export default function ImportCreateSkillPage() {
                               {item.status === 'failed' && (
                                 <AlertTriangle size={12} className="text-red-400" />
                               )}
-                              <span className="text-xs text-gray-300 truncate">{item.file.name}</span>
+                              <span className="text-xs text-dark-text-secondary truncate">{item.file.name}</span>
                             </div>
                             
                             {item.error && (
@@ -609,7 +591,7 @@ export default function ImportCreateSkillPage() {
                                     value={item.skillName}
                                     onChange={(e) => updateItem(item.id, { skillName: e.target.value })}
                                     placeholder="名称"
-                                    className="w-[120px] px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                    className="w-[120px] px-2 py-1 text-xs bg-dark-surface border border-dark-border rounded focus:ring-1 focus:ring-indigo-500 text-dark-text"
                                     disabled={item.status !== 'pending'}
                                   />
                                   <input
@@ -617,7 +599,7 @@ export default function ImportCreateSkillPage() {
                                     value={item.skillDisplayName}
                                     onChange={(e) => updateItem(item.id, { skillDisplayName: e.target.value })}
                                     placeholder="显示名称"
-                                    className="w-[120px] px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                    className="w-[120px] px-2 py-1 text-xs bg-dark-surface border border-dark-border rounded focus:ring-1 focus:ring-indigo-500 text-dark-text"
                                     disabled={item.status !== 'pending'}
                                   />
                                   <input
@@ -625,17 +607,17 @@ export default function ImportCreateSkillPage() {
                                     value={item.skillDescription}
                                     onChange={(e) => updateItem(item.id, { skillDescription: e.target.value })}
                                     placeholder="描述"
-                                    className="flex-1 min-w-[150px] px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                    className="flex-1 min-w-[150px] px-2 py-1 text-xs bg-dark-surface border border-dark-border rounded focus:ring-1 focus:ring-indigo-500 text-dark-text"
                                     disabled={item.status !== 'pending'}
                                   />
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <div className="min-w-[120px]">
-                                    <label className="block text-xs text-gray-500 mb-0.5">分类</label>
+                                    <label className="block text-xs text-dark-text-muted mb-0.5">分类</label>
                                     <select
                                       value={item.categoryId}
                                       onChange={(e) => updateItem(item.id, { categoryId: e.target.value, vulnerabilityTreeId: null })}
-                                      className="w-full px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                      className="w-full px-2 py-1 text-xs bg-dark-surface border border-dark-border rounded focus:ring-1 focus:ring-indigo-500 text-dark-text"
                                       disabled={item.status !== 'pending' || loadingData}
                                     >
                                       <option value="">请选择</option>
@@ -648,7 +630,7 @@ export default function ImportCreateSkillPage() {
                                     const selectedCat = categories.find(c => c.id === item.categoryId);
                                     return selectedCat?.hasSubDimension ? (
                                       <div className="min-w-[200px] max-w-[300px]">
-                                        <label className="block text-xs text-gray-500 mb-0.5">漏洞模式</label>
+                                        <label className="block text-xs text-dark-text-muted mb-0.5">漏洞模式</label>
                                         <VulnerabilityTreeSelector
                                           value={item.vulnerabilityTreeId}
                                           onChange={(patternId) => updateItem(item.id, { vulnerabilityTreeId: patternId })}
@@ -660,7 +642,7 @@ export default function ImportCreateSkillPage() {
                                   })()}
                                 </div>
                                 <div>
-                                  <label className="block text-xs text-gray-500 mb-0.5">适用产品</label>
+                                  <label className="block text-xs text-dark-text-muted mb-0.5">适用产品</label>
                                   <ProductTagSelect 
                                     selectedIds={item.productTagIds} 
                                     onChange={(ids) => updateItem(item.id, { productTagIds: ids })} 
@@ -674,7 +656,7 @@ export default function ImportCreateSkillPage() {
                             <button
                               type="button"
                               onClick={() => removeItem(item.id)}
-                              className="p-1 hover:bg-red-900/30 rounded text-gray-400 hover:text-red-400 shrink-0"
+                              className="p-1 hover:bg-red-900/30 rounded text-dark-text-muted hover:text-red-400 shrink-0"
                             >
                               <Trash2 size={12} />
                             </button>
@@ -687,15 +669,15 @@ export default function ImportCreateSkillPage() {
               )}
 
               {skillItems.length > 0 && validItemsCount > 0 && isAdmin && (
-                <div className="mt-3 pt-3 border-t border-gray-700/50">
+                <div className="mt-3 pt-3 border-t border-dark-border">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={isPublic}
                       onChange={(e) => setIsPublic(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-600 text-blue-400 focus:ring-primary-500 bg-dark-bg"
+                      className="w-4 h-4 rounded border-dark-border bg-dark-bg"
                     />
-                    <span className="ml-2 text-sm text-gray-300">
+                    <span className="ml-2 text-sm text-dark-text-secondary">
                       公开 Skill（所有用户可见）
                     </span>
                   </label>
@@ -703,23 +685,23 @@ export default function ImportCreateSkillPage() {
               )}
 
               {skillItems.length === 1 && skillItems[0].parsed && (
-                <div className="mt-3 pt-3 border-t border-gray-700/50">
+                <div className="mt-3 pt-3 border-t border-dark-border">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm font-medium text-gray-300">
+                    <label className="block text-sm font-medium text-dark-text-secondary">
                       内容预览
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowPreview(!showPreview)}
-                      className="text-xs text-gray-400 hover:text-gray-300 flex items-center"
+                      className="text-xs text-dark-text-muted hover:text-dark-text-secondary flex items-center"
                     >
                       {showPreview ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                       {showPreview ? '收起' : '展开'}
                     </button>
                   </div>
                   {showPreview && (
-                    <div className="bg-dark-bg border border-gray-700/50 rounded-md p-2 max-h-[150px] overflow-auto">
-                      <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
+                    <div className="bg-dark-bg border border-dark-border rounded-lg p-2 max-h-[150px] overflow-auto">
+                      <pre className="text-xs text-dark-text-secondary whitespace-pre-wrap font-mono">
                         {skillItems[0].parsed.content.substring(0, 1500)}
                         {skillItems[0].parsed.content.length > 1500 && '\n... (截断)'}
                       </pre>
@@ -735,14 +717,14 @@ export default function ImportCreateSkillPage() {
                 <button
                   type="button"
                   onClick={() => router.back()}
-                  className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-md hover:bg-dark-bg transition-colors"
+                  className="px-4 py-2 text-sm border border-dark-border text-dark-text-secondary rounded-lg hover:bg-dark-bg transition-colors"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={loading || validItemsCount === 0}
-                  className="inline-flex items-center px-4 py-2 text-sm bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-md hover:from-green-500 hover:to-teal-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -759,8 +741,6 @@ export default function ImportCreateSkillPage() {
               </div>
             )}
           </form>
-        </div>
-      </div>
     </div>
   );
 }

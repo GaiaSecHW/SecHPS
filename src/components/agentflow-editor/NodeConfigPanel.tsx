@@ -14,6 +14,7 @@ interface NodeConfigPanelProps {
   availableModels: { name: string; displayName: string }[];
   availableSkills: { name: string; displayName: string }[];
   availableMcps: { name: string }[];
+  className?: string;
 }
 
 export default function NodeConfigPanel({
@@ -24,6 +25,7 @@ export default function NodeConfigPanel({
   availableModels,
   availableSkills,
   availableMcps,
+  className = 'w-80',
 }: NodeConfigPanelProps) {
   const mergeByCandidates = useMemo(() => {
     if (!node) return [];
@@ -38,7 +40,7 @@ export default function NodeConfigPanel({
 
   if (!node) {
     return (
-      <div className="w-80 bg-[#0F172A] border-l border-gray-700/50 h-full flex items-center justify-center">
+      <div className={`${className} bg-[#0F172A] border-l border-gray-700/50 h-full flex items-center justify-center`}>
         <p className="text-sm text-gray-500">点击节点编辑属性</p>
       </div>
     );
@@ -66,7 +68,7 @@ export default function NodeConfigPanel({
   };
 
   return (
-    <div className="w-80 bg-[#0F172A] border-l border-gray-700/50 h-full overflow-y-auto">
+    <div className={`${className} bg-[#0F172A] border-l border-gray-700/50 h-full overflow-y-auto`}>
       <div className="p-4 border-b border-gray-700/50">
         <h3 className="text-sm font-semibold text-gray-200">节点属性</h3>
         <p className="text-xs text-gray-500 mt-1 truncate">{data.nodeType}</p>
