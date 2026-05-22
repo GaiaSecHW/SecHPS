@@ -79,7 +79,40 @@ try {
       return null;
     }
 
-    const parsed = JSON.parse(jsonStr);
+    // Try direct parse first; if it fails, attempt common JSON repairs
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      // Repair 1: remove trailing content after last closing brace
+      const lastBrace = jsonStr.lastIndexOf('}');
+      if (lastBrace > 0 && lastBrace < jsonStr.length - 1) {
+        const trimmed = jsonStr.slice(0, lastBrace + 1);
+        try { parsed = JSON.parse(trimmed); } catch { /* continue */ }
+        if (parsed) { console.log('[VulnParse] JSON repaired by trimming trailing content'); }
+      }
+      // Repair 2: escape unescaped control characters (newlines, tabs inside string values)
+      if (!parsed) {
+        const repaired = jsonStr.replace(/[\x00-\x1f]/g, (ch) => {
+          if (ch === '\n') return '\\n';
+          if (ch === '\r') return '\\r';
+          if (ch === '\t') return '\\t';
+          return '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0');
+        });
+        try { parsed = JSON.parse(repaired); } catch { /* continue */ }
+        if (parsed) { console.log('[VulnParse] JSON repaired by escaping control characters'); }
+      }
+      // Repair 3: remove markdown bold/italic markers inside JSON values (**text**)
+      if (!parsed) {
+        const cleaned = jsonStr.replace(/\*{1,2}(.*?)\*{1,2}/g, '$1');
+        try { parsed = JSON.parse(cleaned); } catch { /* final failure */ }
+        if (parsed) { console.log('[VulnParse] JSON repaired by removing markdown bold markers'); }
+      }
+      if (!parsed) {
+        console.error('[VulnParse] JSON 解析失败 (all repairs exhausted):', parseErr instanceof Error ? parseErr.message : String(parseErr));
+        return null;
+      }
+    }
     if (!Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
       console.log(`[VulnParse] JSON 解析成功但 vulnerabilities 为空或非数组: ${JSON.stringify(parsed).substring(0, 200)}`);
       return null;
