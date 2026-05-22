@@ -35,15 +35,70 @@ function deriveProviderId(model: string): string {
 }
 
 /**
- * Normalize model name to opencode's `provider/model` format.
- * - "alibaba-cn/MiniMax/MiniMax-M2.7" → "alibaba-cn/MiniMax/MiniMax-M2.7" (unchanged)
- * - "MiniMax-M2.7" → "minimax/MiniMax-M2.7"
- * - "DeepSeek-V3" → "deepseek/DeepSeek-V3"
+ * Extract the model ID from a possibly prefixed model name.
+ * - "minimax/MiniMax-M2.7" → "MiniMax-M2.7"
+ * - "MiniMax-M2.7" → "MiniMax-M2.7" (bare name, unchanged)
  */
-function normalizeModelName(model: string): string {
-  if (model.includes('/')) return model;
-  const providerId = deriveProviderId(model);
-  return `${providerId}/${model}`;
+function extractModelId(model: string): string {
+  if (model.includes('/')) {
+    return model.slice(model.indexOf('/') + 1);
+  }
+  return model;
+}
+
+/**
+ * Build the opencode.json model/provider config for a given model, apiKey, and apiBaseUrl.
+ * Returns a partial config object to merge into the opencode.json.
+ *
+ * When apiBaseUrl is provided, we create a custom provider using @ai-sdk/openai-compatible
+ * so opencode can route to arbitrary OpenAI-compatible endpoints.
+ * The provider ID is prefixed with "custom-" to distinguish from built-in providers.
+ *
+ * Without apiBaseUrl, we just set the model and inject apiKey into the existing provider.
+ */
+function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): Record<string, any> {
+  const config: Record<string, any> = {};
+  if (!model) return config;
+
+  if (apiBaseUrl) {
+    const customProviderId = `custom-${deriveProviderId(model)}`;
+    const modelId = extractModelId(model);
+    config.model = `${customProviderId}/${modelId}`;
+    if (apiKey) {
+      config.provider = {
+        ...(config.provider || {}),
+        [customProviderId]: {
+          npm: '@ai-sdk/openai-compatible',
+          name: deriveProviderId(model),
+          models: {
+            [modelId]: { name: modelId },
+          },
+          options: {
+            apiKey,
+            baseURL: apiBaseUrl,
+          },
+        },
+      };
+    }
+  } else {
+    config.model = model;
+    if (apiKey) {
+      const providerId = deriveProviderId(model);
+      if (providerId) {
+        config.provider = {
+          ...(config.provider || {}),
+          [providerId]: {
+            ...(config.provider?.[providerId] || {}),
+            options: {
+              ...(config.provider?.[providerId]?.options || {}),
+              apiKey,
+            },
+          },
+        };
+      }
+    }
+  }
+  return config;
 }
 
 function mapRemotePathToLocal(remotePath: string): string {
@@ -143,24 +198,12 @@ export class EnvironmentFactory {
 
             if (payload.model || payload.apiKey || payload.apiBaseUrl) {
               progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}, apiBaseUrl=${payload.apiBaseUrl || 'none'}`);
-              if (payload.model) {
-                config.model = normalizeModelName(payload.model);
-              }
-              if (payload.apiKey && payload.model) {
-                const providerId = deriveProviderId(payload.model);
-                if (providerId) {
-                  config.provider = {
-                    ...(config.provider || {}),
-                    [providerId]: {
-                      ...(config.provider?.[providerId] || {}),
-                      options: {
-                        ...(config.provider?.[providerId]?.options || {}),
-                        apiKey: payload.apiKey,
-                        ...(payload.apiBaseUrl ? { baseURL: payload.apiBaseUrl } : {}),
-                      },
-                    },
-                  };
-                }
+              const modelConfig = buildModelConfig(payload.model || '', payload.apiKey, payload.apiBaseUrl);
+              Object.assign(config, modelConfig);
+              if (modelConfig.model) progress(`配置模型: ${modelConfig.model} (from ${payload.model})`);
+              if (modelConfig.provider) {
+                const providerKeys = Object.keys(modelConfig.provider);
+                progress(`配置 provider: ${providerKeys.join(', ')}`);
               }
               fs.writeFileSync(directOpencodeJsonPath, JSON.stringify(config, null, 2));
               progress(`opencode.json 已更新模型配置`);
@@ -194,26 +237,9 @@ export class EnvironmentFactory {
 
                 if (payload.model || payload.apiKey || payload.apiBaseUrl) {
                   progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}, apiBaseUrl=${payload.apiBaseUrl || 'none'}`);
-                  if (payload.model) {
-                    config.model = normalizeModelName(payload.model);
-                  }
-                  if (payload.apiKey && payload.model) {
-                    const providerId = deriveProviderId(payload.model);
-                    if (providerId) {
-                      config.provider = {
-                        ...(config.provider || {}),
-                        [providerId]: {
-                          ...(config.provider?.[providerId] || {}),
-                          ...(payload.apiBaseUrl ? { api: 'openai' } : {}),
-                          options: {
-                            ...(config.provider?.[providerId]?.options || {}),
-                            apiKey: payload.apiKey,
-                            ...(payload.apiBaseUrl ? { baseURL: payload.apiBaseUrl } : {}),
-                          },
-                        },
-                      };
-                    }
-                  }
+                  const modelConfig = buildModelConfig(payload.model || '', payload.apiKey, payload.apiBaseUrl);
+                  Object.assign(config, modelConfig);
+                  if (modelConfig.model) progress(`配置模型(subdir): ${modelConfig.model} (from ${payload.model})`);
                   fs.writeFileSync(subdirOpencodeJsonPath, JSON.stringify(config, null, 2));
                   progress(`子目录 opencode.json 已更新模型配置`);
                 }
@@ -221,8 +247,23 @@ export class EnvironmentFactory {
                 progress(`读取子目录 opencode.json 失败: ${e}`);
               }
             }
-          } else if (subdirs.length > 1) {
+} else if (subdirs.length > 1) {
             progress(`多个子目录，不自动选择`);
+          }
+          // If no opencode.json was found in workspace, auto-generate one with model config
+          if (payload.model && !fs.existsSync(path.join(actualWorkspacePath, 'opencode.json'))) {
+            progress(`No opencode.json found in workspace, auto-generating with model config`);
+            const autoConfig: Record<string, any> = {
+              "$schema": "https://opencode.ai/config.json",
+            };
+            const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl);
+            Object.assign(autoConfig, modelConfig);
+            if (payload.agent) {
+              autoConfig.default_agent = payload.agent;
+            }
+            const autoConfigPath = path.join(localWorkspacePath, 'opencode.json');
+            fs.writeFileSync(autoConfigPath, JSON.stringify(autoConfig, null, 2));
+            progress(`自动生成 opencode.json: model=${autoConfig.model}, agent=${payload.agent || 'none'}`);
           }
         }
       } else {
@@ -272,25 +313,17 @@ export class EnvironmentFactory {
         }
       }
 
-      // Step 5: Generate opencode.json (opencode engine only)
+// Step 5: Generate opencode.json (opencode engine only)
       if (engine !== 'claudecode') {
         const opencodeConfig: Record<string, any> = {};
         if (payload.model) {
-          opencodeConfig.model = normalizeModelName(payload.model);
-          progress(`配置模型: ${opencodeConfig.model} (normalized from ${payload.model})`);
-        }
-        if (payload.apiKey && payload.model) {
-          const providerId = deriveProviderId(payload.model);
-          opencodeConfig.provider = {
-            [providerId]: {
-              ...(payload.apiBaseUrl ? { api: 'openai' } : {}),
-              options: {
-                apiKey: payload.apiKey,
-                ...(payload.apiBaseUrl ? { baseURL: payload.apiBaseUrl } : {}),
-              },
-            },
-          };
-          progress(`配置 provider: ${providerId} (apiKey + baseURL)`);
+          const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl);
+          Object.assign(opencodeConfig, modelConfig);
+          if (modelConfig.model) progress(`配置模型: ${modelConfig.model} (from ${payload.model})`);
+          if (modelConfig.provider) {
+            const providerKeys = Object.keys(modelConfig.provider);
+            progress(`配置 provider: ${providerKeys.join(', ')}`);
+          }
         }
         if (payload.mcps && payload.mcps.length > 0) {
           const mcpObjects = payload.mcps.filter((m): m is Exclude<typeof m, string> => typeof m !== 'string');
