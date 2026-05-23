@@ -65,29 +65,34 @@ export async function POST(request: Request) {
       },
     }).catch(() => {});
 
-    // 同地址冲突清理：标记同地址的其他 online worker 为 offline 并重调度其任务
+    // 同地址冲突清理：按子地址逐个比对，标记冲突的其他 online worker 为 offline
+    // （比全串匹配更精确，避免不同 Worker 共享部分 Docker 内网 IP 但主地址不同时误杀）
     if (address) {
-      const conflictingWorkers = await prisma.codeswarmWorker.findMany({
-        where: {
-          address,
-          status: 'online',
-          nodeId: { not: nodeId },
-          currentTasks: { gt: 0 },
-        },
-        select: { id: true },
-      });
-      await prisma.codeswarmWorker.updateMany({
-        where: {
-          address,
-          status: 'online',
-          nodeId: { not: nodeId },
-        },
-        data: { status: 'offline', currentTasks: 0 },
-      }).catch(() => {});
-      for (const cw of conflictingWorkers) {
-        codeswarmDispatcher.rescheduleWorkerTasksById(cw.id).catch(e =>
-          console.error('[CodeSwarm] 同地址冲突 Worker 任务重调度失败:', e)
-        );
+      const workerSubAddrs = address.split(',').map((a: string) => a.trim()).filter(Boolean);
+      // 仅使用主地址（首个 = WORKER_ADDRESS 配置的外部 IP）做冲突检测
+      const primaryAddr = workerSubAddrs[0];
+      if (primaryAddr && !primaryAddr.startsWith('localhost') && !primaryAddr.startsWith('127.')) {
+        // 查找 DB 中 address 字段包含相同主地址的其他 online worker
+        const conflictingWorkers = await prisma.$queryRaw`
+          SELECT id, "nodeId", "currentTasks"
+          FROM "CodeswarmWorker"
+          WHERE status = 'online'
+            AND "nodeId" != ${nodeId}
+            AND address LIKE ${'%' + primaryAddr + '%'}
+        ` as any[];
+
+        if (conflictingWorkers.length > 0) {
+          const conflictIds = conflictingWorkers.map((w: any) => w.id);
+          await prisma.codeswarmWorker.updateMany({
+            where: { id: { in: conflictIds } },
+            data: { status: 'offline', currentTasks: 0 },
+          });
+          for (const cw of conflictingWorkers) {
+            codeswarmDispatcher.rescheduleWorkerTasksById(cw.id).catch(e =>
+              console.error('[CodeSwarm] 同地址冲突 Worker 任务重调度失败:', e)
+            );
+          }
+        }
       }
     }
 
@@ -130,13 +135,12 @@ export async function POST(request: Request) {
 async function dispatchQueuedTasks(): Promise<void> {
   try {
     // 1. 检查心跳过期的 Worker，标记为 offline
-    const offlineThreshold = new Date(Date.now() - 90_000);
-    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+    // 使用 PostgreSQL NOW() 函数，避免 JavaScript Date 时区转换问题
     const staleWorkers = await prisma.$queryRaw`
       SELECT id, "nodeId", "currentTasks"
       FROM "CodeswarmWorker"
       WHERE status = 'online'
-        AND "lastHeartbeat" < ${offlineThreshold}
+        AND "lastHeartbeat" < NOW() - INTERVAL '90 seconds'
     ` as any[];
 
     if (staleWorkers.length > 0) {

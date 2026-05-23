@@ -128,21 +128,30 @@ class CodeswarmDispatcher {
     // 处理逗号分隔的地址列表，按可达性优先排序（172.x > localhost > 其他 > 198.18.x）
     const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
 
-    // 本地 Worker 使用 localhost 回调，避免 NEXT_PUBLIC_BASE_URL 不可达
-    const isLocalWorker = addresses.some(a => a.startsWith('localhost') || a.startsWith('127.'));
+    // 判断 Worker 是否本地：只看首个地址（WORKER_ADDRESS 配置的主地址）
+    // address 格式："外部IP:port,172.x:port" — 首个是 Worker 主地址
+    const primaryAddr = addresses[0].trim();
+    const isLocalWorker = primaryAddr.startsWith('localhost') || primaryAddr.startsWith('127.');
     const callbackUrl = isLocalWorker ? 'http://localhost:3000' : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
     if (addresses.length === 0) {
       console.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
       return false;
     }
+    // Sort addresses: externally-configured addresses (from WORKER_ADDRESS) first,
+    // then reachable private IPs, then Docker-internal IPs, then localhost/loopback last.
+    // Docker 172.x IPs are unreachable in cross-server deployment, so deprioritize them.
     const sorted = [...addresses].sort((a, b) => {
       const score = (addr: string) => {
-        if (addr.startsWith('172.')) return 0;
-        if (addr.startsWith('localhost') || addr.startsWith('127.')) return 1;
-        if (addr.startsWith('198.18.')) return 3;
-        return 2;
+        if (addr.startsWith('localhost') || addr.startsWith('127.')) return 4;
+        if (addr.startsWith('198.18.')) return 5;
+        // Docker bridge 172.17/172.18/172.19/172.20/172.21 — usually unreachable cross-server
+        if (/^172\.(17|18|19|20|21)\./.test(addr)) return 3;
+        // Other 172.x (AWS VPC etc.) — may be reachable depending on network
+        if (addr.startsWith('172.')) return 2;
+        // Everything else (public IPs, VPN IPs, WORKER_ADDRESS) — highest priority
+        return 1;
       };
-      return score(a) - score(b);
+      return score(a.trim()) - score(b.trim());
     });
 
     // 阶段 1：先更新 DB 状态（乐观锁，防止重复分发）
@@ -621,14 +630,14 @@ const taskPayload = JSON.stringify({
     }
 
     // 同时检查 DB 中状态为 online 但心跳过期的 workers（处理重启后遗漏的）
+    // 使用 PostgreSQL NOW() 函数，避免 JavaScript Date 时区转换问题
     try {
-      const dbOfflineWorkers = await prisma.codeswarmWorker.findMany({
-        where: {
-          status: 'online',
-          lastHeartbeat: { lt: new Date(now - 90_000) },
-        },
-        select: { id: true, nodeId: true, currentTasks: true },
-      });
+      const dbOfflineWorkers = await prisma.$queryRaw`
+        SELECT id, "nodeId", "currentTasks"
+        FROM "CodeswarmWorker"
+        WHERE status = 'online'
+          AND "lastHeartbeat" < NOW() - INTERVAL '90 seconds'
+      ` as any[];
 
       for (const w of dbOfflineWorkers) {
         console.warn(`[CodeSwarm] DB Worker ${w.nodeId} 标记为 offline`);

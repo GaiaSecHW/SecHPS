@@ -19,6 +19,8 @@ interface WorkerDaemonConfig {
   port: number;
   maxConcurrent: number;
   orchestratorUrl: string;
+  /** Worker 外部可达地址（跨服务器部署时必须设置，否则心跳上报自动检测的容器内网 IP + localhost） */
+  address?: string;
 }
 
 export class WorkerDaemon {
@@ -282,25 +284,39 @@ export class WorkerDaemon {
     }, delay);
   }
 
-  /** Get all local IPv4 addresses, excluding loopback. */
-  private getLocalAddresses(): string[] {
-    const addresses: string[] = [];
+  /** Build the address string for heartbeat reporting.
+   *  If WORKER_ADDRESS is set (recommended for cross-server / Docker deployment),
+   *  use it as primary address and append auto-detected IPs as fallback.
+   *  If not set, auto-detect local IPs (but exclude localhost to prevent
+   *  the orchestrator from misclassifying remote workers as local). */
+  private getHeartbeatAddress(): string {
+    const autoDetected: string[] = [];
     const interfaces = os.networkInterfaces();
     for (const addrs of Object.values(interfaces)) {
       if (!addrs) continue;
       for (const addr of addrs) {
         if (addr.family === 'IPv4' && !addr.internal) {
-          addresses.push(`${addr.address}:${this.config.port}`);
+          autoDetected.push(`${addr.address}:${this.config.port}`);
         }
       }
     }
-    addresses.push(`localhost:${this.config.port}`);
-    return [...new Set(addresses)];
+
+    if (this.config.address) {
+      // WORKER_ADDRESS configured: use it as primary, auto-detected as fallback
+      const parts = this.config.address.split(',').map(a => a.trim()).filter(Boolean);
+      const all = [...parts, ...autoDetected];
+      return [...new Set(all)].join(',');
+    }
+
+    // No WORKER_ADDRESS: auto-detect only, skip localhost
+    // (localhost in address triggers isLocalWorker on the orchestrator,
+    //  causing wrong callbackUrl for cross-server deployments)
+    return [...new Set(autoDetected)].join(',');
   }
 
   private async sendHeartbeat(): Promise<boolean> {
     try {
-      const addresses = this.getLocalAddresses();
+      const address = this.getHeartbeatAddress();
       const systemType = os.platform() === 'win32' ? 'windows' : os.platform() === 'darwin' ? 'darwin' : 'linux';
       const arch = os.arch() === 'x64' ? 'x64' : os.arch() === 'arm64' ? 'arm64' : os.arch();
       const resp = await fetch(`${this.config.orchestratorUrl}/api/codeswarm/worker/heartbeat`, {
@@ -310,7 +326,7 @@ export class WorkerDaemon {
           nodeId: this.config.nodeId,
           maxConcurrent: this.config.maxConcurrent,
           currentTasks: this.config.maxConcurrent - this.semaphore.available,
-          address: addresses.join(','),
+          address,
           systemType,
           arch,
         }),

@@ -3,12 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
 function sortAddressesByPriority(addresses: string[]): string[] {
-  return [...addresses].sort((a, b) => {
+  const parts = [...addresses].map(a => a.trim()).filter(Boolean);
+  const hasExternalFirst = parts.length > 1 && parts[0] !== 'localhost' && !parts[0].startsWith('127.') && !parts[0].startsWith('172.17.');
+
+  return [...parts].sort((a, b) => {
     const score = (addr: string) => {
-      if (addr.startsWith('172.')) return 0;
-      if (addr.startsWith('localhost') || addr.startsWith('127.')) return 1;
-      if (addr.startsWith('198.18.')) return 3;
-      return 2;
+      if (hasExternalFirst && parts[0] === addr) return -1;
+      if (addr.startsWith('172.') && !addr.startsWith('172.17.') && !addr.startsWith('172.18.') && !addr.startsWith('172.19.')) return 1;
+      if (addr.startsWith('172.17.') || addr.startsWith('172.18.') || addr.startsWith('172.19.')) return 3;
+      if (addr.startsWith('localhost') || addr.startsWith('127.')) return 2;
+      if (addr.startsWith('198.18.')) return 4;
+      return 0;
     };
     return score(a.trim()) - score(b.trim());
   });
@@ -76,7 +81,10 @@ export async function POST(
       return NextResponse.json({ error: 'Worker 地址无效' }, { status: 500 });
     }
 
-    const isLocalWorker = addresses.some((a: string) => a.startsWith('localhost') || a.startsWith('127.'));
+    // 判断 Worker 是否本地：只看主地址（首个 = WORKER_ADDRESS 配置的外部 IP）
+    // 避免逗号分隔的多地址中含 localhost/127.x 导致远程 Worker 被误判为本地
+    const primaryAddr = addresses[0];
+    const isLocalWorker = primaryAddr.startsWith('localhost') || primaryAddr.startsWith('127.');
     const callbackUrl = isLocalWorker ? 'http://localhost:3000' : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
 
     const sorted = sortAddressesByPriority(addresses);
