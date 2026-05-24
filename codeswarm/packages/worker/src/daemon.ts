@@ -21,6 +21,8 @@ interface WorkerDaemonConfig {
   orchestratorUrl: string;
   /** Worker 外部可达地址（跨服务器部署时必须设置，否则心跳上报自动检测的容器内网 IP + localhost） */
   address?: string;
+  /** 单任务超时时间（毫秒），默认 7*24*3600*1000 = 7天，可通过 TASK_TIMEOUT_SEC 环境变量配置 */
+  taskTimeoutMs: number;
 }
 
 export class WorkerDaemon {
@@ -352,8 +354,9 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env } = payload;
+    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env, timeoutSec } = payload;
     const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
+    const taskTimeoutMs = timeoutSec ? timeoutSec * 1000 : this.config.taskTimeoutMs;
     let buildResult = null;
     let codedmapPromise: Promise<void> | null = null;
 
@@ -483,7 +486,8 @@ export class WorkerDaemon {
         env,
         instruction,
         onEvent,
-        apiBaseUrl
+        apiBaseUrl,
+        taskTimeoutMs
       );
       console.log(`[Daemon] Step 3 DONE: runAgent returned`);
 

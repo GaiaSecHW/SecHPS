@@ -141,7 +141,7 @@ export class AgentRunner {
     }
 
     // Wait for completion with optional timeout
-    const timeoutMs = config.timeoutMs || 60 * 60 * 1000; // 60 min default
+    const timeoutMs = config.timeoutMs || 7 * 24 * 3600 * 1000;
     
     const result = await Promise.race([
       this.exitCodePromise.then((code) => ({

@@ -138,6 +138,7 @@ export class ProcessManager {
     instruction?: string,
     onEvent?: AgentEventCallback,
     apiBaseUrl?: string,
+    timeoutMs?: number,
   ): Promise<RunAgentResult> {
     let stdout = '';
     let stderr = '';
@@ -395,7 +396,16 @@ export class ProcessManager {
       const promptContent = instruction || agentName;
       console.log(`[ProcessMgr]   prompt length: ${promptContent?.length}`);
 
-      const stopReason = await client.sendPrompt(promptContent);
+      const effectiveTimeoutMs = timeoutMs || 7 * 24 * 3600 * 1000;
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Task timed out after ${effectiveTimeoutMs / 1000}s`)), effectiveTimeoutMs);
+      });
+
+      const stopReason = await Promise.race([
+        client.sendPrompt(promptContent),
+        timeoutPromise,
+      ]);
       console.log(`[ProcessMgr] Step F DONE: stopReason = ${stopReason}`);
 
       let exitCode: number | null = null;
@@ -415,7 +425,10 @@ export class ProcessManager {
         console.log(`[ProcessMgr] Step G DONE: exitCode = ${exitCode}`);
       } else {
         console.log(`[ProcessMgr] Step G: Waiting for exitCode (stopReason=${stopReason})...`);
-        exitCode = await client.exitCode;
+        exitCode = await Promise.race([
+          client.exitCode,
+          timeoutPromise,
+        ]);
         console.log(`[ProcessMgr] Step G DONE: exitCode = ${exitCode}`);
       }
 
@@ -463,7 +476,8 @@ export class ProcessManager {
     taskId: string,
     workspace: string,
     command: string,
-    env?: Record<string, string>
+    env?: Record<string, string>,
+    timeoutMs?: number,
   ): Promise<CommandResult> {
     const startTime = Date.now();
     const log = (level: 'info' | 'warn' | 'error', msg: string, meta?: object) => {
@@ -548,10 +562,10 @@ export class ProcessManager {
 
       setTimeout(() => {
         if (!hasEnded) {
-          log('warn', 'opencode command timeout, killing process', { timeout: '60m' });
+          log('warn', 'opencode command timeout, killing process', { timeoutMs });
           proc.kill();
         }
-      }, 60 * 60 * 1000);
+      }, timeoutMs || 7 * 24 * 3600 * 1000);
     });
   }
 }
