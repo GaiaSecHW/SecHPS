@@ -66,8 +66,8 @@ export async function GET(request: NextRequest) {
             COUNT(ti.id)::int AS "runCount",
             COUNT(ti.id) FILTER (WHERE ti.status = 'completed')::int AS "successCount",
             MAX(ti."completedAt") AS "lastRunAt",
-            COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE)::int AS "vulnCount",
-            COUNT(v.id) FILTER (WHERE v.vulnerable IS FALSE)::int AS "alertCount",
+            COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE AND v.status IN ('confirmed','fixed','verified'))::int AS "vulnCount",
+            COUNT(v.id)::int AS "alertCount",
             COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE AND v.status IN ('confirmed','fixed'))::int AS "confirmedVuln",
             COUNT(v.id) FILTER (WHERE v.vulnerable IS FALSE AND v.status IN ('confirmed','fixed'))::int AS "confirmedNonVuln"
           FROM "TaskInstance" ti
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
     const defaultAgentName = (formData.get('defaultAgentName') as string) || undefined;
     const startCommand = formData.get('startCommand') as string | null;
     const inputRequirements = formData.get('inputRequirements') as string | null;
+    const requireCodedmap = formData.get('requireCodedmap') === 'true';
     const isPublic = formData.get('isPublic') === 'true';
     const frontendTenantId = formData.get('tenantId') as string | null;
     const fileType = formData.get('agentHarnessFileType') as string | null;
@@ -241,6 +242,7 @@ export async function POST(request: NextRequest) {
         defaultAgentName: defaultAgentName || undefined,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
+        requireCodedmap,
         status: 'active',
         tenantId,
         isPublic,

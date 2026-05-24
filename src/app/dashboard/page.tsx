@@ -79,8 +79,8 @@ export default function DashboardPage() {
           <p className="text-base md:text-lg text-zinc-200 font-medium mb-2 md:mb-3">
             人机协同 · 智能漏洞挖掘引擎
           </p>
-          <p className="text-sm md:text-base text-zinc-400 max-w-xl leading-relaxed mb-6 md:mb-8">
-            通过人的知识沉淀和 AI 的智能化能力，自动化和辅助漏洞挖掘
+          <p className="text-sm md:text-base text-zinc-400 max-w-xl whitespace-nowrap text-center mb-6 md:mb-8">
+            将安全测试工程师的实战经验持续沉淀，驱动 AI 能力自我进化，构建越用越强的漏洞挖掘引擎
           </p>
 
           {/* 核心特性卡片 */}

@@ -25,7 +25,6 @@ interface TenantModalProps {
 
 function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProps) {
   const [name, setName] = useState(tenant?.name || '');
-  const [slug, setSlug] = useState(tenant?.slug || '');
   const [isIcsTenant, setIsIcsTenant] = useState(tenant?.isIcsTenant || false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -33,11 +32,9 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
   useEffect(() => {
     if (tenant) {
       setName(tenant.name);
-      setSlug(tenant.slug);
       setIsIcsTenant(tenant.isIcsTenant);
     } else {
       setName('');
-      setSlug('');
       setIsIcsTenant(false);
     }
     setError('');
@@ -61,7 +58,6 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
       } else {
         const { data, error: apiError } = await apiPost<Tenant>('/api/admin/tenants', {
           name,
-          slug,
           isIcsTenant,
         });
         if (apiError) {
@@ -119,22 +115,6 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
             placeholder="请输入租户名称"
           />
         </div>
-
-        {!tenant && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-red-400">*</span></label>
-            <input
-              type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              required
-              pattern="[a-z0-9-]+"
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="用于 URL，只能包含小写字母、数字和连字符"
-            />
-            <p className="mt-1 text-sm text-gray-500">用于 URL，只能包含小写字母、数字和连字符</p>
-          </div>
-        )}
 
         <div className="flex items-center">
           <input

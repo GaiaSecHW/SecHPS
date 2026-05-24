@@ -16,6 +16,7 @@ interface FormData {
   defaultAgentName: string;
   startCommand?: string;
   inputRequirements?: string;
+  requireCodedmap?: boolean;
   tenantId: string;
 }
 
@@ -48,6 +49,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [claudeCodeInfo, setClaudeCodeInfo] = useState<ClaudeCodeInfo | null>(null);
+  const [requireCodedmap, setRequireCodedmap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -83,7 +85,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      toast.error('请输入应用名称');
+      toast.error('请输入Agent名称');
       return;
     }
     if (!formData.engine) {
@@ -102,8 +104,8 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     setIsSubmitting(true);
     try {
       const isPublic = formData.tenantId === '__public__';
-      await onSubmit(formData, agentHarnessFile, isPublic);
-      toast.success('应用创建成功');
+      await onSubmit({ ...formData, requireCodedmap }, agentHarnessFile, isPublic);
+      toast.success('Agent创建成功');
       handleClose();
     } catch (error: any) {
       toast.error(error.message || '创建失败，请重试');
@@ -116,6 +118,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', inputRequirements: '', tenantId: '' });
     setAgentHarnessFile(null);
     setClaudeCodeInfo(null);
+    setRequireCodedmap(false);
     onClose();
   };
 
@@ -226,9 +229,9 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               : prev.startCommand || '',
       }));
       if (info.commands.length > 0) {
-        toast.success(`检测到 ${info.agents.length} 个智能体, ${info.commands.length} 个命令`, { duration: 3000 });
+        toast.success(`检测到 ${info.agents.length} 个Agent, ${info.commands.length} 个命令`, { duration: 3000 });
       } else if (info.agents.length > 0) {
-        toast.success(`检测到 ${info.agents.length} 个智能体`, { duration: 3000 });
+        toast.success(`检测到 ${info.agents.length} 个Agent`, { duration: 3000 });
       }
     }
   };
@@ -305,7 +308,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
-          <h2 className="text-base font-semibold text-gray-100">创建新应用</h2>
+          <h2 className="text-base font-semibold text-gray-100">创建新Agent</h2>
           {!isSubmitting && (
             <button onClick={handleClose} className="h-7 px-2 rounded-md text-gray-400 hover:text-gray-300 hover:bg-gray-700/30">
               <X size={16} />
@@ -316,7 +319,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
         <div className="px-4 py-3 space-y-3 overflow-y-auto">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              应用名称 <span className="text-red-400">*</span>
+              Agent名称 <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -410,21 +413,6 @@ className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none
                     disabled={isSubmitting}
                   />
                 </div>
-                <div className="mt-1.5 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (fileInputRef.current) {
-                        fileInputRef.current.webkitdirectory = true;
-                        fileInputRef.current.click();
-                      }
-                    }}
-                    className="text-xs text-primary-500 hover:text-primary-400"
-                    disabled={isSubmitting}
-                  >
-                    或选择文件夹
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
@@ -456,7 +444,7 @@ className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              默认智能体名称 <span className="text-xs text-green-500">(自动识别)</span>
+              默认Agent名称 <span className="text-xs text-green-500">(自动识别)</span>
             </label>
             <input
               type="text"
@@ -527,6 +515,21 @@ className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none
               disabled={isSubmitting}
             />
           </div>
+
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <span className="text-sm font-medium text-gray-300">需要知识图谱</span>
+              <p className="text-xs text-gray-500">启用后，使用此 Agent 的任务会自动加载知识图谱</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRequireCodedmap(!requireCodedmap)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${requireCodedmap ? 'bg-primary-500' : 'bg-gray-600'}`}
+              disabled={isSubmitting}
+            >
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${requireCodedmap ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700/50 bg-dark-bg">
@@ -545,7 +548,7 @@ className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none
             className="h-[38px] px-3 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-50 flex items-center gap-1.5"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-            {isSubmitting ? '创建中...' : '创建应用'}
+            {isSubmitting ? '创建中...' : '创建Agent'}
           </button>
         </div>
       </div>

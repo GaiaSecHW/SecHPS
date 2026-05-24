@@ -27,7 +27,7 @@ export default function AgentHarnessDeveloperGuidePage() {
             <BookOpen size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">Agent 应用开发手册</h1>
+            <h1 className="text-xl font-semibold text-white">Agent 开发手册</h1>
             <p className="text-sm text-gray-400 mt-0.5">AgentHarness 工程包开发指南</p>
           </div>
         </div>

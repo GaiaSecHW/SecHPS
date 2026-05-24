@@ -12,6 +12,7 @@ interface AgentApp {
   startCommand: string;
   notes: string | null;
   inputRequirements: string | null;
+  requireCodedmap?: boolean;
 }
 
 interface ModelConfig {
@@ -227,8 +228,10 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
     setIsSubmitting(true);
     try {
+      const needsCodedmap = agentApps.some(a => selectedAgentIds.has(a.id) && a.requireCodedmap);
+      const finalTargetProduct = needsCodedmap ? targetProduct : '';
       await onSubmit(
-        { name: name.trim(), agents, modelId: option.modelId, modelName: option.modelName, description: description.trim(), targetProduct },
+        { name: name.trim(), agents, modelId: option.modelId, modelName: option.modelName, description: description.trim(), targetProduct: finalTargetProduct },
         selectedFile
       );
       onClose();

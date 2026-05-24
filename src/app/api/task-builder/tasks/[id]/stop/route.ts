@@ -3,6 +3,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
+import { serverLog } from '@/lib/server-log';
 
 export async function POST(
   request: NextRequest,
@@ -46,7 +47,7 @@ export async function POST(
           workerNodeId = csWorker?.nodeId ?? null;
         }
       } catch (e) {
-        console.error('[Stop] 查询 Worker 信息失败:', e);
+        serverLog.error('[Stop] 查询 Worker 信息失败:', e);
       }
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
@@ -55,13 +56,13 @@ export async function POST(
           method: 'DELETE',
         });
       } catch (deleteError) {
-        console.error('删除 CodeSwarm 任务失败:', deleteError);
+        serverLog.error('删除 CodeSwarm 任务失败:', deleteError);
       }
 
       // 释放 Worker 负载（幂等，即使 DELETE 已释放也安全）
       if (workerNodeId) {
         codeswarmDispatcher.onTaskCompleted(workerNodeId).catch(e =>
-          console.error('[Stop] 释放 Worker 负载失败:', e)
+          serverLog.error('[Stop] 释放 Worker 负载失败:', e)
         );
       }
     }
@@ -88,7 +89,7 @@ export async function POST(
 
     return NextResponse.json({ message: '任务已停止', taskId: id });
   } catch (error) {
-    console.error('停止任务失败:', error);
+    serverLog.error('停止任务失败:', error);
     return NextResponse.json({ error: '停止任务失败' }, { status: 500 });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink, Download, Folder } from 'lucide-react';
+import { ArrowLeft, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink, Download, Shield, Eye, X, Bug, Ban } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -82,6 +82,12 @@ export default function TaskDetailPage() {
   const [vulnStats, setVulnStats] = useState<{ total: number; bySeverity: Record<string, number>; byStatus: Record<string, number> } | null>(null);
   const [reportFiles, setReportFiles] = useState<{ hasReport: boolean; files: { url: string; name: string }[] } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [vulnList, setVulnList] = useState<any[]>([]);
+  const [vulnLoading, setVulnLoading] = useState<Record<string, boolean>>({});
+  const [expandedVulnId, setExpandedVulnId] = useState<string | null>(null);
+
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+  const sortedVulnList = useMemo(() => [...vulnList].sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)), [vulnList]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -130,6 +136,22 @@ export default function TaskDetailPage() {
       } catch {}
     };
     fetchVulnStats();
+  }, [taskId]);
+
+  useEffect(() => {
+    const fetchVulnList = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/vulnerabilities?taskId=${taskId}&limit=200`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setVulnList(data.data || []);
+        }
+      } catch {}
+    };
+    fetchVulnList();
   }, [taskId]);
 
   // 执行时长计时器
@@ -293,6 +315,27 @@ export default function TaskDetailPage() {
     }
   };
 
+  const handleVulnAction = async (vulnId: string, action: string) => {
+    setVulnLoading(prev => ({ ...prev, [vulnId]: true }));
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/vulnerabilities/${vulnId}/${action}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success('操作成功');
+        setVulnList(prev => prev.map(v => v.id === vulnId ? { ...v, status: action === 'false-positive' ? 'false-positive' : action } : v));
+      } else {
+        toast.error('操作失败');
+      }
+    } catch {
+      toast.error('网络错误');
+    } finally {
+      setVulnLoading(prev => ({ ...prev, [vulnId]: false }));
+    }
+  };
+
   useEffect(() => {
     fetchReportFiles();
   }, [fetchReportFiles]);
@@ -449,103 +492,48 @@ export default function TaskDetailPage() {
             )}
            </div>
         </div>
-
-        <div className="grid grid-cols-4 gap-4 mt-6 bg-[#0F172A] rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-gray-400" />
-            <div>
-              <p className="text-xs text-gray-500">创建时间</p>
-              <p className="text-sm font-medium text-gray-100">{formatDate(task.createdAt)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock size={18} className="text-gray-400" />
-            <div>
-              <p className="text-xs text-gray-500">更新时间</p>
-              <p className="text-sm font-medium text-gray-100">{formatDate(task.updatedAt)}</p>
-            </div>
-          </div>
-          {task.projectPath && (
-            <div className="flex items-center gap-2">
-              <Folder size={18} className="text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">工作区目录</p>
-                <p className="text-sm font-medium text-gray-100">{task.projectPath.split('/').pop()}</p>
-              </div>
-            </div>
-          )}
-          {task.startedAt && (
-            <div className="flex items-center gap-2">
-              <Play size={18} className="text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">开始时间</p>
-                <p className="text-sm font-medium text-gray-100">{formatDate(task.startedAt)}</p>
-              </div>
-            </div>
-          )}
-          {task.completedAt && (
-            <div className="flex items-center gap-2">
-              <CheckCircle size={18} className="text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">完成时间</p>
-                <p className="text-sm font-medium text-gray-100">{formatDate(task.completedAt)}</p>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* 执行状态卡片（Agent + Codedmap 并行双轨） */}
-      {(task.status === 'running' || codeswarmStatus) && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
-          <div className="flex items-center justify-between mb-3">
+      {/* 执行状态 */}
+      {(task.startedAt || task.status === 'running' || codeswarmStatus) && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 px-4 py-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-center text-xs">
             <div className="flex items-center gap-2">
-              <Cpu size={18} className="text-blue-400" />
-              <h3 className="text-sm font-semibold text-gray-200">执行状态</h3>
+              <Cpu size={14} className="text-blue-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-gray-500">Agent</p>
+                <p className={`font-medium truncate ${parallelPhases.agentColor}`}>{parallelPhases.agentPhase}</p>
+              </div>
             </div>
-            {task.status === 'running' && (
-              <div className="flex items-center gap-2">
-                <Timer size={14} className="text-blue-400" />
-                <span className="text-sm font-mono text-blue-400">{formatElapsed(elapsedSeconds)}</span>
+            <div className="flex items-center gap-2">
+              <Activity size={14} className="text-purple-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-gray-500">知识图谱</p>
+                <p className={`font-medium truncate ${parallelPhases.codedmapColor}`}>{parallelPhases.codedmapPhase}</p>
               </div>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#0F172A] rounded-lg p-3 border border-blue-500/20">
-              <p className="text-xs text-blue-400 mb-1">Agent 执行</p>
-              <div className="flex items-center gap-2">
-                {task.status === 'running' && <span className={`inline-block w-2 h-2 rounded-full ${parallelPhases.agentColor === 'text-blue-400' ? 'bg-blue-400 animate-pulse' : parallelPhases.agentColor === 'text-green-400' ? 'bg-green-400' : parallelPhases.agentColor === 'text-red-400' ? 'bg-red-400' : 'bg-yellow-400'}`} />}
-                <span className={`text-sm font-medium ${parallelPhases.agentColor}`}>{parallelPhases.agentPhase}</span>
-              </div>
-              {parallelPhases.agentDetail && <p className="text-xs text-gray-500 mt-1">{parallelPhases.agentDetail}</p>}
             </div>
-            <div className="bg-[#0F172A] rounded-lg p-3 border border-purple-500/20">
-              <p className="text-xs text-purple-400 mb-1">知识图谱 (并行)</p>
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-medium ${parallelPhases.codedmapColor}`}>{parallelPhases.codedmapPhase}</span>
+            <div className="flex items-center gap-2">
+              <Clock size={14} className="text-gray-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-gray-500">时间</p>
+                <p className="text-gray-300 truncate">
+                  {task.startedAt ? formatDate(task.startedAt) : '-'}
+                  {task.completedAt
+                    ? ` → ${formatDate(task.completedAt)}`
+                    : task.status === 'running' && <span className="text-blue-400 font-mono ml-1">{formatElapsed(elapsedSeconds)}</span>}
+                </p>
               </div>
-              {parallelPhases.codedmapDetail && <p className="text-xs text-gray-500 mt-1">{parallelPhases.codedmapDetail}</p>}
             </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
-            {codeswarmStatus?.engine && (
-              <div className="bg-[#0F172A] rounded-lg p-2">
-                <p className="text-xs text-gray-500">引擎</p>
-                <p className="text-sm font-medium text-gray-200">{codeswarmStatus.engine}</p>
+            <div className="flex items-center gap-2">
+              <Wrench size={14} className="text-gray-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-gray-500">引擎</p>
+                <p className="text-gray-300 truncate">
+                  {codeswarmStatus?.engine || '-'}
+                  {codeswarmStatus?.model && <span className="text-gray-500 ml-1">· {codeswarmStatus.model}</span>}
+                </p>
               </div>
-            )}
-            {codeswarmStatus?.agent && (
-              <div className="bg-[#0F172A] rounded-lg p-2">
-                <p className="text-xs text-gray-500">Agent</p>
-                <p className="text-sm font-medium text-gray-200">{codeswarmStatus.agent}</p>
-              </div>
-            )}
-            {codeswarmStatus?.sessionId && (
-              <div className="bg-[#0F172A] rounded-lg p-2">
-                <p className="text-xs text-gray-500">Session</p>
-                <p className="text-sm font-mono text-gray-300 truncate" title={codeswarmStatus.sessionId}>{codeswarmStatus.sessionId}</p>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       )}
@@ -560,15 +548,6 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      {task.notes && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText size={20} className="text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-100">备注说明</h2>
-          </div>
-          <p className="text-sm text-gray-300 whitespace-pre-wrap">{task.notes}</p>
-        </div>
-      )}
 
       {task.errorMessage && (
         <div className="bg-red-600/10 rounded-lg border border-red-500/20 p-6">
@@ -577,6 +556,119 @@ export default function TaskDetailPage() {
             <h2 className="text-lg font-semibold text-red-400">错误信息</h2>
           </div>
           <pre className="text-sm text-red-400 whitespace-pre-wrap overflow-x-auto">{task.errorMessage}</pre>
+        </div>
+      )}
+
+      {sortedVulnList.length > 0 && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={20} className="text-red-400" />
+              <h2 className="text-lg font-semibold text-gray-100">漏洞列表</h2>
+              <span className="text-sm text-gray-500">({sortedVulnList.length} 条)</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {sortedVulnList.map((v) => {
+              const severityMap: Record<string, { label: string; color: string; bg: string }> = {
+                critical: { label: '严重', color: 'text-red-400', bg: 'bg-red-500/10' },
+                high: { label: '高危', color: 'text-orange-400', bg: 'bg-orange-500/10' },
+                medium: { label: '中危', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+                low: { label: '低危', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                info: { label: '信息', color: 'text-gray-400', bg: 'bg-gray-500/10' },
+              };
+              const sev = severityMap[v.severity] || severityMap.info;
+              const isLoading = vulnLoading[v.id];
+              const statusLabel: Record<string, { label: string; color: string }> = {
+                new: { label: '待处理', color: 'text-yellow-400' },
+                confirmed: { label: '已确认', color: 'text-orange-400' },
+                'false-positive': { label: '误报', color: 'text-gray-400' },
+                fixed: { label: '已修复', color: 'text-green-400' },
+                verified: { label: '已验证', color: 'text-cyan-400' },
+              };
+              const st = statusLabel[v.status] || { label: v.status, color: 'text-gray-400' };
+              const isExpanded = expandedVulnId === v.id;
+
+              return (
+                <div key={v.id} className={`border rounded-lg overflow-hidden transition-colors ${isExpanded ? 'border-gray-600/70 bg-gray-800/50' : 'border-gray-700/50 hover:bg-gray-800/30'}`}>
+                  <div
+                    className="flex items-start justify-between gap-3 p-3 cursor-pointer"
+                    onClick={() => setExpandedVulnId(isExpanded ? null : v.id)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${sev.bg} ${sev.color}`}>{sev.label}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${st.color}`}>{st.label}</span>
+                        <span className="text-sm text-gray-200 truncate">{v.title}</span>
+                      </div>
+                      {v.location && (
+                        <p className="text-xs text-gray-500 truncate">{v.location}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {v.status === 'new' && (
+                        <>
+                          <button onClick={() => handleVulnAction(v.id, 'confirm')} disabled={isLoading} className="p-1.5 rounded-md text-orange-400 hover:bg-orange-500/15 disabled:opacity-50 transition-colors" title="确认为真漏洞">
+                            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
+                          </button>
+                          <button onClick={() => handleVulnAction(v.id, 'false-positive')} disabled={isLoading} className="p-1.5 rounded-md text-gray-400 hover:bg-gray-600/15 disabled:opacity-50 transition-colors" title="标记为误报">
+                            <Ban size={14} />
+                          </button>
+                        </>
+                      )}
+                      {v.status === 'confirmed' && (
+                        <button onClick={() => handleVulnAction(v.id, 'fix')} disabled={isLoading} className="p-1.5 rounded-md text-green-400 hover:bg-green-500/15 disabled:opacity-50 transition-colors" title="标记已修复">
+                          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                        </button>
+                      )}
+                      {v.status === 'fixed' && (
+                        <button onClick={() => handleVulnAction(v.id, 'verify')} disabled={isLoading} className="p-1.5 rounded-md text-cyan-400 hover:bg-cyan-500/15 disabled:opacity-50 transition-colors" title="验证通过">
+                          {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                        </button>
+                      )}
+                      <span className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                        <ChevronRight size={14} />
+                      </span>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-3 pt-1 border-t border-gray-700/40 space-y-3 text-sm">
+                      {v.description && (
+                        <div>
+                          <span className="text-gray-500 text-xs">描述</span>
+                          <p className="text-gray-300 mt-0.5 whitespace-pre-wrap">{v.description}</p>
+                        </div>
+                      )}
+                      {v.location && (
+                        <div>
+                          <span className="text-gray-500 text-xs">位置</span>
+                          <p className="text-gray-300 mt-0.5 font-mono text-xs break-all">{v.location}</p>
+                        </div>
+                      )}
+                      <div className="flex gap-6 text-xs text-gray-400">
+                        {v.cwe && <span>CWE: <span className="text-gray-300">{v.cwe}</span></span>}
+                        {v.type && <span>类型: <span className="text-gray-300">{v.type}</span></span>}
+                        <span>状态: <span className={st.color}>{st.label}</span></span>
+                      </div>
+                      {v.POC && (
+                        <div>
+                          <span className="text-gray-500 text-xs">PoC</span>
+                          <pre className="mt-0.5 bg-gray-900/60 text-red-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40">{v.POC}</pre>
+                        </div>
+                      )}
+                      {v.fixSuggestion && (
+                        <div>
+                          <span className="text-gray-500 text-xs">修复建议</span>
+                          <pre className="mt-0.5 bg-gray-900/60 text-green-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40">{v.fixSuggestion}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -601,51 +693,6 @@ export default function TaskDetailPage() {
           <pre className="bg-gray-900 text-yellow-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96">
             {task.reportPath}
           </pre>
-        </div>
-      )}
-
-      {vulnStats && vulnStats.total > 0 && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ShieldAlert size={20} className="text-red-400" />
-              <h2 className="text-lg font-semibold text-gray-100">漏洞统计</h2>
-              <span className="text-sm text-gray-500">({vulnStats.total} 条)</span>
-            </div>
-            <a
-              href={`/dashboard/admin/vulnerabilities?task=${taskId}`}
-              className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
-            >
-              查看全部漏洞
-              <ExternalLink size={14} />
-            </a>
-          </div>
-          <div className="grid grid-cols-5 gap-3">
-            {([
-              { key: 'critical', label: '严重', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
-              { key: 'high', label: '高危', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-              { key: 'medium', label: '中危', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-              { key: 'low', label: '低危', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-              { key: 'info', label: '信息', color: 'text-gray-400', bg: 'bg-gray-500/10', border: 'border-gray-500/20' },
-            ] as const).map(({ key, label, color, bg, border }) => {
-              const count = vulnStats.bySeverity?.[key] || 0;
-              return (
-                <a
-                  key={key}
-                  href={`/dashboard/admin/vulnerabilities?task=${taskId}&severity=${key}`}
-                  className={`rounded-lg border p-3 text-center ${border} ${bg} hover:opacity-80 transition-opacity`}
-                >
-                  <p className={`text-2xl font-bold ${color}`}>{count}</p>
-                  <p className="text-xs text-gray-400 mt-1">{label}</p>
-                </a>
-              );
-            })}
-          </div>
-          {(vulnStats.byStatus?.new || vulnStats.byStatus?.confirmed) ? (
-            <p className="text-xs text-yellow-500 mt-3">
-              待处理: {(vulnStats.byStatus?.new || 0) + (vulnStats.byStatus?.confirmed || 0)} 条
-            </p>
-          ) : null}
         </div>
       )}
 
@@ -726,28 +773,6 @@ export default function TaskDetailPage() {
           </div>
         </div>
       )}
-
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <FileText size={20} className="text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-100">执行日志</h2>
-            <span className="text-sm text-gray-500">({logs.length} 条记录)</span>
-          </div>
-          {isStreaming && (
-            <span className="flex items-center gap-2 text-sm text-blue-400 animate-pulse">
-              <Loader2 size={14} className="animate-spin" />
-              实时更新中...
-            </span>
-          )}
-        </div>
-        
-        {logs.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-8">暂无执行日志</p>
-        ) : (
-          <LogsGroupedDisplay logs={logs} formatDate={formatDate} />
-        )}
-      </div>
     </div>
   );
 }

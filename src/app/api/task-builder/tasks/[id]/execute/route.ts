@@ -7,6 +7,7 @@ import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import { copyAgentHarnessFromLocal } from '@/lib/task-creation';
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { serverLog } from '@/lib/server-log';
 
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -125,12 +126,12 @@ export async function POST(
           select: { agentHarnessPath: true },
         });
         if (agentAppForHarness?.agentHarnessPath) {
-          console.log(`[Execute] Workspace missing agent harness, copying from local: ${agentAppForHarness.agentHarnessPath}`);
+          serverLog.info(`[Execute] Workspace missing agent harness, copying from local: ${agentAppForHarness.agentHarnessPath}`);
           try {
             await copyAgentHarnessFromLocal(agentAppForHarness.agentHarnessPath, workspacePath);
-            console.log(`[Execute] Agent harness copied to workspace`);
+            serverLog.info(`[Execute] Agent harness copied to workspace`);
           } catch (copyError) {
-            console.error(`[Execute] Failed to copy agent harness from local:`, copyError);
+            serverLog.error(`[Execute] Failed to copy agent harness from local:`, copyError);
           }
         }
       }
@@ -147,7 +148,7 @@ export async function POST(
           model = modelsArray[0];
         }
       } catch {
-        console.warn('解析 ModelConfig.models 失败');
+        serverLog.warn('解析 ModelConfig.models 失败');
       }
     }
 
@@ -253,7 +254,7 @@ export async function POST(
 
     // 异步轮询任务结果
     pollCodeswarmTask(id, codeswarmTaskId).catch(async (error) => {
-      console.error('CodeSwarm 任务轮询失败:', error);
+      serverLog.error('CodeSwarm 任务轮询失败:', error);
 
       eventBus.emit(`task:${id}`, {
         type: 'error',
@@ -283,7 +284,7 @@ export async function POST(
       mergedScripts: parseJsonArray(mergedScripts),
     });
   } catch (error) {
-    console.error('执行任务失败:', error);
+    serverLog.error('执行任务失败:', error);
     // 回滚 TaskInstance 状态，防止卡在 running
     try {
       await prisma.taskInstance.updateMany({
@@ -296,7 +297,7 @@ export async function POST(
         },
       });
     } catch (rollbackErr) {
-      console.error('回滚 TaskInstance 状态失败:', rollbackErr);
+      serverLog.error('回滚 TaskInstance 状态失败:', rollbackErr);
     }
     return NextResponse.json({ error: '执行任务失败' }, { status: 500 });
   }

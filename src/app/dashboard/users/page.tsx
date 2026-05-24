@@ -206,6 +206,9 @@ function UsersPageContent() {
                 角色
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                租户
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 状态
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -220,7 +223,7 @@ function UsersPageContent() {
             {filteredUsers.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-6 py-12 text-center text-sm text-gray-500"
                 >
                   未找到用户
@@ -391,6 +394,9 @@ function UserRow({
           )}
         </div>
       </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+        {user.tenantName || '-'}
+      </td>
       <td className="px-6 py-4 whitespace-nowrap">
         <span
           className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -447,16 +453,32 @@ function CreateUserModal({
   roles,
 }: {
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (initialPassword: string) => void;
   roles: any[];
 }) {
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchTenants = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/admin/tenants', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setTenants(data.tenants || []);
+        }
+      } catch {}
+    };
+    fetchTenants();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,11 +494,10 @@ function CreateUserModal({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          email,
           username,
-          password,
           name,
           roles: selectedRoles,
+          tenantId: selectedTenantId || null,
         }),
       });
 
@@ -494,19 +515,13 @@ function CreateUserModal({
         return;
       }
 
-      onSuccess();
+      const data = await response.json();
+      toast.success(`用户创建成功，初始密码：${data.initialPassword}`, { duration: 10000 });
+      onSuccess(data.initialPassword);
     } catch (err) {
       setError('网络错误，请重试');
       setLoading(false);
     }
-  };
-
-  const toggleRole = (roleId: string) => {
-    setSelectedRoles(prev =>
-      prev.includes(roleId) ?
-        prev.filter(id => id !== roleId)
-      : [...prev, roleId]
-    );
   };
 
   return (
@@ -514,127 +529,51 @@ function CreateUserModal({
       <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4">
         <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-100">创建用户</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400 text-2xl">
-            ×
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-400 text-2xl">×</button>
         </div>
 
         <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
-              {error}
-            </div>
+            <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">{error}</div>
           )}
 
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-300"
-            >
-              邮箱 <span className="text-red-400">*</span>
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="user@example.com"
-            />
+            <label className="block text-sm font-medium text-gray-300">用户名 <span className="text-red-400">*</span></label>
+            <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500" placeholder="请输入用户名" />
           </div>
 
           <div>
-            <label
-              htmlFor="username"
-              className="block text-sm font-medium text-gray-300"
-            >
-              用户名 <span className="text-red-400">*</span>
-            </label>
-            <input
-              id="username"
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="请输入用户名"
-            />
+            <label className="block text-sm font-medium text-gray-300">姓名</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500" placeholder="请输入姓名" />
           </div>
 
           <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
-            >
-              姓名
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="请输入姓名"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-300"
-            >
-              密码 <span className="text-red-400">*</span>
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="请输入密码"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              角色
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">角色</label>
             <div className="grid grid-cols-2 gap-2">
-              {roles.map((role: any) => (
-                <label
-                  key={role.id}
-                  className="flex items-center space-x-2 px-3 py-2 border border-gray-600 rounded-md cursor-pointer hover:bg-dark-surface-hover"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedRoles.includes(role.id)}
-                    onChange={() => toggleRole(role.id)}
-                    className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
-                  />
+              {roles.filter((r: any) => r.name !== 'admin').map((role: any) => (
+                <label key={role.id} className="flex items-center space-x-2 px-3 py-2 border border-gray-600 rounded-md cursor-pointer hover:bg-dark-surface-hover">
+                  <input type="checkbox" checked={selectedRoles.includes(role.id)} onChange={() => {
+                    setSelectedRoles(prev => prev.includes(role.id) ? prev.filter(id => id !== role.id) : [...prev, role.id]);
+                  }} className="rounded border-gray-600 text-blue-400 focus:ring-primary-500" />
                   <span className="text-sm">{role.name}</span>
                 </label>
               ))}
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-300">所属租户 <span className="text-red-400">*</span></label>
+            <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-dark-bg text-gray-100">
+              <option value="">请选择租户</option>
+              {tenants.map((t: any) => (
+                <option key={t.id} value={t.id}>{t.name}{t.isIcsTenant ? ' (ICSL)' : ''}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-            >
-              {loading ? '保存中...' : '保存'}
-            </button>
+            <button type="button" onClick={onClose} disabled={loading} className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50">取消</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50">{loading ? '保存中...' : '保存'}</button>
           </div>
         </form>
       </div>
@@ -651,24 +590,12 @@ function ResetPasswordModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    if (!newPassword) {
-      setError('请输入新密码');
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setError('密码至少需要8个字符');
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -679,7 +606,7 @@ function ResetPasswordModal({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ newPassword: 'huawei@123', mustChangePassword: true }),
       });
 
       if (!response.ok) {
@@ -689,7 +616,7 @@ function ResetPasswordModal({
         return;
       }
 
-      toast.success(`用户 ${user.username} 的密码已重置`);
+      toast.success(`用户 ${user.username} 的密码已重置为 huawei@123，用户下次登录需自行修改密码`);
       onSuccess();
     } catch (err) {
       setError('网络错误，请重试');
@@ -716,24 +643,8 @@ function ResetPasswordModal({
             </div>
           )}
 
-          <div className="bg-yellow-900/20 border border-yellow-200 text-yellow-400 px-4 py-3 rounded text-sm">
-            此操作将直接重置用户 <strong>{user.username}</strong> 的密码，无需验证旧密码。
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              新密码 <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="请输入新密码"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              密码要求：至少8个字符，包含大小写字母和数字
-            </p>
+          <div className="bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded text-sm">
+            将用户 <strong>{user.username}</strong> 的密码重置为默认密码 <code className="bg-yellow-900/40 px-1.5 py-0.5 rounded text-yellow-300">huawei@123</code>，用户下次登录后必须自行修改密码。
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">

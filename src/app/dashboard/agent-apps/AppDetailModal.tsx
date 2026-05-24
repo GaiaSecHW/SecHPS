@@ -11,6 +11,7 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   inputRequirements?: string | null;
+  requireCodedmap?: boolean;
   isPublic: boolean;
   tenantId?: string | null;
   createdAt: string;
@@ -28,6 +29,7 @@ interface FormData {
   defaultAgentName: string;
   startCommand?: string;
   inputRequirements?: string;
+  requireCodedmap?: boolean;
   tenantId: string;
 }
 
@@ -56,6 +58,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     tenantId: '',
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
+  const [requireCodedmap, setRequireCodedmap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -98,6 +101,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
         tenantId: app.isPublic ? '__public__' : (app.tenantId || ''),
       });
       setAgentHarnessFile(null);
+      setRequireCodedmap(app.requireCodedmap || false);
     }
   }, [app, isOpen]);
 
@@ -105,7 +109,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
-      toast.error('请输入应用名称');
+      toast.error('请输入Agent名称');
       return;
     }
     if (!formData.engine) {
@@ -117,8 +121,8 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     setIsSubmitting(true);
     try {
       const isPublic = formData.tenantId === '__public__';
-      await onUpdate(app.id, formData, agentHarnessFile || undefined, isPublic);
-      toast.success('应用更新成功');
+      await onUpdate(app.id, { ...formData, requireCodedmap }, agentHarnessFile || undefined, isPublic);
+      toast.success('Agent更新成功');
       handleClose();
     } catch (error: any) {
       toast.error(error.message || '更新失败，请重试');
@@ -130,6 +134,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   const handleClose = () => {
     setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', inputRequirements: '', tenantId: '' });
     setAgentHarnessFile(null);
+    setRequireCodedmap(false);
     onClose();
   };
 
@@ -162,7 +167,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">应用详情</h2>
+          <h2 className="text-lg font-semibold text-gray-100">Agent详情</h2>
           {!isSubmitting && (
             <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-400 rounded-full">
               <X className="h-5 w-5" />
@@ -174,12 +179,12 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           <div className="text-sm text-gray-500 space-y-1 mb-4">
             <p>创建时间: {new Date(app.createdAt).toLocaleString('zh-CN')}</p>
             <p>更新时间: {new Date(app.updatedAt).toLocaleString('zh-CN')}</p>
-            <p>应用ID: {app.id}</p>
+            <p>AgentID: {app.id}</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              应用名称 <span className="text-red-500">*</span>
+              Agent名称 <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -248,21 +253,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                     disabled={isSubmitting}
                   />
                 </div>
-                <div className="mt-1.5 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (fileInputRef.current) {
-                        fileInputRef.current.webkitdirectory = true;
-                        fileInputRef.current.click();
-                      }
-                    }}
-                    className="text-xs text-primary-500 hover:text-primary-400"
-                    disabled={isSubmitting}
-                  >
-                    或选择文件夹
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
@@ -294,7 +284,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              默认智能体名称
+              默认Agent名称
             </label>
             <input
               type="text"
@@ -333,6 +323,21 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               disabled={isSubmitting}
             />
             <p className="mt-1 text-xs text-gray-500">留空则不校验上传文件的目录结构</p>
+          </div>
+
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <span className="text-sm font-medium text-gray-300">需要知识图谱</span>
+              <p className="text-xs text-gray-500">启用后，使用此 Agent 的任务会自动加载知识图谱</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRequireCodedmap(!requireCodedmap)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${requireCodedmap ? 'bg-primary-500' : 'bg-gray-600'}`}
+              disabled={isSubmitting}
+            >
+              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${requireCodedmap ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+            </button>
           </div>
         </div>
 

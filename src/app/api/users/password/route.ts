@@ -16,12 +16,19 @@ export async function POST(request: Request) {
     const { payload } = auth;
 
     const body = await request.json();
-    const { currentPassword, newPassword } = body;
+    const { currentPassword, newPassword, forceChange } = body;
 
     // 验证输入
-    if (!currentPassword || !newPassword) {
+    if (!newPassword) {
       return NextResponse.json(
-        { details: { error: '请提供当前密码和新密码' } },
+        { details: { error: '请提供新密码' } },
+        { status: 400 }
+      );
+    }
+
+    if (newPassword.length < 6) {
+      return NextResponse.json(
+        { details: { error: '新密码长度至少为 6 位' } },
         { status: 400 }
       );
     }
@@ -42,21 +49,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '用户不存在' } }, { status: 404 });
     }
 
-    // 验证当前密码
-    const isValidPassword = await verifyPassword(currentPassword, user.passwordHash);
+    // 强制改密（首次登录）跳过旧密码验证
+    if (!forceChange) {
+      if (!currentPassword) {
+        return NextResponse.json(
+          { details: { error: '请提供当前密码' } },
+          { status: 400 }
+        );
+      }
 
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { details: { error: '当前密码错误' } },
-        { status: 400 }
-      );
+      const isValidPassword = await verifyPassword(currentPassword, user.passwordHash);
+      if (!isValidPassword) {
+        return NextResponse.json(
+          { details: { error: '当前密码错误' } },
+          { status: 400 }
+        );
+      }
     }
 
     // 更新密码
     const newPasswordHash = await hashPassword(newPassword);
     await prisma.user.update({
       where: { id: payload.userId },
-      data: { passwordHash: newPasswordHash },
+      data: { passwordHash: newPasswordHash, mustChangePassword: false },
     });
 
     // 记录审计日志

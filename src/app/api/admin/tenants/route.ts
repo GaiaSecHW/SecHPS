@@ -55,16 +55,18 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, slug, isIcsTenant } = body;
+  const { name, isIcsTenant } = body;
 
-  if (!name || !slug) {
-    return NextResponse.json({ error: 'name 和 slug 是必填的' }, { status: 400 });
+  if (!name) {
+    return NextResponse.json({ error: 'name 是必填的' }, { status: 400 });
   }
 
-  // 检查 slug 是否已存在
-  const existing = await prisma.tenant.findUnique({ where: { slug } });
-  if (existing) {
-    return NextResponse.json({ error: 'slug 已存在' }, { status: 400 });
+  // 基于 name 自动生成唯一 slug
+  const baseSlug = name.toLowerCase().replace(/[^a-z0-9一-鿿]+/g, '-').replace(/^-|-$/g, '') || `tenant`;
+  let slug = baseSlug;
+  let suffix = 1;
+  while (await prisma.tenant.findUnique({ where: { slug } })) {
+    slug = `${baseSlug}-${suffix++}`;
   }
 
   const tenant = await prisma.tenant.create({

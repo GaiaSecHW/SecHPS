@@ -41,7 +41,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
-    const { newPassword } = body;
+    const { newPassword, mustChangePassword } = body;
 
     // 验证新密码
     if (!newPassword) {
@@ -76,7 +76,10 @@ export async function POST(
     // 更新密码
     await prisma.user.update({
       where: { id },
-      data: { passwordHash },
+      data: {
+        passwordHash,
+        ...(mustChangePassword ? { mustChangePassword: true } : {}),
+      },
     });
 
     // 记录审计日志

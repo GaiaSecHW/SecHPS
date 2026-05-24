@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
-import { BroadcastMarquee } from '@/components/BroadcastMarquee';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   Home,
@@ -101,6 +100,62 @@ function DashboardLayoutContent({
     }
     setLoading(false);
   }, [router]);
+
+  // 强制改密模态框状态
+  const [forceChangePassword, setForceChangePassword] = useState(false);
+  const [fcNewPassword, setFcNewPassword] = useState('');
+  const [fcConfirmPassword, setFcConfirmPassword] = useState('');
+  const [fcError, setFcError] = useState('');
+  const [fcLoading, setFcLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.mustChangePassword) {
+      setForceChangePassword(true);
+    }
+  }, [user]);
+
+  const handleForceChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFcError('');
+
+    if (fcNewPassword.length < 6) {
+      setFcError('新密码长度至少为 6 位');
+      return;
+    }
+    if (fcNewPassword !== fcConfirmPassword) {
+      setFcError('两次输入的密码不一致');
+      return;
+    }
+
+    setFcLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/users/password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ newPassword: fcNewPassword, forceChange: true }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        setFcError(data.details?.error || data.error || '修改密码失败');
+        setFcLoading(false);
+        return;
+      }
+
+      // 强制注销
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
+      router.push('/login');
+    } catch {
+      setFcError('网络错误，请重试');
+      setFcLoading(false);
+    }
+  };
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
@@ -269,10 +324,9 @@ function DashboardLayoutContent({
           className="fixed right-0 top-0 h-screen flex flex-col transition-all duration-300 ease-in-out"
           style={{ left: sidebarWidth }}
         >
-          <header className="h-14 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0">
+          <header className="h-14 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0 relative z-50">
             <div className="h-full flex items-center justify-between px-4 md:px-6 lg:px-8 gap-4">
               <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
-                <BroadcastMarquee />
               </div>
 
               <div className="flex items-center flex-shrink-0">
@@ -405,6 +459,34 @@ function DashboardLayoutContent({
           },
         }}
       />
+
+      {/* 强制改密遮罩 */}
+      {forceChangePassword && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100]">
+          <div className="bg-dark-surface rounded-xl shadow-2xl border border-gray-700/50 w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-700/50">
+              <h3 className="text-lg font-semibold text-white">首次登录 — 修改初始密码</h3>
+              <p className="text-sm text-gray-400 mt-1">请修改初始密码后方可使用系统</p>
+            </div>
+            <form className="p-6 space-y-4" onSubmit={handleForceChangePassword}>
+              {fcError && (
+                <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">{fcError}</div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-300">新密码 <span className="text-red-400">*</span></label>
+                <input type="password" required value={fcNewPassword} onChange={(e) => setFcNewPassword(e.target.value)} minLength={6} className="mt-1 block w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100" placeholder="至少 6 位" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300">确认新密码 <span className="text-red-400">*</span></label>
+                <input type="password" required value={fcConfirmPassword} onChange={(e) => setFcConfirmPassword(e.target.value)} minLength={6} className="mt-1 block w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100" placeholder="再次输入新密码" />
+              </div>
+              <button type="submit" disabled={fcLoading} className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-md hover:bg-primary-400 font-medium disabled:opacity-50">
+                {fcLoading ? '提交中...' : '确认修改并重新登录'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

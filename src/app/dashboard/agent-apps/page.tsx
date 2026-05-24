@@ -14,6 +14,7 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   isPublic: boolean;
+  requireCodedmap?: boolean;
   tenantId?: string | null;
   Tenant?: {
     name: string;
@@ -79,13 +80,13 @@ export default function AgentAppsPage() {
         setApps(data.apps || []);
       } else {
         const errorData = await response.json().catch(() => ({ error: '未知错误' }));
-        console.error('获取应用列表失败:', errorData);
-        toast.error(errorData.error || '获取应用列表失败');
+        console.error('获取Agent列表失败:', errorData);
+        toast.error(errorData.error || '获取Agent列表失败');
         setApps([]);
       }
     } catch (error) {
-      console.error('获取应用列表失败:', error);
-      toast.error('获取应用列表失败');
+      console.error('获取Agent列表失败:', error);
+      toast.error('获取Agent列表失败');
       setApps([]);
     } finally {
       setLoading(false);
@@ -133,7 +134,7 @@ export default function AgentAppsPage() {
   };
 
   const handleDelete = async (app: AgentApp) => {
-    if (!confirm(`确定要删除应用 "${app.name}" 吗？此操作不可恢复。`)) {
+    if (!confirm(`确定要删除Agent "${app.name}" 吗？此操作不可恢复。`)) {
       return;
     }
 
@@ -158,7 +159,7 @@ export default function AgentAppsPage() {
         throw new Error(data.error || '删除失败');
       }
       
-      toast.success('应用删除成功');
+      toast.success('Agent删除成功');
       await fetchApps();
     } catch (error: any) {
       toast.error(error.message || '删除失败，请重试');
@@ -182,6 +183,7 @@ export default function AgentAppsPage() {
         fd.append('inputRequirements', formData.inputRequirements);
       }
       fd.append('isPublic', isPublic ? 'true' : 'false');
+      fd.append('requireCodedmap', formData.requireCodedmap ? 'true' : 'false');
       // __public__ 是前端占位值，后端收到 isPublic=true 时不需要 tenantId
       const tenantId = formData.tenantId === '__public__' ? '' : (formData.tenantId || '');
       fd.append('tenantId', tenantId);
@@ -237,6 +239,7 @@ export default function AgentAppsPage() {
           fd.append('inputRequirements', formData.inputRequirements);
         }
         fd.append('isPublic', isPublic ? 'true' : 'false');
+        fd.append('requireCodedmap', formData.requireCodedmap ? 'true' : 'false');
         fd.append('agentHarnessFileType', agentHarnessFile.type);
         
         if (agentHarnessFile.type === 'archive') {
@@ -288,6 +291,7 @@ export default function AgentAppsPage() {
             defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
             inputRequirements: formData.inputRequirements || null,
+            requireCodedmap: formData.requireCodedmap || false,
             isPublic: isPublic,
           }),
         });
@@ -315,7 +319,7 @@ export default function AgentAppsPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">Agent市场</h1>
-            <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent 应用</p>
+            <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent</p>
           </div>
         </div>
 <div className="flex items-center gap-3">
@@ -349,7 +353,7 @@ export default function AgentAppsPage() {
              className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
            >
              <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
-             创建新应用
+             创建新Agent
            </button>
          </div>
       </div>
@@ -438,7 +442,7 @@ export default function AgentAppsPage() {
                   <div className="px-4 py-3 grid grid-cols-3 gap-1.5">
                     {[
                       { icon: <Play size={12} />, value: app._metrics?.runCount ?? 0, label: '运行次数', color: 'text-blue-400', show: true },
-                      { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '发现漏洞', color: 'text-red-400', show: true },
+                      { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '确认漏洞', color: 'text-red-400', show: true },
                       { icon: <Bell size={12} />, value: app._metrics?.alertCount ?? 0, label: '告警数量', color: 'text-yellow-400', show: true },
                       {
                         icon: <CheckCircle size={12} />,

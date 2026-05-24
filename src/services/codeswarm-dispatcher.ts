@@ -1,5 +1,6 @@
 import Redis, { Command } from 'ioredis';
 import { prisma } from '@/lib/prisma';
+import { serverLog } from '@/lib/server-log';
 
 const STREAM_KEY = 'codeswarm:task:queue';
 const CONSUMER_GROUP = 'dispatcher';
@@ -30,7 +31,7 @@ class CodeswarmDispatcher {
 
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      console.warn('[CodeSwarm] REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
+      serverLog.warn('[CodeSwarm] REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
       return;
     }
 
@@ -39,7 +40,7 @@ class CodeswarmDispatcher {
         maxRetriesPerRequest: null,
         retryStrategy: (times) => {
           if (times > 3) {
-            console.warn('[CodeSwarm] Redis 重连超过 3 次，停止重试');
+            serverLog.warn('[CodeSwarm] Redis 重连超过 3 次，停止重试');
             return null;
           }
           return Math.min(times * 1000, 5000);
@@ -67,12 +68,12 @@ class CodeswarmDispatcher {
         const expectedDb = this.parseDbFromUrl(redisUrl);
         const actualDb = dbMatch ? parseInt(dbMatch[1]) : 0;
         if (expectedDb !== null && actualDb !== expectedDb) {
-          console.warn(`[CodeSwarm] Redis 数据库不匹配: URL 指定 db=${expectedDb}, 实际连接 db=${actualDb}, 执行 SELECT ${expectedDb}`);
+          serverLog.warn(`[CodeSwarm] Redis 数据库不匹配: URL 指定 db=${expectedDb}, 实际连接 db=${actualDb}, 执行 SELECT ${expectedDb}`);
           await this.redis.select(expectedDb);
         }
-        console.log(`[CodeSwarm] Redis 已连接 db=${actualDb}`);
+        serverLog.info(`[CodeSwarm] Redis 已连接 db=${actualDb}`);
       } catch (e) {
-        console.warn('[CodeSwarm] Redis 数据库验证失败（非致命）:', e);
+        serverLog.warn('[CodeSwarm] Redis 数据库验证失败（非致命）:', e);
       }
 
       // 创建消费者组（如果不存在）
@@ -87,7 +88,7 @@ class CodeswarmDispatcher {
 
       this.running = true;
       this.initialized = true;
-      console.log('[CodeSwarm] 调度器已启动，等待任务...');
+      serverLog.info('[CodeSwarm] 调度器已启动，等待任务...');
 
       // 启动消费循环
       this.dispatchLoop();
@@ -96,9 +97,9 @@ class CodeswarmDispatcher {
       // 启动掉线检测 + 超时扫描
       this.startHealthChecks();
     } catch (e) {
-      console.warn('[CodeSwarm] Redis 不可用，降级为 DB 轮询模式');
-      console.warn('[CodeSwarm] 错误详情:', e);
-      console.warn('[CodeSwarm] REDIS_URL:', redisUrl);
+      serverLog.warn('[CodeSwarm] Redis 不可用，降级为 DB 轮询模式');
+      serverLog.warn('[CodeSwarm] 错误详情:', e);
+      serverLog.warn('[CodeSwarm] REDIS_URL:', redisUrl);
       this.teardownRedis();
     }
   }
@@ -115,7 +116,7 @@ class CodeswarmDispatcher {
       await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
       return true;
     } catch (e) {
-      console.error('[CodeSwarm] XADD 失败:', e);
+      serverLog.error('[CodeSwarm] XADD 失败:', e);
       return false;
     }
   }
@@ -134,7 +135,7 @@ class CodeswarmDispatcher {
     const isLocalWorker = primaryAddr.startsWith('localhost') || primaryAddr.startsWith('127.');
     const callbackUrl = isLocalWorker ? 'http://localhost:3000' : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
     if (addresses.length === 0) {
-      console.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
+      serverLog.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
       return false;
     }
     // Sort addresses: externally-configured addresses (from WORKER_ADDRESS) first,
@@ -161,7 +162,7 @@ class CodeswarmDispatcher {
       data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
     });
     if (updateResult.count === 0) {
-      console.log(`[CodeSwarm] Task ${task.taskId} is no longer queued, skipping`);
+      serverLog.info(`[CodeSwarm] Task ${task.taskId} is no longer queued, skipping`);
       return true;
     }
 
@@ -199,37 +200,37 @@ const taskPayload = JSON.stringify({
             where: { id: worker.id },
             data: { currentTasks: { increment: 1 } },
           });
-          console.log(`[CodeSwarm] Task ${task.taskId} dispatched to ${worker.id} via ${addr}`);
+          serverLog.info(`[CodeSwarm] Task ${task.taskId} dispatched to ${worker.id} via ${addr}`);
           return true;
         }
 
         const respBody = await resp.text().catch(() => '');
         // Worker reports task is already being executed (dedup)
         if (resp.status === 409) {
-          console.log(`[CodeSwarm] Task ${task.taskId} already executing on worker, skipping duplicate`);
+          serverLog.info(`[CodeSwarm] Task ${task.taskId} already executing on worker, skipping duplicate`);
           return true;
         }
         if (resp.status === 400) {
-          console.error(`[CodeSwarm] Task ${task.taskId} payload validation failed (400), marking as failed: ${respBody.substring(0, 200)}`);
+          serverLog.error(`[CodeSwarm] Task ${task.taskId} payload validation failed (400), marking as failed: ${respBody.substring(0, 200)}`);
           await prisma.codeswarmTask.update({
             where: { id: task.id },
             data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
-          }).catch(e => console.error('[CodeSwarm] 标记任务 failed 失败:', e));
+          }).catch(e => serverLog.error('[CodeSwarm] 标记任务 failed 失败:', e));
           return true;
         }
 
-        console.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} returned ${resp.status}, trying next address`);
+        serverLog.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} returned ${resp.status}, trying next address`);
       } catch (err) {
-        console.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} unreachable: ${err}`);
+        serverLog.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} unreachable: ${err}`);
       }
     }
 
     // 所有地址都失败，回滚 DB 状态
-    console.error(`[CodeSwarm] All addresses failed for worker ${worker.id}: [${sorted.join(', ')}]`);
+    serverLog.error(`[CodeSwarm] All addresses failed for worker ${worker.id}: [${sorted.join(', ')}]`);
     await prisma.codeswarmTask.update({
       where: { id: task.id },
       data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
-    }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
+    }).catch(e => serverLog.error('[CodeSwarm] 回滚任务状态失败:', e));
     return false;
   }
 
@@ -318,10 +319,10 @@ const taskPayload = JSON.stringify({
       }
 
       if (recovered > 0) {
-        console.log(`[CodeSwarm] 恢复了 ${recovered} 条 pending 消息`);
+        serverLog.info(`[CodeSwarm] 恢复了 ${recovered} 条 pending 消息`);
       }
     } catch (e) {
-      console.error('[CodeSwarm] 恢复 pending 消息失败:', e);
+      serverLog.error('[CodeSwarm] 恢复 pending 消息失败:', e);
     }
   }
 
@@ -354,7 +355,7 @@ const taskPayload = JSON.stringify({
                 // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
                 const isDbConnError = this.isDbConnectionError(dbTaskId);
                 if (isDbConnError) {
-                  console.warn('[CodeSwarm] DB 连接不足，延迟 10 秒后重入队');
+                  serverLog.warn('[CodeSwarm] DB 连接不足，延迟 10 秒后重入队');
                   await this.sleep(10000);
                 }
                 await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
@@ -365,17 +366,17 @@ const taskPayload = JSON.stringify({
       } catch (e: any) {
         const errMsg = e?.message || String(e);
         if (errMsg.includes('NOGROUP')) {
-          console.warn('[CodeSwarm] NOGROUP 错误，尝试重建 Consumer Group...');
+          serverLog.warn('[CodeSwarm] NOGROUP 错误，尝试重建 Consumer Group...');
           const rebuilt = await this.ensureConsumerGroup();
           if (rebuilt) {
-            console.log('[CodeSwarm] Consumer Group 重建成功，继续消费');
+            serverLog.info('[CodeSwarm] Consumer Group 重建成功，继续消费');
           }
           await this.sleep(2000);
         } else if (errMsg.includes('too many clients') || errMsg.includes('Too many database connections')) {
-          console.warn('[CodeSwarm] DB 连接耗尽，等待 15 秒后重试...');
+          serverLog.warn('[CodeSwarm] DB 连接耗尽，等待 15 秒后重试...');
           await this.sleep(15000);
         } else {
-          console.error('[CodeSwarm] 消费循环错误:', e);
+          serverLog.error('[CodeSwarm] 消费循环错误:', e);
           await this.sleep(2000);
         }
       }
@@ -391,11 +392,11 @@ const taskPayload = JSON.stringify({
       // 优先使用指定的 Worker，否则自动分配
       let worker = this.selectWorker(task.preferredWorkerNodeId ?? undefined);
       if (!worker) {
-        console.log('[CodeSwarm] 指定 Worker 不可用，尝试自动分配...');
+        serverLog.info('[CodeSwarm] 指定 Worker 不可用，尝试自动分配...');
         worker = this.selectWorker();
       }
       if (!worker) {
-        console.log('[CodeSwarm] 无可用 Worker，任务保持排队:', task.taskId);
+        serverLog.info('[CodeSwarm] 无可用 Worker，任务保持排队:', task.taskId);
         return false;
       }
 
@@ -418,15 +419,15 @@ const taskPayload = JSON.stringify({
         await this.registerTaskTimeout(dbTaskId, task.timeoutSec);
       }
 
-      console.log(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
+      serverLog.info(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       return true;
     } catch (e: any) {
       const errMsg = e?.message || String(e);
       if (errMsg.includes('too many clients') || errMsg.includes('Too many database connections')) {
-        console.warn('[CodeSwarm] DB 连接耗尽，任务暂时跳过:', dbTaskId);
+        serverLog.warn('[CodeSwarm] DB 连接耗尽，任务暂时跳过:', dbTaskId);
         this.lastDbErrorTaskId = dbTaskId;
       } else {
-        console.error('[CodeSwarm] 分发失败:', dbTaskId, e);
+        serverLog.error('[CodeSwarm] 分发失败:', dbTaskId, e);
       }
       return false;
     }
@@ -441,12 +442,12 @@ const taskPayload = JSON.stringify({
         const isHealthy = Date.now() - preferred.lastHeartbeat <= 90000;
         const hasCapacity = preferred.currentTasks < preferred.maxConcurrent;
         if (isHealthy && hasCapacity) {
-          console.log(`[CodeSwarm] 使用手动选择的 Worker: ${preferredNodeId}`);
+          serverLog.info(`[CodeSwarm] 使用手动选择的 Worker: ${preferredNodeId}`);
           return preferred;
         }
-        console.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 不可用 (健康=${isHealthy}, 容量=${hasCapacity})`);
+        serverLog.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 不可用 (健康=${isHealthy}, 容量=${hasCapacity})`);
       } else {
-        console.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 未注册`);
+        serverLog.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 未注册`);
       }
     }
 
@@ -485,9 +486,9 @@ const taskPayload = JSON.stringify({
           lastHeartbeat: w.lastHeartbeat.getTime(),
         });
       }
-      console.log(`[CodeSwarm] 从 DB 恢复 ${workers.length} 个 Worker`);
+      serverLog.info(`[CodeSwarm] 从 DB 恢复 ${workers.length} 个 Worker`);
     } catch (e) {
-      console.error('[CodeSwarm] 恢复 Worker 失败:', e);
+      serverLog.error('[CodeSwarm] 恢复 Worker 失败:', e);
     }
   }
 
@@ -508,11 +509,11 @@ const taskPayload = JSON.stringify({
     if (!this.redis) return false;
     try {
       await this.redis.xgroup('CREATE', STREAM_KEY, CONSUMER_GROUP, '0', 'MKSTREAM');
-      console.log('[CodeSwarm] Consumer Group 已重建');
+      serverLog.info('[CodeSwarm] Consumer Group 已重建');
       return true;
     } catch (e: any) {
       if (e.message.includes('BUSYGROUP')) return true;
-      console.error('[CodeSwarm] 重建 Consumer Group 失败:', e);
+      serverLog.error('[CodeSwarm] 重建 Consumer Group 失败:', e);
       return false;
     }
   }
@@ -566,7 +567,7 @@ const taskPayload = JSON.stringify({
                 claimedCount++;
               }
             } catch (claimErr) {
-              console.warn('[CodeSwarm] claim pending 消息失败:', claimErr);
+              serverLog.warn('[CodeSwarm] claim pending 消息失败:', claimErr);
             }
           }
 
@@ -574,7 +575,7 @@ const taskPayload = JSON.stringify({
             await this.redisExec('XGROUP', 'DELCONSUMER', STREAM_KEY, CONSUMER_GROUP, nameStr);
             deletedCount++;
           } catch (delErr) {
-            console.warn('[CodeSwarm] 删除死消费者失败:', delErr);
+            serverLog.warn('[CodeSwarm] 删除死消费者失败:', delErr);
           }
         }
       }
@@ -584,10 +585,10 @@ const taskPayload = JSON.stringify({
       } catch { /* non-critical */ }
 
       if (deletedCount > 0 || claimedCount > 0) {
-        console.log(`[CodeSwarm] Stream 清理完成: 删除 ${deletedCount} 个死消费者, 清理 ${claimedCount} 条 pending 消息`);
+        serverLog.info(`[CodeSwarm] Stream 清理完成: 删除 ${deletedCount} 个死消费者, 清理 ${claimedCount} 条 pending 消息`);
       }
     } catch (e) {
-      console.error('[CodeSwarm] Stream 清理失败:', e);
+      serverLog.error('[CodeSwarm] Stream 清理失败:', e);
     }
   }
 
@@ -610,7 +611,7 @@ const taskPayload = JSON.stringify({
     const now = Date.now();
     for (const [nodeId, worker] of this.workers) {
       if (now - worker.lastHeartbeat > 90_000) {
-        console.warn(`[CodeSwarm] Worker ${nodeId} 掉线（90s 无心跳），currentTasks=${worker.currentTasks}`);
+        serverLog.warn(`[CodeSwarm] Worker ${nodeId} 掉线（90s 无心跳），currentTasks=${worker.currentTasks}`);
 
         const hadTasks = worker.currentTasks > 0;
         worker.currentTasks = 0;
@@ -618,13 +619,13 @@ const taskPayload = JSON.stringify({
 
         if (hadTasks) {
           this.rescheduleWorkerTasks(worker).catch(e =>
-            console.error('[CodeSwarm] 重调度任务失败:', e)
+            serverLog.error('[CodeSwarm] 重调度任务失败:', e)
           );
         } else {
           await prisma.codeswarmWorker.update({
             where: { id: worker.id },
             data: { status: 'offline', currentTasks: 0 },
-          }).catch(e => console.error('[CodeSwarm] 标记 Worker offline 失败:', e));
+          }).catch(e => serverLog.error('[CodeSwarm] 标记 Worker offline 失败:', e));
         }
       }
     }
@@ -640,7 +641,7 @@ const taskPayload = JSON.stringify({
       ` as any[];
 
       for (const w of dbOfflineWorkers) {
-        console.warn(`[CodeSwarm] DB Worker ${w.nodeId} 标记为 offline`);
+        serverLog.warn(`[CodeSwarm] DB Worker ${w.nodeId} 标记为 offline`);
         await prisma.codeswarmWorker.update({
           where: { id: w.id },
           data: { status: 'offline', currentTasks: 0 },
@@ -648,12 +649,12 @@ const taskPayload = JSON.stringify({
 
         if (w.currentTasks > 0) {
           this.rescheduleWorkerTasksById(w.id).catch(e =>
-            console.error('[CodeSwarm] rescheduleWorkerTasksById 失败:', e)
+            serverLog.error('[CodeSwarm] rescheduleWorkerTasksById 失败:', e)
           );
         }
       }
     } catch (e) {
-      console.error('[CodeSwarm] 检查 DB offline workers 失败:', e);
+      serverLog.error('[CodeSwarm] 检查 DB offline workers 失败:', e);
     }
   }
 
@@ -684,10 +685,10 @@ const taskPayload = JSON.stringify({
                 body: JSON.stringify({ taskId: task.taskId }),
                 signal: AbortSignal.timeout(5000),
               });
-              console.log(`[CodeSwarm] 已向 Worker ${addr} 发送取消请求: ${task.taskId}`);
+              serverLog.info(`[CodeSwarm] 已向 Worker ${addr} 发送取消请求: ${task.taskId}`);
               break;  // 第一个可达地址成功即可
             } catch (e) {
-              console.warn(`[CodeSwarm] 取消请求发送失败 ${addr}:`, e);
+              serverLog.warn(`[CodeSwarm] 取消请求发送失败 ${addr}:`, e);
             }
           }
         }
@@ -708,10 +709,10 @@ const taskPayload = JSON.stringify({
           await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
         }
 
-        console.log(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
+        serverLog.info(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
       }
     } catch (e) {
-      console.error('[CodeSwarm] rescheduleWorkerTasksById 异常:', e);
+      serverLog.error('[CodeSwarm] rescheduleWorkerTasksById 异常:', e);
     }
   }
 
@@ -764,10 +765,10 @@ const taskPayload = JSON.stringify({
           await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
         }
 
-        console.log(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
+        serverLog.info(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
       }
     } catch (e) {
-      console.error('[CodeSwarm] rescheduleWorkerTasks 异常:', e);
+      serverLog.error('[CodeSwarm] rescheduleWorkerTasks 异常:', e);
     }
   }
 
@@ -807,7 +808,7 @@ const taskPayload = JSON.stringify({
           });
 
           if (task) {
-            console.warn(`[CodeSwarm] 任务 ${task.taskId} 超时，标记为 failed`);
+            serverLog.warn(`[CodeSwarm] 任务 ${task.taskId} 超时，标记为 failed`);
 
             // 释放 Worker 槽位（幂等性检查）
             if (task.workerId) {
@@ -835,7 +836,7 @@ const taskPayload = JSON.stringify({
         await this.redis.zrem('codeswarm:task:timeouts', dbTaskId);
       }
     } catch (e) {
-      console.error('[CodeSwarm] 超时扫描异常:', e);
+      serverLog.error('[CodeSwarm] 超时扫描异常:', e);
     }
   }
 
