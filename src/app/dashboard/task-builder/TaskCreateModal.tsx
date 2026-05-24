@@ -11,6 +11,7 @@ interface AgentApp {
   engine: string;
   startCommand: string;
   notes: string | null;
+  inputRequirements: string | null;
 }
 
 interface ModelConfig {
@@ -399,6 +400,25 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
               </div>
             )}
           </div>
+
+          {/* 文件要求提示 */}
+          {(() => {
+            const hints = agentApps
+              .filter(a => selectedAgentIds.has(a.id) && a.inputRequirements?.trim())
+              .map(a => ({ name: a.name, req: a.inputRequirements! }));
+            if (hints.length === 0) return null;
+            return (
+              <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2.5 text-sm text-yellow-300">
+                <p className="font-medium mb-1">文件要求</p>
+                {hints.map(h => (
+                  <p key={h.name} className="text-yellow-400/80 text-xs leading-relaxed">
+                    {hints.length > 1 && <span className="font-medium">[{h.name}] </span>}
+                    {h.req}
+                  </p>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* 上传文件 */}
           <div>

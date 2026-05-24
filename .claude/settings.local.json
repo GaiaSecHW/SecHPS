@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(tasklist)",
-      "Bash(findstr /i \"node\")"
+      "Bash(findstr /i \"node\")",
+      "WebFetch(domain:www.avlsec.com)",
+      "WebSearch"
     ]
   }
 }

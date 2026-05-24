@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
+import ModeSelectModal from './ModeSelectModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ConfirmDialog } from '@/components/ui/Modal';
 
@@ -54,6 +55,7 @@ export default function TaskBuilderPage() {
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showModeSelect, setShowModeSelect] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
@@ -110,6 +112,11 @@ export default function TaskBuilderPage() {
     task.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (task.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false))
   );
+
+  const handleModeSelect = (mode: 'quick' | 'deep') => {
+    setShowModeSelect(false);
+    if (mode === 'quick') setShowCreateModal(true);
+  };
 
   const handleCreateTask = async (formData: TaskFormData, file: File | null) => {
     const token = localStorage.getItem('token');
@@ -309,7 +316,7 @@ export default function TaskBuilderPage() {
             <span>刷新</span>
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => setShowModeSelect(true)}
             className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
           >
             <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
@@ -395,7 +402,7 @@ export default function TaskBuilderPage() {
               </p>
               {!searchQuery && statusFilter === 'all' && (
                 <button
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={() => setShowModeSelect(true)}
                   className="text-primary-500 hover:text-primary-400"
                 >
                   创建第一个任务
@@ -548,6 +555,12 @@ export default function TaskBuilderPage() {
           </div>
         )}
       </div>
+
+      <ModeSelectModal
+        isOpen={showModeSelect}
+        onClose={() => setShowModeSelect(false)}
+        onSelect={handleModeSelect}
+      />
 
       <TaskCreateModal
         isOpen={showCreateModal}

@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 import { BroadcastMarquee } from '@/components/BroadcastMarquee';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
+  Home,
   LayoutDashboard,
   Users,
   Settings,
@@ -157,7 +158,10 @@ function DashboardLayoutContent({
             )}
             {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
             
-            <NavLink href="/dashboard" icon={<LayoutDashboard size={18} />} collapsed={sidebarCollapsed} exact pathname={pathname}>
+            <NavLink href="/dashboard" icon={<Home size={18} />} collapsed={sidebarCollapsed} exact pathname={pathname}>
+              首页
+            </NavLink>
+            <NavLink href="/dashboard/overview" icon={<LayoutDashboard size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
               仪表盘
             </NavLink>
             <NavLink href="/dashboard/task-builder" icon={<ClipboardList size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
@@ -183,12 +187,12 @@ function DashboardLayoutContent({
                   Agent市场
                 </NavLink>
                 <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  工作流编排
+                  工作流编排<span className="text-[10px] text-blue-400 ml-1">(建设中)</span>
                 </NavLink>
               </>
             )}
 
-            {(user?.isIcsTenant || user?.roles?.includes('admin')) && (
+            {user?.roles?.includes('admin') && (
               <>
                 {!sidebarCollapsed && (
                   <div className="pt-5 pb-1 px-4">
