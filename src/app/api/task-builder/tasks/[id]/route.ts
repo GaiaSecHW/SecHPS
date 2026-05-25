@@ -36,7 +36,7 @@ export async function GET(
     if (task.codeswarmTaskId) {
       const csTask = await prisma.codeswarmTask.findUnique({
         where: { taskId: task.codeswarmTaskId },
-        select: { state: true, sessionId: true, engine: true, agent: true, model: true, createdAt: true, updatedAt: true },
+        select: { state: true, sessionId: true, engine: true, agent: true, model: true, workerId: true, createdAt: true, updatedAt: true },
       });
       if (csTask) {
         const recentEvents = await prisma.codeswarmEvent.findMany({
@@ -45,7 +45,19 @@ export async function GET(
           take: 10,
           select: { type: true, data: true, createdAt: true },
         });
-        codeswarmStatus = { ...csTask, recentEvents };
+
+        let workerInfo = null;
+        if (csTask.workerId) {
+          const worker = await prisma.codeswarmWorker.findUnique({
+            where: { id: csTask.workerId },
+            select: { nodeId: true, status: true },
+          });
+          if (worker) {
+            workerInfo = { workerNodeId: worker.nodeId, workerStatus: worker.status };
+          }
+        }
+
+        codeswarmStatus = { ...csTask, recentEvents, ...workerInfo };
       }
     }
 

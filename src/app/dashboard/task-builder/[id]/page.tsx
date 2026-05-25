@@ -47,6 +47,8 @@ interface CodeswarmStatus {
   engine: string | null;
   agent: string | null;
   model: string | null;
+  workerNodeId: string | null;
+  workerStatus: string | null;
   createdAt: string;
   updatedAt: string;
   recentEvents: { type: string; data: string; createdAt: string }[];
@@ -497,7 +499,7 @@ export default function TaskDetailPage() {
       {/* 执行状态 */}
       {(task.startedAt || task.status === 'running' || codeswarmStatus) && (
         <div className="bg-dark-surface rounded-lg border border-gray-700/50 px-4 py-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-center text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-center text-xs">
             <div className="flex items-center gap-2">
               <Cpu size={14} className="text-blue-400 shrink-0" />
               <div className="min-w-0">
@@ -531,6 +533,17 @@ export default function TaskDetailPage() {
                 <p className="text-gray-300 truncate">
                   {codeswarmStatus?.engine || '-'}
                   {codeswarmStatus?.model && <span className="text-gray-500 ml-1">· {codeswarmStatus.model}</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Cpu size={14} className="text-gray-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-gray-500">Worker</p>
+                <p className="text-gray-300 truncate">
+                  {codeswarmStatus?.workerNodeId
+                    ? <span>{codeswarmStatus.workerNodeId} <span className={`ml-1 text-xs ${codeswarmStatus.workerStatus === 'online' ? 'text-green-400' : 'text-gray-500'}`}>{codeswarmStatus.workerStatus === 'online' ? '在线' : codeswarmStatus.workerStatus}</span></span>
+                    : '-'}
                 </p>
               </div>
             </div>
