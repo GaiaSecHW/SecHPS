@@ -635,22 +635,34 @@ export class WorkerDaemon {
 
   private async postEvent(payload: TaskPayload, events: unknown[]): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
-    try {
-      const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
-        signal: AbortSignal.timeout(10000),
-      });
-      
-      if (!response.ok) {
-        this.server.log.warn({ taskId: payload.taskId, status: response.status }, 'Event post failed');
-      } else {
-        this.server.log.debug({ taskId: payload.taskId, eventCount: events.length }, 'Events posted');
+    const maxRetries = 3;
+    const retryDelay = 1000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
+          signal: AbortSignal.timeout(10000),
+        });
+        
+        if (response.ok) {
+          this.server.log.debug({ taskId: payload.taskId, eventCount: events.length }, 'Events posted');
+          return;
+        }
+        
+        this.server.log.warn({ taskId: payload.taskId, status: response.status, attempt }, 'Event post failed');
+      } catch (err) {
+        this.server.log.warn({ taskId: payload.taskId, error: err, attempt, callbackUrl }, 'Event post error');
       }
-    } catch (err) {
-      this.server.log.warn({ taskId: payload.taskId, error: err, callbackUrl }, 'Failed to post events to platform');
+
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+      }
     }
+
+    this.server.log.error({ taskId: payload.taskId }, 'Event post failed after all retries');
   }
 
   private async postResult(payload: TaskPayload, result: {

@@ -27,6 +27,15 @@ async function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[Worker] Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Worker] Uncaught exception:', err);
+  shutdown().catch(() => process.exit(1));
+});
+
 export { WorkerDaemon } from './daemon.js';
 export { Semaphore } from './semaphore.js';
 export { EnvironmentFactory } from './environment.js';
