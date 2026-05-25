@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Upload, File, Loader2, ChevronDown, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ProductTreeSelect from '@/components/ui/ProductTreeSelect';
@@ -46,6 +46,13 @@ interface Props {
   }, file: File | null) => Promise<void>;
 }
 
+// Agent 引擎 → 兼容的 Model providerType 映射
+const ENGINE_PROVIDER_MAP: Record<string, string[]> = {
+  claudecode: ['claude'],
+  opencode: ['openai'],
+  agentflow: ['openai', 'claude'],
+};
+
 export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -61,6 +68,25 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+
+  const compatibleProviderTypes = useMemo(() => {
+    const selectedEngines = agentApps
+      .filter(a => selectedAgentIds.has(a.id))
+      .map(a => a.engine);
+
+    if (selectedEngines.length === 0) return null;
+
+    const providerLists = selectedEngines.map(e => ENGINE_PROVIDER_MAP[e] || []);
+    if (providerLists.length === 1) return providerLists[0];
+
+    const first = providerLists[0];
+    return first.filter(p => providerLists.every(list => list.includes(p)));
+  }, [agentApps, selectedAgentIds]);
+
+  const filteredModelOptions = useMemo(() => {
+    if (compatibleProviderTypes === null) return modelOptions;
+    return modelOptions.filter(o => compatibleProviderTypes.includes(o.providerType));
+  }, [modelOptions, compatibleProviderTypes]);
 
   useEffect(() => {
     if (isOpen) {
@@ -85,6 +111,16 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  useEffect(() => {
+    const currentValid = filteredModelOptions.find(o => o.key === selectedModelKey);
+    if (!currentValid && filteredModelOptions.length > 0) {
+      const defaultOpt = filteredModelOptions.find(o => o.label.includes('[默认]'));
+      setSelectedModelKey(defaultOpt?.key || filteredModelOptions[0].key);
+    } else if (!currentValid && filteredModelOptions.length === 0) {
+      setSelectedModelKey('');
+    }
+  }, [filteredModelOptions, selectedModelKey]);
 
   const getProviderColor = (providerType: string) => {
     const type = providerType.toLowerCase();
@@ -219,7 +255,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     if (!selectedModelKey) { toast.error('请选择模型'); return; }
     if (!selectedFile) { toast.error('请上传文件'); return; }
 
-    const option = modelOptions.find(o => o.key === selectedModelKey);
+    const option = filteredModelOptions.find(o => o.key === selectedModelKey);
     if (!option) { toast.error('请选择模型'); return; }
 
     const agents = agentApps
@@ -338,14 +374,19 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 选择模型（合并为一个下拉） */}
           <div>
-            <label className="block text-sm font-medium text-gray-300">选择模型 <span className="text-red-400">*</span></label>
+            <label className="block text-sm font-medium text-gray-300">选择模型 <span className="text-red-400">*</span>
+                {compatibleProviderTypes !== null && <span className="ml-2 text-xs text-blue-400 font-normal">已按引擎过滤</span>}
+              </label>
             {loadingModels ? (
               <div className="mt-1 flex items-center justify-center py-8">
                 <Loader2 size={20} className="animate-spin text-blue-400" />
               </div>
-            ) : modelOptions.length === 0 ? (
-              <div className="mt-1 text-center py-8 text-gray-500 text-sm bg-[#0F172A] border border-gray-700/50 rounded-md">
-                暂无可用模型，请在 我的模型页面创建
+            ) : filteredModelOptions.length === 0 ? (
+              <div className="mt-1 text-center py-8 text-sm bg-[#0F172A] border border-gray-700/50 rounded-md">
+                {modelOptions.length === 0
+                  ? <span className="text-gray-500">暂无可用模型，请在 我的模型页面创建</span>
+                  : <span className="text-yellow-400">选中的 Agent 没有兼容的模型配置</span>
+                }
               </div>
             ) : (
               <div className="mt-1 relative" ref={modelDropdownRef}>
@@ -359,7 +400,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                   {selectedModelKey ? (
                     <div className="flex items-center gap-2">
                       {(() => {
-                        const opt = modelOptions.find(o => o.key === selectedModelKey);
+                        const opt = filteredModelOptions.find(o => o.key === selectedModelKey);
                         if (!opt) return <span className="text-gray-200">请选择模型</span>;
                         return (
                           <>
@@ -378,7 +419,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                 </button>
                 {modelDropdownOpen && (
                   <div className="absolute z-50 mt-1 w-full bg-[#0F172A] border border-gray-600 rounded-md shadow-xl max-h-60 overflow-y-auto">
-                    {modelOptions.map((opt) => (
+                    {filteredModelOptions.map((opt) => (
                       <button
                         key={opt.key}
                         type="button"
