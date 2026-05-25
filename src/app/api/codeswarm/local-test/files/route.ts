@@ -3,8 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { listTaskFiles, TaskFileInfo } from '@/lib/minio-vulnerability';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
-const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
-
 async function getTaskContext(taskId: string): Promise<{ productName: string; taskName: string }> {
   const taskInstance = await prisma.taskInstance.findUnique({
     where: { id: taskId },
@@ -43,11 +41,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
     }
 
-    const effectiveTaskId = taskId === 'default' ? LOCAL_TEST_VULN_TASK_ID : taskId;
+    // taskId 现在直接是 TaskInstance ID（本地测试创建时生成），无需硬编码回退
+    const { productName, taskName } = await getTaskContext(taskId);
 
-    const { productName, taskName } = await getTaskContext(effectiveTaskId);
-
-    const files = await listTaskFiles(effectiveTaskId, productName, taskName);
+    const files = await listTaskFiles(taskId, productName, taskName);
 
     const reportFiles: TaskFileInfo[] = [];
     const fileFiles: TaskFileInfo[] = [];
@@ -61,7 +58,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      taskId: effectiveTaskId,
+      taskId,
       productName,
       taskName,
       reportFiles,

@@ -63,7 +63,9 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
   if (apiBaseUrl) {
     const customProviderId = `custom-${deriveProviderId(model)}`;
     const modelId = extractModelId(model);
-    config.model = `${customProviderId}/${modelId}`;
+    // Use raw model name (e.g. "zai-org/GLM-5.1-180k-MAAS") for team permission matching
+    // Provider key uses "custom-" prefix to distinguish from built-in providers
+    config.model = model;
     if (apiKey) {
       config.provider = {
         ...(config.provider || {}),
@@ -71,7 +73,8 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
           npm: '@ai-sdk/openai-compatible',
           name: deriveProviderId(model),
           models: {
-            [modelId]: { name: modelId },
+            // Key = raw model name for opencode model lookup; name = display name (modelId only)
+            [model]: { name: modelId },
           },
           options: {
             apiKey,

@@ -405,10 +405,10 @@ if (instructionPhase1) {
         const createdCount = vulnResult.summary.created || 0;
         const skippedCount = vulnResult.summary.skipped || 0;
 
+        // 仅更新 updatedAt，不再覆写 reportContent（原始安全报告需保留）
         await prisma.$executeRaw`
           UPDATE "CodeswarmTask"
-          SET "reportContent" = ${`漏洞提交成功: 创建 ${createdCount} 条, 跳过 ${skippedCount} 条`},
-              "updatedAt" = NOW()
+          SET "updatedAt" = NOW()
           WHERE "taskId" = ${taskId}
         `;
 
