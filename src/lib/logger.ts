@@ -35,6 +35,14 @@ async function writeToFile(level: string, message: string) {
   } catch {}
 }
 
+// ========== 日志归档调度器（服务端专用，由 instrumentation.ts 调用）==========
+// 实现在 src/lib/log-archiver.ts，此处仅作类型占位，避免客户端引用
+
+export function startLogArchiveScheduler() {
+  // 实际实现在 log-archiver.ts，由 instrumentation.ts 直接调用
+  // 此函数保留是为了向后兼容，不做任何事
+}
+
 // 日志级别
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
