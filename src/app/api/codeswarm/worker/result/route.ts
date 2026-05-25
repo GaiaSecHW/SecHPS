@@ -6,10 +6,10 @@ import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import eventBus from '@/lib/event-bus';
 import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
+import { copyInnerSkillsToWorkspace, buildReportParseInstruction } from '@/lib/inner-skills';
 
 const PARSE_TIMEOUT_SEC = 3600;
 
-const INSTRUCTION_PHASE1 = '执行 audit-report-parser skill 解析漏洞报告';
 const INSTRUCTION_PHASE2 = '读取 Report 文件夹内的报告文件，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion, rawReport 字段。仅输出可解析的 JSON，不要额外说明。';
 
 const isWindows = process.platform === 'win32';
@@ -149,7 +149,7 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
   try {
     const args: string[] = ['run', instruction];
 
-    const env: Record<string, string> = { TERM: 'dumb', NO_COLOR: '1', OPENCODE_DISABLE_PROJECT_CONFIG: '1' };
+    const env: Record<string, string> = { TERM: 'dumb', NO_COLOR: '1' };
     if (process.env.NODE_ENV) env.NODE_ENV = process.env.NODE_ENV;
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
@@ -281,6 +281,23 @@ function executeVulnerabilityParseAsync(
 
       await createParseLog(taskInstanceId, 'info', '开始解析漏洞报告', `产品: ${productName}, 任务: ${taskName}`);
 
+      // 将内置 skill 拷贝到工作区，确保 opencode run 能发现 audit-report-parser
+      const copyResult = copyInnerSkillsToWorkspace(projectPath);
+      if (copyResult.success > 0) {
+        console.log(`[VulnParse:${taskId}] 内置 skill 拷贝成功: ${copyResult.copiedSkills.join(', ')}`);
+        await createParseLog(taskInstanceId, 'info', `内置 skill 已部署到工作区: ${copyResult.copiedSkills.join(', ')}`);
+      } else {
+        console.warn(`[VulnParse:${taskId}] 内置 skill 拷贝失败，Phase 1 可能无法找到 audit-report-parser`);
+        await createParseLog(taskInstanceId, 'warn', '内置 skill 拷贝失败', '将尝试 Phase 1 但可能回退到 Phase 2');
+      }
+
+      // 动态构建 Phase 1 指令（从 inner_skills/ 获取 skill 名称）
+      const instructionPhase1 = buildReportParseInstruction();
+      if (!instructionPhase1) {
+        console.warn(`[VulnParse:${taskId}] 无法构建 Phase 1 指令（inner_skills/ 中无 audit-report-parser）`);
+        await createParseLog(taskInstanceId, 'warn', 'Phase 1 指令构建失败', 'inner_skills/ 中缺少 audit-report-parser skill');
+      }
+
       let filePath: string = projectPath;
 
       const reportFolder = findReportFolder(projectPath);
@@ -308,9 +325,14 @@ function executeVulnerabilityParseAsync(
 
       let report: ParsedVulnerabilityReport | null = null;
 
-      await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动 audit-report-parser skill', `opencode run "${INSTRUCTION_PHASE1}"`);
-      console.log(`[VulnParse:${taskId}] Phase 1 开始: instruction="${INSTRUCTION_PHASE1}"`);
-      report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE1);
+      if (instructionPhase1) {
+        await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动内置 skill 解析', `opencode run "${instructionPhase1}"`);
+        console.log(`[VulnParse:${taskId}] Phase 1 开始: instruction="${instructionPhase1}"`);
+        report = await runOpencodeParse(taskId, projectPath, instructionPhase1);
+      } else {
+        console.log(`[VulnParse:${taskId}] Phase 1 跳过（无内置 skill 可用）`);
+        await createParseLog(taskInstanceId, 'warn', 'Phase 1 跳过', 'inner_skills/ 中无 audit-report-parser');
+      }
 
       if (report) {
         const durationMs = Date.now() - startTime;
