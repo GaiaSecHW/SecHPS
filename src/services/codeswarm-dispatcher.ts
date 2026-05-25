@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 const STREAM_KEY = 'codeswarm:task:queue';
+const WAITING_KEY = 'codeswarm:task:waiting';
 const CONSUMER_GROUP = 'dispatcher';
 const CONSUMER_NAME = `dispatcher-${process.pid}`;
 
@@ -278,6 +279,16 @@ const taskPayload = JSON.stringify({
       },
       data: { currentTasks: { decrement: 1 } },
     }).catch(() => {});
+
+    // Worker 空出来了，从等待队列取下一个任务
+    const waitingTaskId = await this.redis?.lpop(WAITING_KEY);
+    if (waitingTaskId) {
+      const dispatched = await this.dispatchOne(waitingTaskId as string);
+      if (!dispatched) {
+        // 放回队尾，避免饿死后面的任务
+        await this.redis?.rpush(WAITING_KEY, waitingTaskId);
+      }
+    }
   }
 
   /** 同步 Worker 负载到内存（DB fallback 路径使用） */
@@ -369,28 +380,8 @@ const taskPayload = JSON.stringify({
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
-                const isDbConnError = this.isDbConnectionError(dbTaskId);
-                if (isDbConnError) {
-                  logger.warn(LOG_MODULES.CODESWARM, 'DB 连接不足，延迟 10 秒后重入队');
-                  await this.sleep(10000);
-                }
-
-                const retries = (this.retryCounts.get(dbTaskId) || 0) + 1;
-                this.retryCounts.set(dbTaskId, retries);
-
-                if (retries >= CodeswarmDispatcher.MAX_REQUEUE_ATTEMPTS) {
-                  logger.error(LOG_MODULES.CODESWARM, `Task ${dbTaskId} failed after ${retries} dispatch attempts, marking as failed`);
-                  await prisma.codeswarmTask.updateMany({
-                    where: { id: dbTaskId, state: 'queued' },
-                    data: { state: 'failed', error: `No available worker after ${retries} attempts`, completedAt: new Date(), updatedAt: new Date() },
-                  }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
-                  this.retryCounts.delete(dbTaskId);
-                } else {
-                  await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
-                }
-              } else {
-                this.retryCounts.delete(dbTaskId);
+                logger.info(LOG_MODULES.CODESWARM, `无可用 Worker，任务 ${dbTaskId} 进入等待队列`);
+                await this.redis!.rpush(WAITING_KEY, dbTaskId);
               }
             })
           );
@@ -551,8 +542,6 @@ const taskPayload = JSON.stringify({
   }
 
   private lastDbErrorTaskId: string | null = null;
-  private readonly retryCounts = new Map<string, number>();
-  private static readonly MAX_REQUEUE_ATTEMPTS = 10;
 
   private isDbConnectionError(dbTaskId: string): boolean {
     if (this.lastDbErrorTaskId === dbTaskId) {
