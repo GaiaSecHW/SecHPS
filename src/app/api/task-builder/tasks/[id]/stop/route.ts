@@ -72,14 +72,16 @@ export async function POST(
       },
     });
 
-    await prisma.taskExecutionLog.create({
-      data: {
+    await prisma.taskExecutionLog.upsert({
+      where: { id: `log-${Date.now()}-stop` },
+      create: {
         id: `log-${Date.now()}-stop`,
         taskId: id,
         level: 'warning',
         message: '任务已停止',
         details: '用户手动停止',
       },
+      update: {},
     });
 
     return NextResponse.json({ message: '任务已停止', taskId: id });
