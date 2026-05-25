@@ -289,6 +289,7 @@ async function findPotentialDuplicates(skill: {
       id: { not: skill.id },
       OR: conditions,
       isActive: true,
+      isBuiltin: false,
     },
     select: {
       id: true,

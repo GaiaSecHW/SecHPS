@@ -146,9 +146,9 @@ export async function getLowPrecisionSkills(
   threshold: number,
   timeRange?: { start: Date; end: Date }
 ): Promise<SkillMetrics[]> {
-  // 获取所有活跃的 Skill
+  // 获取所有活跃的 Skill（排除内置基础设施 skill）
   const skills = await prisma.skill.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isBuiltin: false },
     select: {
       id: true,
       name: true,
@@ -212,9 +212,9 @@ export async function calculateBatchSkillMetrics(
 export async function getAllSkillMetrics(
   timeRange?: { start: Date; end: Date }
 ): Promise<SkillMetrics[]> {
-  // 获取所有活跃的 Skill
+  // 获取所有活跃的 Skill（排除内置基础设施 skill）
   const skills = await prisma.skill.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isBuiltin: false },
     select: {
       id: true,
     },

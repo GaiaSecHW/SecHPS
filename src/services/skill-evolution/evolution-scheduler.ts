@@ -247,9 +247,9 @@ export async function scanAndCreateEvolutionTasks(
   // 获取低精准率 Skill 列表
   const lowPrecisionSkills = await getLowPrecisionSkills(finalConfig.precisionThreshold);
 
-  // 获取所有活跃 Skill（用于完整扫描）
+  // 获取所有活跃 Skill（用于完整扫描，排除内置基础设施 skill）
   const allActiveSkills = await prisma.skill.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isBuiltin: false },
     select: {
       id: true,
       name: true,
