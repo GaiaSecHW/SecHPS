@@ -225,7 +225,10 @@ export async function pushToOrgRepoViaGit(
   const protocol = isHttps ? 'https' : 'http';
   const repoUrl = `${protocol}://${GITEA_ORG_TOKEN}@${giteaHost}/${GITEA_ORG_NAME}/${repoName}.git`;
 
-  const git: SimpleGit = simpleGit(localPath);
+  // 绕过全局 git 代理，避免内网地址走代理返回 502
+  const git: SimpleGit = simpleGit(localPath, {
+    config: ['http.proxy=', 'https.proxy='],
+  });
 
   try {
     const remotes = await git.getRemotes(true);
