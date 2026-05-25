@@ -59,12 +59,7 @@ export async function POST(
         serverLog.error('删除 CodeSwarm 任务失败:', deleteError);
       }
 
-      // 释放 Worker 负载（幂等，即使 DELETE 已释放也安全）
-      if (workerNodeId) {
-        codeswarmDispatcher.onTaskCompleted(workerNodeId).catch(e =>
-          serverLog.error('[Stop] 释放 Worker 负载失败:', e)
-        );
-      }
+      // DELETE 端点内部已调 onTaskCompleted 释放 Worker 负载，此处不再重复调用
     }
 
     await prisma.taskInstance.update({

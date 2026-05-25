@@ -211,8 +211,8 @@ export function calculateSafeMaxTokens(
 export const DEFAULT_TIMEOUT_MS = 7200000;
 /** 长时间任务超时：2小时 */
 export const LONG_TIMEOUT_MS = 7200000;
-/** 测试超时：2小时 */
-export const TEST_TIMEOUT_MS = 7200000;
+/** 连接测试超时：30秒（仅用于 testModelConnection） */
+export const TEST_TIMEOUT_MS = 30000;
 
 // ============================================================================
 // 错误类型
