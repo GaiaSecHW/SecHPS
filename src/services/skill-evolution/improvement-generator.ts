@@ -5,6 +5,7 @@
 
 import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
 import type { TokenUsageContext } from '@/types/call-scene';
 import type { BalanceAnalysisResult } from './balance-analyzer';
@@ -444,9 +445,9 @@ export async function generateImprovement(
       options
     );
     
-    console.log(`[ImprovementGenerator] 开始生成改进: skillId=${skillId}`);
-    console.log(`[ImprovementGenerator] 分析结果: ${analysisResult.recommendations.length} 条排除规则建议`);
-    console.log(`[ImprovementGenerator] 正确发现案例: ${confirmedCases.length}个（用于回测验证）`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `开始生成改进: skillId=${skillId}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `分析结果: ${analysisResult.recommendations.length} 条排除规则建议`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `正确发现案例: ${confirmedCases.length}个（用于回测验证）`);
     
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
@@ -465,7 +466,7 @@ export async function generateImprovement(
     // 提取内容
     const content = extractContent(response);
     
-    console.log(`[ImprovementGenerator] LLM 原始响应 (前${DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH}字符): ${content.substring(0, DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH)}`);
+    logger.debug(LOG_MODULES.SKILL_EVOLUTION, `LLM 原始响应 (前${DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH}字符): ${content.substring(0, DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH)}`);
     
     // 解析 JSON
     const parsed = parseJsonFromContent(content);
@@ -473,8 +474,8 @@ export async function generateImprovement(
     let improvementData: LlmImprovementResponse;
     
     if (!parsed) {
-      console.warn('[ImprovementGenerator] 无法从 LLM 响应解析 JSON，使用默认值');
-      console.warn('[ImprovementGenerator] 完整响应内容:', content);
+      logger.warn(LOG_MODULES.SKILL_EVOLUTION, '无法从 LLM 响应解析 JSON，使用默认值');
+      logger.warn(LOG_MODULES.SKILL_EVOLUTION, `完整响应内容: ${content}`);
       improvementData = createDefaultImprovement(skillContent);
     } else {
       improvementData = {
@@ -508,8 +509,8 @@ export async function generateImprovement(
       },
     });
     
-    console.log(`[ImprovementGenerator] 改进记录已保存: improvementId=${improvement.id}`);
-    console.log(`[ImprovementGenerator] 变更摘要: ${improvementData.changeSummary.length} 条`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `改进记录已保存: improvementId=${improvement.id}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `变更摘要: ${improvementData.changeSummary.length} 条`);
     
     return {
       improvementId: improvement.id,
@@ -519,7 +520,7 @@ export async function generateImprovement(
     };
     
   } catch (error) {
-    console.error('[ImprovementGenerator] LLM 生成失败:', error);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, 'LLM 生成失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     
     // 即使失败，也更新记录（使用 upsert）
     const improvement = await prisma.skillImprovement.upsert({

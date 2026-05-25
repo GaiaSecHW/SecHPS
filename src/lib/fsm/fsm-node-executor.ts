@@ -7,6 +7,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { WorkflowNode, WorkflowExecution, EvaluationSession } from '@prisma/client';
 import type { ExecutionContext, StepResult } from '@/types/workflow';
 
@@ -123,7 +124,7 @@ export class FSMNodeExecutor {
       );
 
     } catch (error) {
-      console.error('[fsm/fsm-node-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.FSM, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       await this.updateNodeStatus(context.executionId, node.id, 'failed');
       return this.createFailedResult(
         node.id,

@@ -3,6 +3,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       type: ext,
     });
   } catch (error) {
-    console.error('上传脚本失败:', error);
+    logger.error(LOG_MODULES.AGENT, '上传脚本失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '上传脚本失败' }, { status: 500 });
   }
 }
@@ -80,7 +81,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: '脚本已删除' });
   } catch (error) {
-    console.error('删除脚本失败:', error);
+    logger.error(LOG_MODULES.AGENT, '删除脚本失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '删除脚本失败' }, { status: 500 });
   }
 }

@@ -41,23 +41,22 @@ async function generateNodeList(workflowId: string): Promise<Array<{ id: string;
   if (workflow.FSMTemplate?.nodes) {
     try {
       const fsmNodes = JSON.parse(workflow.FSMTemplate.nodes);
-      
       // 过滤掉占位节点（skillPath=null && fsmPhase=6 的 fsm-node-penetration）
       const filteredNodes = fsmNodes.filter((n: any) => {
         const isPlaceholder = n.skillPath === null && n.fsmPhase === 6;
         if (isPlaceholder) {
-          console.log(`[generateNodeList] 过滤占位节点: ${n.id} (${n.label})`);
+          logger.info(LOG_MODULES.EVALUATION, `generateNodeList 过滤占位节点: ${n.id} (${n.label})`);
         }
         return !isPlaceholder;
       });
-      
+
       // 查询用户编排的 task 节点
       const userNodes = workflow.WorkflowNode.filter(n => n.type === 'task');
-      console.log(`[generateNodeList] 找到 ${userNodes.length} 个用户节点`);
-      
+      logger.info(LOG_MODULES.EVALUATION, `generateNodeList 找到 ${userNodes.length} 个用户节点`);
+
       // 在 fsmPhase=6 位置插入用户节点
       const result: Array<{ id: string; label: string; type: string; order: number }> = [];
-      
+
       // 处理 FSM 固定节点
       for (const n of filteredNodes) {
         result.push({
@@ -67,14 +66,14 @@ async function generateNodeList(workflowId: string): Promise<Array<{ id: string;
           order: n.fsmOrder ?? n.fsmPhase ?? result.length,
         });
       }
-      
+
       // 在 P5 (fsmPhase=5) 和 P6 (fsmPhase=7) 之间插入用户节点
       const p5Index = result.findIndex(r => r.id === 'fsm-node-p5');
       const insertIndex = p5Index >= 0 ? p5Index + 1 : result.length;
-      
+
       // 按 positionX 排序用户节点
       const sortedUserNodes = userNodes.sort((a, b) => a.positionX - b.positionX);
-      
+
       for (let i = 0; i < sortedUserNodes.length; i++) {
         const wn = sortedUserNodes[i];
         const data = wn.data ? JSON.parse(wn.data) : {};
@@ -85,11 +84,11 @@ async function generateNodeList(workflowId: string): Promise<Array<{ id: string;
           order: 6 + i * 0.1, // 6.0, 6.1, 6.2...
         });
       }
-      
-      console.log(`[generateNodeList] 最终节点列表 (${result.length} 个):`);
+
+      logger.info(LOG_MODULES.EVALUATION, `generateNodeList 最终节点列表 (${result.length} 个):`);
       for (const n of result) {
         const isUser = n.id.startsWith('wn-');
-        console.log(`  ${isUser ? '[USER]' : '[FSM]'} ${n.order}: ${n.id} (${n.label})`);
+        logger.info(LOG_MODULES.EVALUATION, `  ${isUser ? '[USER]' : '[FSM]'} ${n.order}: ${n.id} (${n.label})`);
       }
       
       return result;

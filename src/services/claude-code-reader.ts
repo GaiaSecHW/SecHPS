@@ -1,8 +1,8 @@
 /**
  * Claude Code 本地数据读取服务
- * 
+ *
  * 从 ~/.claude/projects 目录读取项目、会话和消息数据
- * 
+ *
  * 核心功能:
  * 1. discoverProjects() - 发现所有项目
  * 2. getSessions(projectPath) - 获取项目的会话列表
@@ -25,6 +25,7 @@ import type {
   ClaudeCodeConfigFile,
   ClaudeCodeReaderOptions,
 } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================
 // 常量
@@ -182,7 +183,7 @@ export class ClaudeCodeReader {
 
       return projects;
     } catch (error) {
-      console.error('Error discovering projects:', error);
+      logger.error(LOG_MODULES.AGENT, 'Error discovering projects', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -299,7 +300,7 @@ export class ClaudeCodeReader {
             }
           }
         } catch (error) {
-          console.error(`Error reading session file ${file}:`, error);
+          logger.error(LOG_MODULES.AGENT, `Error reading session file ${file}`, { details: { error: error instanceof Error ? error.message : String(error) } });
         }
       }
 
@@ -344,7 +345,7 @@ export class ClaudeCodeReader {
         limit,
       };
     } catch (error) {
-      console.error('Error getting sessions:', error);
+      logger.error(LOG_MODULES.AGENT, 'Error getting sessions', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         sessions: [],
         hasMore: false,
@@ -487,7 +488,7 @@ export class ClaudeCodeReader {
         limit,
       };
     } catch (error) {
-      console.error('Error getting session messages:', error);
+      logger.error(LOG_MODULES.AGENT, 'Error getting session messages', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         messages: [],
         total: 0,

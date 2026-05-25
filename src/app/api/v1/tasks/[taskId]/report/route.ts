@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { notFound, internalError } from '@/lib/api-errors';
 import SftpClient from 'ssh2-sftp-client';
 import * as fs from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 function getSftpConfig() {
   const host = process.env.SFTP_HOST;
@@ -101,7 +102,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Failed to read report from SFTP:', error);
+    logger.error(LOG_MODULES.CODE, 'Failed to read report from SFTP', { details: { error: error instanceof Error ? error.message : String(error) } });
     return internalError('Failed to retrieve report');
   } finally {
     await sftp.end();

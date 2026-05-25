@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { createNodeStreamStore } from '@/services/node-stream-store';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/todos - 获取评估会话的 TODO 列表
 // 只从 stream.jsonl 解析 TodoWrite（不再从数据库快照读取）
@@ -66,11 +67,11 @@ export async function GET(
       
       return NextResponse.json({ todos, source: 'stream', nodeId });
     } catch (error) {
-      console.error('[todos] 从 stream.jsonl 读取错误:', error);
+      logger.error(LOG_MODULES.EVALUATION, '从 stream.jsonl 读取错误', { details: { error: error instanceof Error ? error.message : String(error) } });
       return NextResponse.json({ todos: [], source: 'stream' });
     }
   } catch (error) {
-    console.error('[todos] 获取错误:', error);
+    logger.error(LOG_MODULES.EVALUATION, '获取错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

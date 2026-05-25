@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
@@ -63,14 +64,14 @@ export async function POST(request: Request) {
           await prisma.$executeRaw`
             UPDATE "CodeswarmTask" SET "sessionId" = ${event.message}, state = 'running', "updatedAt" = NOW()
             WHERE "taskId" = ${taskId} AND state = 'dispatched'
-          `.catch(e => console.error('[CodeSwarm] 更新 sessionId/状态 失败:', e));
+          `.catch(e => logger.error(LOG_MODULES.CODESWARM, '更新 sessionId/状态 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
         } else if (event.type === 'phase_start') {
           const eventData = event.data || event;
           if (eventData.phase === 'executing') {
             await prisma.$executeRaw`
               UPDATE "CodeswarmTask" SET state = 'running', "updatedAt" = NOW()
               WHERE "taskId" = ${taskId} AND state = 'dispatched'
-            `.catch(e => console.error('[CodeSwarm] 更新 running 状态失败:', e));
+            `.catch(e => logger.error(LOG_MODULES.CODESWARM, '更新 running 状态失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
           }
         }
       }
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
         codeswarmDispatcher.publishTaskEvent(taskId, {
           type: 'task_event',
           data: event,
-        }).catch(e => console.error('[CodeSwarm] 发布事件失败:', e));
+        }).catch(e => logger.error(LOG_MODULES.CODESWARM, '发布事件失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
       }
 
       if (taskInstance) {
@@ -169,8 +170,8 @@ export async function POST(request: Request) {
         }
 
         if (logsToCreate.length > 0) {
-          await prisma.taskExecutionLog.createMany({ data: logsToCreate }).catch((e: Error) => 
-            console.error('[CodeSwarm] 创建执行日志失败:', e)
+          await prisma.taskExecutionLog.createMany({ data: logsToCreate }).catch((e: Error) =>
+            logger.error(LOG_MODULES.CODESWARM, '创建执行日志失败', { details: { error: e instanceof Error ? e.message : String(e) } })
           );
         }
       }
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, count: eventList.length });
   } catch (error) {
-    console.error('[CodeSwarm] Event processing error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Event processing error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

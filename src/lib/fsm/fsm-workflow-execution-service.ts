@@ -195,7 +195,7 @@ export class FSMWorkflowExecutionService {
       // 1.5 加载用户添加的自定义节点（WorkflowNode 表）
       // 用户在编排界面添加的 task 节点，应该在渗透测试阶段执行
       const userNodes = await this.loadUserNodes();
-      console.log(`[execute] 加载用户添加节点: ${userNodes.length} 个`);
+      logger.info(LOG_MODULES.FSM, `[execute] 加载用户添加节点: ${userNodes.length} 个`);
 
       // 1.6 为每个用户节点的 skills 创建 SkillExecution 记录
       // 在评估启动时批量创建，确保每个 skill 都有对应的执行记录
@@ -223,7 +223,7 @@ export class FSMWorkflowExecutionService {
         if (mode === 'vulnerability' && userNode.vulnerabilityCategories && userNode.vulnerabilityCategories.length > 0) {
           const matchedIds = await matchSkillsByCategoryValues(userNode.vulnerabilityCategories, projectTechStack);
           nodeSkills = matchedIds;
-          console.log(`[execute] vulnerability 模式匹配: ${userNode.id} -> ${nodeSkills.length} skills`);
+          logger.info(LOG_MODULES.FSM, `[execute] vulnerability 模式匹配: ${userNode.id} -> ${nodeSkills.length} skills`);
         }
         
         if (nodeSkills.length > 0) {
@@ -234,18 +234,18 @@ export class FSMWorkflowExecutionService {
               skills: nodeSkills,
               projectId: this.config.projectId,
             });
-            console.log(`[execute] 为节点 ${userNode.id} 创建了 ${nodeSkills.length} 个 SkillExecution 记录`);
+            logger.info(LOG_MODULES.FSM, `[execute] 为节点 ${userNode.id} 创建了 ${nodeSkills.length} 个 SkillExecution 记录`);
           } catch (error) {
-            console.error(`[execute] 为节点 ${userNode.id} 创建 SkillExecution 失败:`, error);
+            logger.error(LOG_MODULES.FSM, `[execute] 为节点 ${userNode.id} 创建 SkillExecution 失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
           }
         }
       }
 
       // 2. 加载 Skill 内容到 workspace
       if (this.fsmTemplate.skillPath) {
-        console.log(`[execute] Loading FSM Skill, template name: ${this.fsmTemplate.name}`);
-        console.log(`[execute] Session ID: ${this.config.evaluationSessionId}`);
-        console.log(`[execute] Workspace: ${this.config.workspacePath}`);
+        logger.info(LOG_MODULES.FSM, `[execute] Loading FSM Skill, template name: ${this.fsmTemplate.name}`);
+        logger.info(LOG_MODULES.FSM, `[execute] Session ID: ${this.config.evaluationSessionId}`);
+        logger.info(LOG_MODULES.FSM, `[execute] Workspace: ${this.config.workspacePath}`);
         
         const loadResult = await loadFSMSkill(
           this.fsmTemplate.name,
@@ -253,7 +253,7 @@ export class FSMWorkflowExecutionService {
           this.config.workspacePath
         );
         
-        console.log(`[execute] loadFSMSkill result:`, loadResult);
+        logger.info(LOG_MODULES.FSM, `[execute] loadFSMSkill result:`, loadResult);
         
         if (!loadResult.success) {
           logger.error(LOG_MODULES.FSM, `Failed to load FSM Skill: ${loadResult.error}`);
@@ -380,7 +380,7 @@ export class FSMWorkflowExecutionService {
         orderBy: { positionX: 'asc' },  // 按编排界面位置排序
       });
       
-      console.log(`[loadUserNodes] 找到 ${workflowNodes.length} 个用户添加的节点`);
+      logger.info(LOG_MODULES.FSM, `[loadUserNodes] 找到 ${workflowNodes.length} 个用户添加的节点`);
       
       for (const wn of workflowNodes) {
         const data = wn.data ? JSON.parse(wn.data) : {};
@@ -403,16 +403,16 @@ export class FSMWorkflowExecutionService {
           fsmOrder: 6,  // 在 FSM 流程中的位置
         };
         
-        console.log(`[loadUserNodes] 用户节点: ${wn.id}`);
-        console.log(`  label: ${unifiedNode.label}`);
-        console.log(`  skills: ${unifiedNode.skills ? JSON.stringify(unifiedNode.skills) : '无'}`);
-        console.log(`  vulnCategories: ${unifiedNode.vulnerabilityCategories ? JSON.stringify(unifiedNode.vulnerabilityCategories) : '无'}`);
-        console.log(`  skillLoadingMode: ${data.skillLoadingMode || 'description'}`);
+        logger.info(LOG_MODULES.FSM, `[loadUserNodes] 用户节点: ${wn.id}`);
+        logger.info(LOG_MODULES.FSM, `  label: ${unifiedNode.label}`);
+        logger.info(LOG_MODULES.FSM, `  skills: ${unifiedNode.skills ? JSON.stringify(unifiedNode.skills) : '无'}`);
+        logger.info(LOG_MODULES.FSM, `  vulnCategories: ${unifiedNode.vulnerabilityCategories ? JSON.stringify(unifiedNode.vulnerabilityCategories) : '无'}`);
+        logger.info(LOG_MODULES.FSM, `  skillLoadingMode: ${data.skillLoadingMode || 'description'}`);
         
         userNodes.push(unifiedNode);
       }
     } catch (error) {
-      console.error(`[loadUserNodes] 查询失败:`, error);
+      logger.error(LOG_MODULES.FSM, `[loadUserNodes] 查询失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
     
     return userNodes;
@@ -435,7 +435,7 @@ export class FSMWorkflowExecutionService {
     for (const node of nodes) {
       // skillPath 为 null 的节点（fsm-node-penetration）是占位符，用用户节点替换
       if (node.skillPath === null && node.fsmPhase === 6) {
-        console.log(`[convertFSMNodesToUnified] 跳过占位节点: ${node.id} (${node.label})，用用户节点替换`);
+        logger.info(LOG_MODULES.FSM, `[convertFSMNodesToUnified] 跳过占位节点: ${node.id} (${node.label})，用用户节点替换`);
         continue;
       }
       
@@ -466,7 +466,7 @@ export class FSMWorkflowExecutionService {
       // 在 P5 和 P6 之间插入用户节点
       const insertIndex = p5Index >= 0 ? p5Index + 1 : result.length;
       
-      console.log(`[convertFSMNodesToUnified] 在位置 ${insertIndex} 插入 ${userNodes.length} 个用户节点`);
+      logger.info(LOG_MODULES.FSM, `[convertFSMNodesToUnified] 在位置 ${insertIndex} 插入 ${userNodes.length} 个用户节点`);
       
       // 更新用户节点的 fsmOrder（保持执行顺序）
       userNodes.forEach((node, i) => {
@@ -486,11 +486,11 @@ export class FSMWorkflowExecutionService {
     // 3. 按 fsmOrder 排序
     result.sort((a, b) => (a.fsmOrder || 0) - (b.fsmOrder || 0));
     
-    console.log(`[convertFSMNodesToUnified] 最终节点列表 (${result.length} 个):`);
+    logger.info(LOG_MODULES.FSM, `[convertFSMNodesToUnified] 最终节点列表 (${result.length} 个):`);
     for (const n of result) {
-      console.log(`  ${n.fsmOrder}: ${n.id} (${n.label}, type: ${n.type})`);
-      if (n.skills) console.log(`    skills: ${JSON.stringify(n.skills)}`);
-      if (n.vulnerabilityCategories) console.log(`    vulnCategories: ${JSON.stringify(n.vulnerabilityCategories)}`);
+      logger.info(LOG_MODULES.FSM, `  ${n.fsmOrder}: ${n.id} (${n.label}, type: ${n.type})`);
+      if (n.skills) logger.info(LOG_MODULES.FSM, `    skills: ${JSON.stringify(n.skills)}`);
+      if (n.vulnerabilityCategories) logger.info(LOG_MODULES.FSM, `    vulnCategories: ${JSON.stringify(n.vulnerabilityCategories)}`);
     }
     
     return result;
@@ -526,7 +526,7 @@ export class FSMWorkflowExecutionService {
     let mcpServers = this.config.mcpServers;
     if (!mcpServers && this.config.userId) {
       mcpServers = await loadMcpServersForProject(this.config.projectId, this.config.userId);
-      console.log(`[FSM] 从数据库加载 MCP 配置: ${mcpServers?.length || 0} 个`);
+      logger.info(LOG_MODULES.FSM, `[FSM] 从数据库加载 MCP 配置: ${mcpServers?.length || 0} 个`);
     }
 
     return {
@@ -591,7 +591,7 @@ export class FSMWorkflowExecutionService {
       
       onNodeRetry: (nodeIndex, nodeId, nodeName, retryCount, maxRetries, error) => {
         const phase = nodeIndex + 1;
-        console.log(`[FSM Phase ${phase}] 重试 (${retryCount}/${maxRetries}): ${error.message}`);
+        logger.info(LOG_MODULES.FSM, `[FSM Phase ${phase}] 重试 (${retryCount}/${maxRetries}): ${error.message}`);
       },
       
       onNodeComplete: async (nodeIndex, result) => {
@@ -631,11 +631,11 @@ export class FSMWorkflowExecutionService {
       
       onWorkflowComplete: async (result) => {
         // 不在这里调用 FSM 的 onWorkflowComplete，因为还需要执行 Agent Zone
-        console.log(`[FSM] Phase 1-4 执行完成: ${result.status}`);
+        logger.info(LOG_MODULES.FSM, `[FSM] Phase 1-4 执行完成: ${result.status}`);
       },
       
       onWorkflowError: (error) => {
-        console.error(`[FSM] Phase 1-4 执行错误: ${error.message}`);
+        logger.error(LOG_MODULES.FSM, `[FSM] Phase 1-4 执行错误: ${error.message}`);
       },
     };
   }
@@ -722,7 +722,7 @@ export class FSMWorkflowExecutionService {
           results.push(result);
           this.callbacks.onAgentZoneProgress(agent.name, 'completed');
         } catch (error) {
-          console.error('[fsm/fsm-workflow-execution-service] 操作失败:', error instanceof Error ? error.message : String(error));
+          logger.error(LOG_MODULES.FSM, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
           results.push({
             agentName: agent.name,
             agentType: agent.type,

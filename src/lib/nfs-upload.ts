@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface NfsConfig {
   mountPath: string;
@@ -15,7 +16,7 @@ function getNfsConfig(): NfsConfig | null {
   const mountPath = process.env.NFS_MOUNT_PATH;
 
   if (!mountPath) {
-    console.warn('NFS configuration incomplete: NFS_MOUNT_PATH not set');
+    logger.warn(LOG_MODULES.FILE, 'NFS configuration incomplete: NFS_MOUNT_PATH not set');
     return null;
   }
 
@@ -56,7 +57,7 @@ export async function testNfsConnection(): Promise<boolean> {
     fs.unlinkSync(testFile);
     return true;
   } catch (error) {
-    console.error('NFS connection test failed:', error);
+    logger.error(LOG_MODULES.FILE, 'NFS connection test failed', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -128,9 +129,9 @@ export async function uploadAndExtractArchive(
     try {
       await extractArchive(remoteFilePath, remoteDirPath);
       extracted = true;
-      console.log(`Archive extracted and original file deleted: ${fileName}`);
+      logger.info(LOG_MODULES.FILE, `Archive extracted and original file deleted: ${fileName}`);
     } catch (error) {
-      console.error(`Failed to extract archive: ${fileName}`, error);
+      logger.error(LOG_MODULES.FILE, `Failed to extract archive: ${fileName}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       throw error;
     }
   }
@@ -186,13 +187,13 @@ export async function uploadFilesToRemote(
     try {
       fs.writeFileSync(remoteFilePath, file.content);
       uploadedCount++;
-      console.log(`[NFS] File uploaded: ${file.path}`);
+      logger.info(LOG_MODULES.FILE, `File uploaded: ${file.path}`);
     } catch (uploadError) {
-      console.error(`[NFS] Failed to upload file: ${file.path}`, uploadError);
+      logger.error(LOG_MODULES.FILE, `Failed to upload file: ${file.path}`, { details: { error: uploadError instanceof Error ? uploadError.message : String(uploadError) } });
     }
   }
 
-  console.log(`[NFS] Uploaded ${uploadedCount}/${files.length} files to ${baseDirPath}`);
+  logger.info(LOG_MODULES.FILE, `Uploaded ${uploadedCount}/${files.length} files to ${baseDirPath}`);
   return { uploadedCount, remoteDirPath: actualProjectPath };
 }
 

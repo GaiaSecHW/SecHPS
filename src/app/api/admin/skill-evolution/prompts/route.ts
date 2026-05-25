@@ -4,11 +4,12 @@
 
 import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
-import { 
-  getAllEvolutionPrompts, 
-  updateEvolutionPrompt, 
+import { logger, LOG_MODULES } from '@/lib/logger';
+import {
+  getAllEvolutionPrompts,
+  updateEvolutionPrompt,
   seedEvolutionPrompts,
-  type PromptKey 
+  type PromptKey
 } from '@/services/skill-evolution/prompt-manager';
 import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
       total: prompts.length,
     });
   } catch (error) {
-    console.error('[API] 获取提示词失败:', error);
+    logger.error(LOG_MODULES.SKILL, '[API] 获取提示词失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '获取失败' },
       { status: 500 }
@@ -88,7 +89,7 @@ export async function PUT(request: Request) {
       message: '提示词已更新',
     });
   } catch (error) {
-    console.error('[API] 更新提示词失败:', error);
+    logger.error(LOG_MODULES.SKILL, '[API] 更新提示词失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '更新失败' },
       { status: 500 }
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
       message: `已创建 ${result.created} 个提示词，跳过 ${result.skipped} 个已存在的`,
     });
   } catch (error) {
-    console.error('[API] Seed 提示词失败:', error);
+    logger.error(LOG_MODULES.SKILL, '[API] Seed 提示词失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Seed 失败' },
       { status: 500 }

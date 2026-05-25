@@ -1,6 +1,6 @@
 /**
  * FSM Skill 加载器
- * 
+ *
  * 在 FSM 工作流启动时，将 Skill 目录复制到项目 outputs/skills/ 目录
  * 注意：使用 outputs/ 目录替代 .claude/ 目录，因为大模型不允许操作 .claude 目录
  */
@@ -8,6 +8,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const DATA_SKILLS_PATH = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'skills');
 // 使用 outputs/ 替代 .claude/
@@ -51,8 +52,8 @@ export async function loadFSMSkill(
       ? path.join(/*turbopackIgnore: true*/ process.cwd(), template.skillPath)
       : DATA_SKILLS_PATH;
     
-    console.log(`[loadFSMSkill] skillPath from DB: ${template.skillPath}`);
-    console.log(`[loadFSMSkill] resolved sourcePath: ${sourcePath}`);
+    logger.info(LOG_MODULES.FSM, `skillPath from DB: ${template.skillPath}`);
+    logger.info(LOG_MODULES.FSM, `resolved sourcePath: ${sourcePath}`);
 
     // 3. 检查源目录是否存在
     const sourceExists = await fs.stat(sourcePath).catch(() => null);
@@ -107,7 +108,7 @@ export async function loadFSMSkill(
         }
       });
     } catch (dbError) {
-      console.warn('[loadFSMSkill] 记录 skillExecution 失败，继续执行:', dbError);
+      logger.warn(LOG_MODULES.FSM, '记录 skillExecution 失败，继续执行', { details: { error: dbError instanceof Error ? dbError.message : String(dbError) } });
     }
     */
 
@@ -118,7 +119,7 @@ export async function loadFSMSkill(
     };
 
   } catch (error) {
-    console.error('[fsm/fsm-skill-loader] 操作失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.FSM, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       skillPath: '',

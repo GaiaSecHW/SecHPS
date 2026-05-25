@@ -13,6 +13,7 @@ import { generateId } from '@/lib/id-generator';
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import os from 'os';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const CLAUDE_PROJECTS_DIR = join(os.homedir(), '.claude', 'projects');
 
@@ -176,7 +177,7 @@ export async function POST(request: Request) {
         await prisma.autonomousEvolutionRunLog.update({
           where: { id: runLog.id },
           data: { status: 'error', errorMessage: String(err).slice(0, 500), finishedAt: new Date() },
-        }).catch((updateErr) => console.error('[Extract] Failed to update run log:', updateErr));
+        }).catch((updateErr) => logger.error(LOG_MODULES.SKILL_EVOLUTION, 'Failed to update run log', { details: { error: updateErr instanceof Error ? updateErr.message : String(updateErr) } }));
         send({ type: 'error', message: String(err) });
       } finally {
         controller.close();

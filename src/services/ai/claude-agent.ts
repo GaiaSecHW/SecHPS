@@ -1,6 +1,7 @@
 // src/services/ai/claude-agent.ts
 
 import { query, Options, SDKMessage, SDKResultSuccess, SDKResultError, McpServerConfig, AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * MCP 服务器配置（应用层）
@@ -107,12 +108,12 @@ export class ClaudeAgentService {
       throw new Error('ClaudeAgentService 必须配置 model 参数，未设置模型将无法执行。');
     }
     
-    console.log(`[TRACE MCP] claude-agent.ts: config.mcpServers=${config.mcpServers?.length || 0}个`);
+    logger.info(LOG_MODULES.AGENT, `config.mcpServers=${config.mcpServers?.length || 0}个`);
     if (config.mcpServers && config.mcpServers.length > 0) {
-      console.log(`[TRACE MCP] claude-agent.ts: MCP服务器=${config.mcpServers.map(s => s.name).join(', ')}`);
-      console.log(`[TRACE MCP] claude-agent.ts: 第一个MCP详情=${JSON.stringify(config.mcpServers[0])}`);
+      logger.info(LOG_MODULES.AGENT, `MCP服务器=${config.mcpServers.map(s => s.name).join(', ')}`);
+      logger.info(LOG_MODULES.AGENT, `第一个MCP详情=${JSON.stringify(config.mcpServers[0])}`);
     } else {
-      console.log(`[TRACE MCP] claude-agent.ts: ⚠️ config.mcpServers 为空！`);
+      logger.warn(LOG_MODULES.AGENT, 'config.mcpServers 为空！');
     }
     
     this.config = {
@@ -120,7 +121,7 @@ export class ClaudeAgentService {
       ...config,
     };
     
-    console.log(`[TRACE MCP] claude-agent.ts: this.config.mcpServers=${this.config.mcpServers?.length || 0}个`);
+    logger.info(LOG_MODULES.AGENT, `this.config.mcpServers=${this.config.mcpServers?.length || 0}个`);
   }
 
   /**
@@ -217,7 +218,7 @@ export class ClaudeAgentService {
       hooks: {
         PreCompact: [{
           hooks: [async (input: any) => {
-            console.log('[SDK Compact] 触发压缩:', input.trigger);
+            logger.info(LOG_MODULES.AGENT, '触发压缩', { details: { trigger: input.trigger } });
             return {
               custom_instructions: '保留以下内容：关键决策和原因、代码片段和文件路径、错误及其修复方法、当前任务状态和进度'
             };
@@ -225,10 +226,7 @@ export class ClaudeAgentService {
         }],
         PostCompact: [{
           hooks: [async (input: any) => {
-            console.log('[SDK Compact] 压缩完成:', {
-              trigger: input.trigger,
-              summaryLength: input.compact_summary?.length || 0,
-            });
+            logger.info(LOG_MODULES.AGENT, '压缩完成', { details: { trigger: input.trigger, summaryLength: input.compact_summary?.length || 0 } });
             callbacks.onCompaction?.({
               trigger: input.trigger || 'unknown',
               summaryLength: input.compact_summary?.length || 0,
@@ -276,7 +274,7 @@ export class ClaudeAgentService {
         if (mcpAllowedTools.length > 0) {
           const existingTools = options.allowedTools || [];
           options.allowedTools = [...existingTools, ...mcpAllowedTools];
-          console.log('[ClaudeAgentService] 已添加 MCP 工具权限:', mcpAllowedTools);
+          logger.info(LOG_MODULES.AGENT, '已添加 MCP 工具权限', { details: { mcpAllowedTools } });
         }
        }
      }
@@ -326,7 +324,7 @@ ${allTools.map(t => `
 - 如果工具调用失败，请检查参数是否正确并重试
 
 `;
-        console.log('[ClaudeAgentService] MCP 工具详情已生成:', allTools.length, '个工具');
+        logger.info(LOG_MODULES.AGENT, 'MCP 工具详情已生成', { details: { count: allTools.length } });
       } else {
         // 如果没有工具详情，显示基本说明
         mcpToolsPrompt = `\n\n## 可用的 MCP 服务器
@@ -337,7 +335,7 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
 **注意**: 工具列表尚未同步，请运行测试连接获取工具详情。
 
 `;
-        console.log('[ClaudeAgentService] MCP 服务器已配置，但无工具详情:', mcpServerNames.join(', '));
+        logger.info(LOG_MODULES.AGENT, 'MCP 服务器已配置，但无工具详情', { details: { mcpServerNames } });
       }
     }
     
@@ -349,21 +347,20 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
         : this.config.systemPrompt;
       
       options.systemPrompt = basePrompt + mcpToolsPrompt;
-      console.log('[ClaudeAgentService] 已配置系统提示词（含 MCP 工具说明）:',
-        (typeof basePrompt === 'string' ? basePrompt.substring(0, 200) : JSON.stringify(basePrompt)) + '...');
-      console.log('[ClaudeAgentService] 完整系统提示词长度:', options.systemPrompt?.length || 0);
-      
+      logger.info(LOG_MODULES.AGENT, '已配置系统提示词（含 MCP 工具说明）', { details: { preview: (typeof basePrompt === 'string' ? basePrompt.substring(0, 200) : JSON.stringify(basePrompt)) + '...' } });
+      logger.info(LOG_MODULES.AGENT, '完整系统提示词长度', { details: { length: options.systemPrompt?.length || 0 } });
+
       // 检查是否包含经验预注入（用于调试）
       const basePromptStr = typeof basePrompt === 'string' ? basePrompt : '';
       const hasExperienceInjection = basePromptStr.includes('已知执行经验') || basePromptStr.includes('直达方案');
-      console.log('[ClaudeAgentService] 是否包含经验预注入:', hasExperienceInjection);
+      logger.info(LOG_MODULES.AGENT, '是否包含经验预注入', { details: { hasExperienceInjection } });
     } else {
       // 如果没有配置系统提示词，仅使用 MCP 工具说明
       if (mcpToolsPrompt) {
         options.systemPrompt = mcpToolsPrompt;
-        console.log('[ClaudeAgentService] 仅使用 MCP 工具说明作为系统提示词');
+        logger.info(LOG_MODULES.AGENT, '仅使用 MCP 工具说明作为系统提示词');
       } else {
-        console.log('[ClaudeAgentService] ⚠️  未配置系统提示词');
+        logger.warn(LOG_MODULES.AGENT, '未配置系统提示词');
       }
     }
     
@@ -372,13 +369,11 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
     // 这是官方推荐的传递 MCP 和 Skills 给子Agent的方式
     if (this.config.agents && Object.keys(this.config.agents).length > 0) {
       options.agents = this.config.agents;
-      console.log('[ClaudeAgentService] 已配置子Agent定义:', Object.keys(this.config.agents).join(', '));
-      
+      logger.info(LOG_MODULES.AGENT, '已配置子Agent定义', { details: { agentNames: Object.keys(this.config.agents).join(', ') } });
+
       // 日志每个子Agent的 MCP 和 Skills 配置
       for (const [agentName, agentDef] of Object.entries(this.config.agents)) {
-        console.log(`[ClaudeAgentService] 子Agent "${agentName}":`);
-        console.log(`  - MCP Servers: ${agentDef.mcpServers ? JSON.stringify(agentDef.mcpServers) : '无'}`);
-        console.log(`  - Skills: ${agentDef.skills ? agentDef.skills.join(', ') : '无'}`);
+        logger.info(LOG_MODULES.AGENT, `子Agent "${agentName}"`, { details: { mcpServers: agentDef.mcpServers ? JSON.stringify(agentDef.mcpServers) : '无', skills: agentDef.skills ? agentDef.skills.join(', ') : '无' } });
       }
     }
 
@@ -386,14 +381,8 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
 
     try {
       // 日志：发送给 SDK 的完整配置
-      console.log('[ClaudeAgentService] ========================================');
-      console.log('[ClaudeAgentService] 发送给 Claude SDK 的配置:');
-      console.log('[ClaudeAgentService] - 模型:', this.config.model);
-      console.log('[ClaudeAgentService] - 工作目录:', this.config.cwd);
-      console.log('[ClaudeAgentService] - 权限模式:', this.config.permissionMode);
-      console.log('[ClaudeAgentService] - 允许跳过权限:', this.config.allowDangerouslySkipPermissions);
-      console.log('[ClaudeAgentService] - 设置源(settingSources):', this.config.settingSources || '未配置');
-      
+      logger.info(LOG_MODULES.AGENT, '发送给 Claude SDK 的配置', { details: { model: this.config.model, cwd: this.config.cwd, permissionMode: this.config.permissionMode, allowDangerouslySkipPermissions: this.config.allowDangerouslySkipPermissions, settingSources: this.config.settingSources || '未配置' } });
+
       // ⚠️ 重要：检查 CLAUDE.md 是否被 SDK 加载
       // settingSources=['project'] 应该会加载项目目录下的 CLAUDE.md
       // 但 SDK 内部处理，不会出现在消息流中
@@ -401,29 +390,21 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
       if (this.config.cwd) {
         const { access, readFile } = await import('fs/promises');
         const { join } = await import('path');
-        
+
         const claudeMdPath = join(this.config.cwd, 'CLAUDE.md');
         try {
           await access(claudeMdPath);
           const claudeMdContent = await readFile(claudeMdPath, 'utf-8');
-          console.log('[ClaudeAgentService] ✅ CLAUDE.md 文件存在:', claudeMdPath);
-          console.log('[ClaudeAgentService] CLAUDE.md 长度:', claudeMdContent.length, '字符');
-          console.log('[ClaudeAgentService] CLAUDE.md 内容预览(前500字符):', claudeMdContent.substring(0, 500));
-          console.log('[ClaudeAgentService] ⚠️ 注意: settingSources=["project"] 应该会加载此文件，但 SDK 内部处理不会出现在消息流');
+          logger.info(LOG_MODULES.AGENT, 'CLAUDE.md 文件存在', { details: { path: claudeMdPath, length: claudeMdContent.length, preview: claudeMdContent.substring(0, 500) } });
+          logger.info(LOG_MODULES.AGENT, '注意: settingSources=["project"] 应该会加载此文件，但 SDK 内部处理不会出现在消息流');
         } catch (e) {
-          console.log('[ClaudeAgentService] ⚠️ CLAUDE.md 文件不存在:', claudeMdPath);
-          console.log('[ClaudeAgentService] ⚠️ SDK 将不会加载项目级 CLAUDE.md');
+          logger.warn(LOG_MODULES.AGENT, 'CLAUDE.md 文件不存在', { details: { path: claudeMdPath } });
+          logger.warn(LOG_MODULES.AGENT, 'SDK 将不会加载项目级 CLAUDE.md');
         }
       }
-      
-      console.log('[ClaudeAgentService] - 系统提示词内容:',
-        this.config.systemPrompt
-          ? (typeof this.config.systemPrompt === 'string'
-              ? this.config.systemPrompt.substring(0, 300) + '...'
-              : JSON.stringify(this.config.systemPrompt, null, 2))
-          : '未配置');
-      console.log('[ClaudeAgentService] - 用户提示词(prompt):', prompt.substring(0, 200));
-      console.log('[ClaudeAgentService] ========================================');
+
+      logger.info(LOG_MODULES.AGENT, '系统提示词内容', { details: { content: this.config.systemPrompt ? (typeof this.config.systemPrompt === 'string' ? this.config.systemPrompt.substring(0, 300) + '...' : JSON.stringify(this.config.systemPrompt, null, 2)) : '未配置' } });
+      logger.info(LOG_MODULES.AGENT, '用户提示词', { details: { preview: prompt.substring(0, 200) } });
 
       const q = query({
         prompt,
@@ -448,26 +429,24 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
         const msgType = msg.type;
         const msgSubtype = msg.subtype;
         const msgRole = msg.role;
-        
+
         // 打印消息类型
-        console.log(`[ClaudeAgent] 📨 消息: type=${msgType} | subtype=${msgSubtype} | role=${msgRole}`);
-        
+        logger.info(LOG_MODULES.AGENT, '消息', { details: { type: msgType, subtype: msgSubtype, role: msgRole } });
+
         // 检查 system 消息（可能包含 CLAUDE.md）
         if (msgRole === 'system' || msgType === 'system') {
           const systemContent = msg.content || msg.message?.content || '';
-          console.log('[ClaudeAgent] 📨 ⚠️ 发现 system 消息！长度:', typeof systemContent === 'string' ? systemContent.length : JSON.stringify(systemContent).length);
-          console.log('[ClaudeAgent] 📨 system 内容预览:', typeof systemContent === 'string' ? systemContent.substring(0, 500) : JSON.stringify(systemContent).substring(0, 500));
-          
+          logger.info(LOG_MODULES.AGENT, '发现 system 消息', { details: { length: typeof systemContent === 'string' ? systemContent.length : JSON.stringify(systemContent).length, preview: typeof systemContent === 'string' ? systemContent.substring(0, 500) : JSON.stringify(systemContent).substring(0, 500) } });
+
           // 检查是否包含 CLAUDE.md 特征内容
           const systemStr = typeof systemContent === 'string' ? systemContent : JSON.stringify(systemContent);
           const hasClaudeMdIndicators = systemStr.includes('CLAUDE.md') || systemStr.includes('Important instructions') || systemStr.includes('project instructions');
-          console.log('[ClaudeAgent] 📨 是否包含 CLAUDE.md 特征:', hasClaudeMdIndicators);
+          logger.info(LOG_MODULES.AGENT, '是否包含 CLAUDE.md 特征', { details: { hasClaudeMdIndicators } });
         }
-        
+
         // 检查 init 消息（SDK 初始化时可能包含设置）
         if (msgType === 'init' || msgSubtype === 'init') {
-          console.log('[ClaudeAgent] 📨 ⚠️ 发现 init 消息！');
-          console.log('[ClaudeAgent] 📨 init 内容:', JSON.stringify(msg).substring(0, 500));
+          logger.info(LOG_MODULES.AGENT, '发现 init 消息', { details: { content: JSON.stringify(msg).substring(0, 500) } });
         }
         
         // 处理所有可能包含内容的消息
@@ -476,7 +455,7 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
         // 1. result 字段（完成时的最终结果）
         if (msg.result && typeof msg.result === 'string') {
           extractedContent = msg.result;
-          console.log('[ClaudeAgent] 📨 从 result 提取，长度:', extractedContent.length);
+          logger.info(LOG_MODULES.AGENT, '从 result 提取', { details: { length: extractedContent.length } });
         }
         
         // 2. message.content 字段 - 同时处理 text、tool_use 和 thinking blocks
@@ -487,23 +466,23 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
             const textBlocks = content.filter((b: any) => b.type === 'text' && b.text);
             if (textBlocks.length > 0) {
               extractedContent = textBlocks.map((b: any) => b.text).join('');
-              console.log('[ClaudeAgent] 📨 从 message.content[] 提取文本，长度:', extractedContent.length);
+              logger.info(LOG_MODULES.AGENT, '从 message.content[] 提取文本', { details: { length: extractedContent.length } });
             }
             // 提取 thinking blocks
             const thinkingBlocks = content.filter((b: any) => b.type === 'thinking' && b.thinking);
             for (const block of thinkingBlocks) {
-              console.log('[ClaudeAgent] 📨 从 message.content[] 发现 thinking，长度:', block.thinking?.length || 0);
+              logger.info(LOG_MODULES.AGENT, '从 message.content[] 发现 thinking', { details: { length: block.thinking?.length || 0 } });
               callbacks.onThinking?.(block.thinking);
             }
             // 提取工具调用 blocks - 按 SDK 格式提取完整信息
             const toolUseBlocks = content.filter((b: any) => b.type === 'tool_use');
             for (const block of toolUseBlocks) {
-              console.log('[ClaudeAgent] 📨 从 message.content[] 发现 tool_use:', block.name, 'id:', block.id);
+              logger.info(LOG_MODULES.AGENT, '从 message.content[] 发现 tool_use', { details: { name: block.name, id: block.id } });
               callbacks.onToolUse?.(block.id || 'unknown', block.name || 'unknown', block.input || {});
             }
           } else if (typeof content === 'string') {
             extractedContent = content;
-            console.log('[ClaudeAgent] 📨 从 message.content (string) 提取，长度:', extractedContent.length);
+            logger.info(LOG_MODULES.AGENT, '从 message.content (string) 提取', { details: { length: extractedContent.length } });
           }
         }
         
@@ -514,36 +493,36 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
             const textBlocks = content.filter((b: any) => b.type === 'text' && b.text);
             if (textBlocks.length > 0) {
               extractedContent = textBlocks.map((b: any) => b.text).join('');
-              console.log('[ClaudeAgent] 📨 从 content[] 提取文本，长度:', extractedContent.length);
+              logger.info(LOG_MODULES.AGENT, '从 content[] 提取文本', { details: { length: extractedContent.length } });
             }
             // 提取 thinking blocks
             const thinkingBlocks = content.filter((b: any) => b.type === 'thinking' && b.thinking);
             for (const block of thinkingBlocks) {
-              console.log('[ClaudeAgent] 📨 从 content[] 发现 thinking，长度:', block.thinking?.length || 0);
+              logger.info(LOG_MODULES.AGENT, '从 content[] 发现 thinking', { details: { length: block.thinking?.length || 0 } });
               callbacks.onThinking?.(block.thinking);
             }
             // 提取工具调用 blocks - 按 SDK 格式提取完整信息
             const toolUseBlocks = content.filter((b: any) => b.type === 'tool_use');
             for (const block of toolUseBlocks) {
-              console.log('[ClaudeAgent] 📨 从 content[] 发现 tool_use:', block.name, 'id:', block.id);
+              logger.info(LOG_MODULES.AGENT, '从 content[] 发现 tool_use', { details: { name: block.name, id: block.id } });
               callbacks.onToolUse?.(block.id || 'unknown', block.name || 'unknown', block.input || {});
             }
           } else if (typeof content === 'string') {
             extractedContent = content;
-            console.log('[ClaudeAgent] 📨 从 content (string) 提取，长度:', extractedContent.length);
+            logger.info(LOG_MODULES.AGENT, '从 content (string) 提取', { details: { length: extractedContent.length } });
           }
         }
         
         // 4. text 字段
         if (!extractedContent && msg.text && typeof msg.text === 'string') {
           extractedContent = msg.text;
-          console.log('[ClaudeAgent] 📨 从 text 提取，长度:', extractedContent.length);
+          logger.info(LOG_MODULES.AGENT, '从 text 提取', { details: { length: extractedContent.length } });
         }
-        
+
         // 5. description 字段（system/task_progress 消息）
         if (!extractedContent && msg.description && typeof msg.description === 'string') {
           extractedContent = msg.description;
-          console.log('[ClaudeAgent] 📨 从 description 提取，长度:', extractedContent.length);
+          logger.info(LOG_MODULES.AGENT, '从 description 提取', { details: { length: extractedContent.length } });
         }
         
         // 如果提取到内容，调用 onChunk
@@ -557,7 +536,7 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
         // 捕获 SDK 返回的会话 ID（参考 CloudCLI 实现）
         if (msg.session_id && !capturedSessionId) {
           capturedSessionId = true;
-          console.log('[ClaudeAgent] 🆔 会话ID:', msg.session_id);
+          logger.info(LOG_MODULES.AGENT, '会话ID', { details: { sessionId: msg.session_id } });
           callbacks.onSessionId?.(msg.session_id);
         }
 
@@ -572,8 +551,8 @@ if (this.isResultSuccess(message)) {
           const stopReason = msg.stop_reason;
           const terminalReason = msg.terminal_reason;
           const totalCostUsd = msg.total_cost_usd || 0;
-          
-          console.log('[ClaudeAgent] stop_reason:', stopReason, 'terminal_reason:', terminalReason);
+
+          logger.info(LOG_MODULES.AGENT, '停止原因', { details: { stopReason, terminalReason } });
           callbacks.onStopReason?.({ stopReason, terminalReason });
           
           const usageData = {
@@ -589,7 +568,7 @@ if (this.isResultSuccess(message)) {
         } else if (this.isResultError(message)) {
           // 错误结果消息
           const errorMsg = message.errors?.join('\n') || 'Unknown error';
-          console.error('[ClaudeAgent] Error:', errorMsg);
+          logger.error(LOG_MODULES.AGENT, 'Error', { details: { errorMsg } });
           callbacks.onError?.(new Error(errorMsg));
         } else if (this.isToolUseMessage(message)) {
           // 工具使用消息 - 按 SDK 格式提取完整信息
@@ -641,7 +620,7 @@ if (this.isResultSuccess(message)) {
               accumulatedCacheReadTokens = Math.max(accumulatedCacheReadTokens, cacheReadTokens);
               accumulatedCacheCreationTokens = Math.max(accumulatedCacheCreationTokens, cacheCreationTokens);
               
-              console.log('[ClaudeAgent] 📊 Token (cumulative): input=%d, output=%d', accumulatedInputTokens, accumulatedOutputTokens);
+              logger.info(LOG_MODULES.AGENT, 'Token (cumulative)', { details: { input: accumulatedInputTokens, output: accumulatedOutputTokens } });
               
               // 回调当前的累计值
               callbacks.onUsage?.({
@@ -660,20 +639,20 @@ if (this.isResultSuccess(message)) {
           
           // 处理 type=user 消息
           if (msgType === 'user') {
-            console.log('[ClaudeAgent] 📨 处理 user 消息');
+            logger.info(LOG_MODULES.AGENT, '处理 user 消息');
             // user 消息通常包含在 message.content 中
             if (msg.message?.content) {
               const content = msg.message.content;
               if (Array.isArray(content)) {
                 for (const block of content) {
                   if (block.type === 'text' && block.text) {
-                    console.log('[ClaudeAgent] 📨 从 user 消息提取 text，长度:', block.text.length);
+                    logger.info(LOG_MODULES.AGENT, '从 user 消息提取 text', { details: { length: block.text.length } });
                     // user 消息不追加到 fullResponse，但触发 onMessage 回调
                     callbacks.onMessage?.(message);
                   }
                   // 处理 tool_result block（用户消息中的工具结果）
                   if (block.type === 'tool_result') {
-                    console.log('[ClaudeAgent] 📨 从 user 消息提取 tool_result, tool_use_id:', block.tool_use_id);
+                    logger.info(LOG_MODULES.AGENT, '从 user 消息提取 tool_result', { details: { toolUseId: block.tool_use_id } });
                     const toolResultContent = typeof block.content === 'string'
                       ? block.content
                       : JSON.stringify(block.content);
@@ -685,19 +664,12 @@ if (this.isResultSuccess(message)) {
                   }
                 }
               } else if (typeof content === 'string') {
-                console.log('[ClaudeAgent] 📨 从 user 消息提取 string content，长度:', content.length);
+                logger.info(LOG_MODULES.AGENT, '从 user 消息提取 string content', { details: { length: content.length } });
                 callbacks.onMessage?.(message);
               }
             }
             // 检查 tool_use_result（工具返回结果） - 按 SDK 格式提取完整信息
             if (msg.tool_use_result) {
-              //console.log('[ClaudeAgent] 📨 user 消息包含 tool_use_result');
-              //console.log('[ClaudeAgent] 📨 tool_use_result keys:', Object.keys(msg.tool_use_result));
-              //console.log('[ClaudeAgent] 📨 msg keys:', Object.keys(msg));
-              //console.log('[ClaudeAgent] 📨 parent_tool_use_id:', msg.parent_tool_use_id);
-              //console.log('[ClaudeAgent] 📨 tool_use_id:', msg.tool_use_id);
-              //console.log('[ClaudeAgent] 📨 tool_name:', msg.tool_name);
-              
               const toolResultData = msg.tool_use_result;
               
               // 提取 tool_use_id - 这是匹配 tool_use 的关键
@@ -732,11 +704,7 @@ if (this.isResultSuccess(message)) {
               
               // 提取错误状态
               const isError = toolResultData.is_error || toolResultData.error || false;
-              
-              //console.log('[ClaudeAgent] 📨 提取的 tool_use_id:', toolUseId);
-              //console.log('[ClaudeAgent] 📨 提取的工具名称:', toolName);
-              //console.log('[ClaudeAgent] 📨 提取的工具结果长度:', typeof toolResult === 'string' ? toolResult.length : JSON.stringify(toolResult).length);
-              //console.log('[ClaudeAgent] 📨 是否错误:', isError);
+
               callbacks.onToolResult?.(toolUseId, toolResult, isError);
             }
             continue;
@@ -748,13 +716,13 @@ if (this.isResultSuccess(message)) {
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === 'text' && block.text) {
-                  console.log('[ClaudeAgent] 📨 从其他消息提取 text，长度:', block.text.length);
+                  logger.info(LOG_MODULES.AGENT, '从其他消息提取 text', { details: { length: block.text.length } });
                   fullResponse += block.text;
                   callbacks.onChunk?.(block.text);
                 }
               }
             } else if (typeof content === 'string') {
-              console.log('[ClaudeAgent] 📨 从其他消息提取 string content，长度:', content.length);
+              logger.info(LOG_MODULES.AGENT, '从其他消息提取 string content', { details: { length: content.length } });
               fullResponse += content;
               callbacks.onChunk?.(content);
             }
@@ -765,7 +733,7 @@ if (this.isResultSuccess(message)) {
       callbacks.onComplete?.(fullResponse);
       return fullResponse;
     } catch (error) {
-      console.error('[ClaudeAgent] Error:', error);
+      logger.error(LOG_MODULES.AGENT, 'Error', { details: { error: error instanceof Error ? error.message : String(error) } });
       if ((error as Error).name === 'AbortError') {
         callbacks.onComplete?.(fullResponse);
         return fullResponse;
@@ -874,7 +842,7 @@ if (this.isResultSuccess(message)) {
     const explicitAllowed = this.config.allowedTools || [];
     const merged = [...new Set([...explicitAllowed, ...allowedFromPermissions, ...defaultAllowedTools])];
 
-    console.log(`[ClaudeAgent] processAllowedTools: ${merged.length} 个工具`, merged.slice(0, 10).join(', ') + '...');
+    logger.info(LOG_MODULES.AGENT, 'processAllowedTools', { details: { count: merged.length, tools: merged.slice(0, 10).join(', ') + '...' } });
     return merged;
   }
 
@@ -900,7 +868,7 @@ if (this.isResultSuccess(message)) {
     const merged = [...new Set([...explicitDisallowed, ...deniedFromPermissions])];
 
     if (merged.length > 0) {
-      console.log(`[ClaudeAgent] processDisallowedTools: ${merged.length} 个工具被拒绝`, merged.join(', '));
+      logger.info(LOG_MODULES.AGENT, 'processDisallowedTools', { details: { count: merged.length, tools: merged.join(', ') } });
     }
     return merged;
   }

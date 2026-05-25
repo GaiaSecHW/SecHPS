@@ -28,34 +28,38 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/prisma';
 import type { User, Role, Permission } from '@prisma/client';
 import { permissionCache, cacheKeys, getOrSet, invalidateUserCaches } from '@/lib/cache';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // JWT_SECRET 必须通过环境变量设置，禁止硬编码
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    console.error('\n');
-    console.error('========================================');
-    console.error('❌ 错误: JWT_SECRET 环境变量未设置!');
-    console.error('========================================');
-    console.error('');
-    console.error('请按照以下步骤设置 JWT_SECRET:');
-    console.error('');
-    console.error('1. 在项目根目录创建 .env.local 文件（如果不存在）');
-    console.error('');
-    console.error('2. 在 .env.local 中添加以下内容:');
-    console.error('');
-    console.error('   JWT_SECRET=your-secure-random-string-here');
-    console.error('');
-    console.error('3. 生成安全的密钥（推荐方式）:');
-    console.error('   - Node.js: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
-    console.error('   - OpenSSL: openssl rand -hex 64');
-    console.error('   - 在线工具: https://generate-secret.vercel.app/64');
-    console.error('');
-    console.error('4. 重启应用程序');
-    console.error('');
-    console.error('⚠️  注意: 请勿将 JWT_SECRET 提交到版本控制系统!');
-    console.error('    确保 .env.local 已添加到 .gitignore');
-    console.error('');
+    const errorMsg = [
+      '',
+      '========================================',
+      '❌ 错误: JWT_SECRET 环境变量未设置!',
+      '========================================',
+      '',
+      '请按照以下步骤设置 JWT_SECRET:',
+      '',
+      '1. 在项目根目录创建 .env.local 文件（如果不存在）',
+      '',
+      '2. 在 .env.local 中添加以下内容:',
+      '',
+      '   JWT_SECRET=your-secure-random-string-here',
+      '',
+      '3. 生成安全的密钥（推荐方式）:',
+      '   - Node.js: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"',
+      '   - OpenSSL: openssl rand -hex 64',
+      '   - 在线工具: https://generate-secret.vercel.app/64',
+      '',
+      '4. 重启应用程序',
+      '',
+      '⚠️  注意: 请勿将 JWT_SECRET 提交到版本控制系统!',
+      '    确保 .env.local 已添加到 .gitignore',
+      ''
+    ].join('\n');
+    logger.error(LOG_MODULES.AUTH, errorMsg);
     process.exit(1);
   }
   return secret;
@@ -123,11 +127,11 @@ export function verifyToken(token: string): JWTPayload | null {
     // JWT验证失败，可能是token过期、签名无效或格式错误
     if (error instanceof Error) {
       if (error.name === 'TokenExpiredError') {
-        console.warn('[Auth] Token已过期');
+        logger.warn(LOG_MODULES.AUTH, 'Token已过期');
       } else if (error.name === 'JsonWebTokenError') {
-        console.warn('[Auth] Token签名无效:', error.message);
+        logger.warn(LOG_MODULES.AUTH, `Token签名无效: ${error.message}`);
       } else {
-        console.warn('[Auth] Token验证失败:', error.message);
+        logger.warn(LOG_MODULES.AUTH, `Token验证失败: ${error.message}`);
       }
     }
     return null;
@@ -159,9 +163,9 @@ export function verifyRefreshToken(token: string): RefreshTokenPayload | null {
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'TokenExpiredError') {
-        console.warn('[Auth] Refresh Token已过期');
+        logger.warn(LOG_MODULES.AUTH, 'Refresh Token已过期');
       } else if (error.name === 'JsonWebTokenError') {
-        console.warn('[Auth] Refresh Token签名无效:', error.message);
+        logger.warn(LOG_MODULES.AUTH, `Refresh Token签名无效: ${error.message}`);
       }
     }
     return null;

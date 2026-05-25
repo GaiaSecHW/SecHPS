@@ -7,6 +7,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { calculateSkillMetrics } from '@/services/skill-evolution/metrics-calculator';
 import { prisma } from '@/lib/prisma';
 import { buildTenantFilter } from '@/lib/tenant-filter';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -85,7 +86,7 @@ export async function GET(
       lastUpdated: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[API] 获取 Skill 指标失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取 Skill 指标失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '获取指标失败' },
       { status: 500 }

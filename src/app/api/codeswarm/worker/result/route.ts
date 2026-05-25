@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import eventBus from '@/lib/event-bus';
@@ -35,7 +36,7 @@ interface ParsedVulnerabilityReport {
 function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
   try {
     let jsonStr = '';
-    console.log(`[VulnParse] parseVulnerabilityJson 输出长度: ${output.length}, 前200字符: ${output.substring(0, 200)}`);
+    logger.info(LOG_MODULES.CODESWARM, `parseVulnerabilityJson 输出长度: ${output.length}, 前200字符: ${output.substring(0, 200)}`);
 
     if (output.includes('```json')) {
       const matches = output.match(/```json\s*([\s\S]*?)\s*```/g);
@@ -70,12 +71,12 @@ try {
           if (braceCount === 0) { endIdx = i + 1; break; }
         }
         jsonStr = output.slice(startIdx, endIdx);
-        console.log(`[VulnParse] 从 vulnerabilities 关键词提取 JSON, 长度: ${jsonStr.length}, 起始位置: ${startIdx}`);
+        logger.info(LOG_MODULES.CODESWARM, `从 vulnerabilities 关键词提取 JSON, 长度: ${jsonStr.length}, 起始位置: ${startIdx}`);
       }
     }
 
     if (!jsonStr) {
-      console.log(`[VulnParse] 未提取到 JSON 字符串, 输出不含 \`\`\`json 或 "vulnerabilities"`);
+      logger.info(LOG_MODULES.CODESWARM, `未提取到 JSON 字符串, 输出不含 \`\`\`json 或 "vulnerabilities"`);
       return null;
     }
 
@@ -88,14 +89,14 @@ try {
       if (!parsed) {
         const noTrailingCommas = jsonStr.replace(/,(\s*[}\]])/g, '$1');
         try { parsed = JSON.parse(noTrailingCommas); } catch { /* continue */ }
-        if (parsed) { console.log('[VulnParse] JSON repaired by removing trailing commas'); }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by removing trailing commas'); }
       }
       // Repair 1: remove trailing content after last closing brace
       const lastBrace = jsonStr.lastIndexOf('}');
       if (lastBrace > 0 && lastBrace < jsonStr.length - 1) {
         const trimmed = jsonStr.slice(0, lastBrace + 1);
         try { parsed = JSON.parse(trimmed); } catch { /* continue */ }
-        if (parsed) { console.log('[VulnParse] JSON repaired by trimming trailing content'); }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by trimming trailing content'); }
       }
       // Repair 2: escape unescaped control characters (newlines, tabs inside string values)
       if (!parsed) {
@@ -106,39 +107,39 @@ try {
           return '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0');
         });
         try { parsed = JSON.parse(repaired); } catch { /* continue */ }
-        if (parsed) { console.log('[VulnParse] JSON repaired by escaping control characters'); }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by escaping control characters'); }
       }
       // Repair 3: remove markdown bold/italic markers inside JSON values (**text**)
       if (!parsed) {
         const cleaned = jsonStr.replace(/\*{1,2}(.*?)\*{1,2}/g, '$1');
         try { parsed = JSON.parse(cleaned); } catch { /* final failure */ }
-        if (parsed) { console.log('[VulnParse] JSON repaired by removing markdown bold markers'); }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by removing markdown bold markers'); }
       }
       if (!parsed) {
-        console.error('[VulnParse] JSON 解析失败 (all repairs exhausted):', parseErr instanceof Error ? parseErr.message : String(parseErr));
+        logger.error(LOG_MODULES.CODESWARM, 'JSON 解析失败 (all repairs exhausted)', { details: { error: parseErr instanceof Error ? parseErr.message : String(parseErr) } });
         return null;
       }
     }
     if (!Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
-      console.log(`[VulnParse] JSON 解析成功但 vulnerabilities 为空或非数组: ${JSON.stringify(parsed).substring(0, 200)}`);
+      logger.info(LOG_MODULES.CODESWARM, `JSON 解析成功但 vulnerabilities 为空或非数组: ${JSON.stringify(parsed).substring(0, 200)}`);
       return null;
     }
 
     for (const v of parsed.vulnerabilities) {
       if (!v.title || !v.type) {
-        console.log(`[VulnParse] 漏洞条目缺少 title/type: ${JSON.stringify(v).substring(0, 200)}`);
+        logger.info(LOG_MODULES.CODESWARM, `漏洞条目缺少 title/type: ${JSON.stringify(v).substring(0, 200)}`);
         return null;
       }
     }
 
-    console.log(`[VulnParse] 解析成功: ${parsed.vulnerabilities.length} 条漏洞, evaluationId=${parsed.evaluationId || '无'}`);
+    logger.info(LOG_MODULES.CODESWARM, `解析成功: ${parsed.vulnerabilities.length} 条漏洞, evaluationId=${parsed.evaluationId || '无'}`);
     return {
       evaluationId: parsed.evaluationId ?? '',
       skillExecutionId: parsed.skillExecutionId ?? '',
       vulnerabilities: parsed.vulnerabilities,
     };
   } catch (e) {
-    console.error('[VulnParse] JSON 解析失败:', e instanceof Error ? e.message : String(e));
+    logger.error(LOG_MODULES.CODESWARM, 'JSON 解析失败', { details: { error: e instanceof Error ? e.message : String(e) } });
     return null;
   }
 }
@@ -170,7 +171,7 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
       finalArgs = ['-c', `opencode run "${instruction}"`];
     }
 
-    console.log(`[VulnParse:${taskId}] 执行: cmd=${cmd}, args=${isWindows ? finalArgs.join(' ') : finalArgs[1]?.substring(0, 80)}`);
+    logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 执行: cmd=${cmd}, args=${isWindows ? finalArgs.join(' ') : finalArgs[1]?.substring(0, 80)}`);
 
     let stdout = '';
     let stderr = '';
@@ -183,11 +184,11 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
     });
 
     childProcess.on('spawn', () => {
-      console.log(`[VulnParse:${taskId}] 进程已启动, pid=${childProcess?.pid}`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程已启动, pid=${childProcess?.pid}`);
     });
 
     childProcess.on('error', (err) => {
-      console.error(`[VulnParse:${taskId}] 进程启动错误: ${err.message}`);
+      logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程启动错误: ${err.message}`);
     });
 
     childProcess.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
@@ -195,17 +196,17 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
 
     const exitCode = await new Promise<number | null>((resolve) => {
       childProcess?.on('exit', (code) => {
-        console.log(`[VulnParse:${taskId}] 进程退出, code=${code}, stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程退出, code=${code}, stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
         resolve(code ?? 1);
       });
       childProcess?.on('error', () => {
-        console.error(`[VulnParse:${taskId}] 进程 error 事件, stderr=${stderr.substring(0, 200)}`);
+        logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程 error 事件, stderr=${stderr.substring(0, 200)}`);
         resolve(1);
       });
 
       setTimeout(() => {
         if (childProcess && childProcess.exitCode === null) {
-          console.log(`[VulnParse:${taskId}] 执行超时终止 (已收集 stdout=${stdout.length}, stderr=${stderr.length})`);
+          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 执行超时终止 (已收集 stdout=${stdout.length}, stderr=${stderr.length})`);
           childProcess.kill('SIGTERM');
           resolve(124);
         }
@@ -213,19 +214,19 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
     });
 
     if (exitCode !== 0) {
-      console.error(`[VulnParse:${taskId}] 执行失败: exit=${exitCode}, stderr=${stderr.substring(0, 500)}`);
+      logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 执行失败: exit=${exitCode}, stderr=${stderr.substring(0, 500)}`);
       return null;
     }
 
-    console.log(`[VulnParse:${taskId}] 执行成功: stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
-    console.log(`[VulnParse:${taskId}] stdout预览: ${stdout.substring(0, 300)}`);
-    console.log(`[VulnParse:${taskId}] stderr预览: ${stderr.substring(0, 300)}`);
+    logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 执行成功: stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
+    logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] stdout预览: ${stdout.substring(0, 300)}`);
+    logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] stderr预览: ${stderr.substring(0, 300)}`);
 
     const report = parseVulnerabilityJson(stdout) || parseVulnerabilityJson(stderr);
     if (report) {
-      console.log(`[VulnParse:${taskId}] 解析成功: ${report.vulnerabilities.length} 条漏洞`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 解析成功: ${report.vulnerabilities.length} 条漏洞`);
     } else {
-      console.log(`[VulnParse:${taskId}] 解析失败: stdout和stderr均未提取到有效漏洞 JSON`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 解析失败: stdout和stderr均未提取到有效漏洞 JSON`);
     }
     return report;
   } finally {
@@ -277,24 +278,24 @@ function executeVulnerabilityParseAsync(
     const { productName, taskName } = context;
 
     try {
-      console.log(`[VulnParse:${taskId}] 开始解析漏洞报告 (productName=${productName}, taskName=${taskName})`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 开始解析漏洞报告 (productName=${productName}, taskName=${taskName})`);
 
       await createParseLog(taskInstanceId, 'info', '开始解析漏洞报告', `产品: ${productName}, 任务: ${taskName}`);
 
       // 将内置 skill 拷贝到工作区，确保 opencode run 能发现 audit-report-parser
       const copyResult = copyInnerSkillsToWorkspace(projectPath);
       if (copyResult.success > 0) {
-        console.log(`[VulnParse:${taskId}] 内置 skill 拷贝成功: ${copyResult.copiedSkills.join(', ')}`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 内置 skill 拷贝成功: ${copyResult.copiedSkills.join(', ')}`);
         await createParseLog(taskInstanceId, 'info', `内置 skill 已部署到工作区: ${copyResult.copiedSkills.join(', ')}`);
       } else {
-        console.warn(`[VulnParse:${taskId}] 内置 skill 拷贝失败，Phase 1 可能无法找到 audit-report-parser`);
+        logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 内置 skill 拷贝失败，Phase 1 可能无法找到 audit-report-parser`);
         await createParseLog(taskInstanceId, 'warn', '内置 skill 拷贝失败', '将尝试 Phase 1 但可能回退到 Phase 2');
       }
 
       // 动态构建 Phase 1 指令（从 inner_skills/ 获取 skill 名称）
       const instructionPhase1 = buildReportParseInstruction();
       if (!instructionPhase1) {
-        console.warn(`[VulnParse:${taskId}] 无法构建 Phase 1 指令（inner_skills/ 中无 audit-report-parser）`);
+        logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 无法构建 Phase 1 指令（inner_skills/ 中无 audit-report-parser）`);
         await createParseLog(taskInstanceId, 'warn', 'Phase 1 指令构建失败', 'inner_skills/ 中缺少 audit-report-parser skill');
       }
 
@@ -302,86 +303,86 @@ function executeVulnerabilityParseAsync(
 
       const reportFolder = findReportFolder(projectPath);
       if (reportFolder) {
-        console.log(`[VulnParse:${taskId}] 找到 Report 文件夹: ${path.relative(projectPath, reportFolder).replace(/\\/g, '/')}`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 找到 Report 文件夹: ${path.relative(projectPath, reportFolder).replace(/\\/g, '/')}`);
 
         await createParseLog(taskInstanceId, 'info', '找到 Report 文件夹', `上传报告文件到 MinIO (${productName}/${taskName}/report)`);
 
-        console.log(`[VulnParse:${taskId}] 上传 Report 文件到 MinIO (${productName}/${taskName}/report)...`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 上传 Report 文件到 MinIO (${productName}/${taskName}/report)...`);
         const uploadResult = await uploadReportFolder(taskId, reportFolder, productName, taskName);
 
         if (uploadResult.success) {
           filePath = JSON.stringify(uploadResult.urls);
-          console.log(`[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
+          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
           await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
         } else {
-          console.log(`[VulnParse:${taskId}] MinIO 上传失败: ${uploadResult.error}`);
+          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传失败: ${uploadResult.error}`);
           filePath = reportFolder;
           await createParseLog(taskInstanceId, 'warn', `MinIO 上传失败`, uploadResult.error || '未知错误');
         }
       } else {
-        console.log(`[VulnParse:${taskId}] 未找到 Report 文件夹`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 未找到 Report 文件夹`);
         await createParseLog(taskInstanceId, 'warn', '未找到 Report 文件夹', `工作区路径: ${projectPath}`);
       }
 
       let report: ParsedVulnerabilityReport | null = null;
 
-      if (instructionPhase1) {
+if (instructionPhase1) {
         await createParseLog(taskInstanceId, 'info', 'Phase 1: 启动内置 skill 解析', `opencode run "${instructionPhase1}"`);
-        console.log(`[VulnParse:${taskId}] Phase 1 开始: instruction="${instructionPhase1}"`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 1 开始: instruction="${instructionPhase1}"`);
         report = await runOpencodeParse(taskId, projectPath, instructionPhase1);
       } else {
-        console.log(`[VulnParse:${taskId}] Phase 1 跳过（无内置 skill 可用）`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 1 跳过（无内置 skill 可用）`);
         await createParseLog(taskInstanceId, 'warn', 'Phase 1 跳过', 'inner_skills/ 中无 audit-report-parser');
       }
 
       if (report) {
         const durationMs = Date.now() - startTime;
-        console.log(`[VulnParse:${taskId}] Phase 1 成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 1 成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
         const vulnTitles = report.vulnerabilities.slice(0, 3).map(v => `${v.severity || '?'}: ${v.title}`).join('; ');
         await createParseLog(taskInstanceId, 'success', `Skill 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s, 示例: ${vulnTitles}`);
       } else {
-        console.log(`[VulnParse:${taskId}] Phase 1 失败: Skill 未返回有效漏洞数据`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 1 失败: Skill 未返回有效漏洞数据`);
         await createParseLog(taskInstanceId, 'warn', 'Phase 1 Skill 解析未返回有效数据', '将启动 Phase 2 Fallback');
       }
 
       if (!report) {
         await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', `opencode run "${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
-        console.log(`[VulnParse:${taskId}] Phase 2 开始: instruction="${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 2 开始: instruction="${INSTRUCTION_PHASE2.substring(0, 80)}..."`);
         report = await runOpencodeParse(taskId, projectPath, INSTRUCTION_PHASE2);
 
         if (report) {
           const durationMs = Date.now() - startTime;
-          console.log(`[VulnParse:${taskId}] Phase 2 成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
+          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 2 成功: ${report.vulnerabilities.length} 条漏洞, 耗时 ${durationMs}ms`);
           const vulnTitles = report.vulnerabilities.slice(0, 3).map(v => `${v.severity || '?'}: ${v.title}`).join('; ');
           await createParseLog(taskInstanceId, 'success', `AI Fallback 解析成功，提取 ${report.vulnerabilities.length} 条漏洞`, `耗时 ${(durationMs / 1000).toFixed(1)}s, 示例: ${vulnTitles}`);
         } else {
-          console.log(`[VulnParse:${taskId}] Phase 2 失败: AI Fallback 也未返回有效漏洞数据`);
+          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Phase 2 失败: AI Fallback 也未返回有效漏洞数据`);
           await createParseLog(taskInstanceId, 'warn', 'Phase 2 AI Fallback 解析未返回有效数据');
         }
       }
 
       if (!report) {
-        console.log(`[VulnParse:${taskId}] 无法解析漏洞（Skill 和 AI 均失败）`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 无法解析漏洞（Skill 和 AI 均失败）`);
         await createParseLog(taskInstanceId, 'warn', '漏洞报告解析失败', '无法从 Report 文件夹或 AI 输出中提取漏洞数据');
         return;
       }
 
-      console.log(`[VulnParse:${taskId}] 解析到 ${report.vulnerabilities.length} 条漏洞`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 解析到 ${report.vulnerabilities.length} 条漏洞`);
 
-      console.log(`[VulnParse:${taskId}] 上传漏洞原始文件到 MinIO (${productName}/${taskName}/file)...`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 上传漏洞原始文件到 MinIO (${productName}/${taskName}/file)...`);
       const vulnsWithRawReports = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.trim());
       if (vulnsWithRawReports.length > 0) {
         report.vulnerabilities = await processVulnerabilityRawReports(taskId, report.vulnerabilities, productName, taskName);
         const uploadedCount = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.includes('http')).length;
-        console.log(`[VulnParse:${taskId}] 漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
         await createParseLog(taskInstanceId, 'success', `漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
       } else {
-        console.log(`[VulnParse:${taskId}] 无漏洞原始文件需要上传`);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 无漏洞原始文件需要上传`);
       }
 
       const effectiveTaskId = taskInstanceId;
 
-      console.log(`[VulnParse:${taskId}] 调用 /api/v1/vulnerabilities 入库: ${report.vulnerabilities.length} 条漏洞`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 调用 /api/v1/vulnerabilities 入库: ${report.vulnerabilities.length} 条漏洞`);
       await createParseLog(taskInstanceId, 'info', `调用 /api/v1/vulnerabilities 入库`, `${report.vulnerabilities.length} 条漏洞`);
 
       const vulnRequestBody = {
@@ -396,7 +397,7 @@ function executeVulnerabilityParseAsync(
         body: JSON.stringify(vulnRequestBody),
       });
 
-      console.log(`[VulnParse:${taskId}] 漏洞入库响应: status=${vulnRes.status}, ok=${vulnRes.ok}`);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 漏洞入库响应: status=${vulnRes.status}, ok=${vulnRes.ok}`);
 
       const vulnResult = await vulnRes.json();
 
@@ -411,17 +412,17 @@ function executeVulnerabilityParseAsync(
           WHERE "taskId" = ${taskId}
         `;
 
-        console.log(`[VulnParse:${taskId}] 漏洞提交成功: created=${createdCount}, skipped=${skippedCount}`);
+        logger.info(LOG_MODULES.CODESWARM, `漏洞提交成功: created=${createdCount}, skipped=${skippedCount}`);
         const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join('\n');
         await createParseLog(taskInstanceId, 'success', `漏洞入库完成：创建 ${createdCount} 条，跳过 ${skippedCount} 条`, vulnSummary);
       } else {
         const errorMsg = vulnResult.error || '未知错误';
-        console.error(`[VulnParse:${taskId}] 漏洞提交失败: ${errorMsg}`);
+        logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 漏洞提交失败: ${errorMsg}`);
         await createParseLog(taskInstanceId, 'error', '漏洞入库失败', errorMsg);
       }
 
     } catch (e) {
-      console.error(`[VulnParse:${taskId}] 异常:`, e);
+      logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 异常`, { details: { error: e instanceof Error ? e.message : String(e) } });
       await createParseLog(taskInstanceId, 'error', 'VulnParse 异常', e instanceof Error ? e.message : String(e));
     }
   })();
@@ -479,7 +480,7 @@ export async function POST(request: Request) {
     });
 
     if (txResult.alreadyTerminal) {
-      console.warn(`[CodeSwarm] Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
+      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
       if (nodeId) {
         await codeswarmDispatcher.onTaskCompleted(nodeId);
       }
@@ -550,7 +551,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, taskId, status: finalState });
   } catch (error) {
-    console.error('[CodeSwarm] Result callback error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Result callback error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: 'Failed to record result' },
       { status: 500 }

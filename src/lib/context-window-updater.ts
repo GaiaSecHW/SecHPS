@@ -1,11 +1,12 @@
 /**
  * Context Window 自动更新工具
- * 
+ *
  * 当 API 调用因 token 超限报错时，自动解析错误并更新数据库的 contextWindow
  */
 
 import { prisma } from '@/lib/prisma';
 import { parseContextWindowFromError } from '@/lib/error-parser';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 从错误中提取 contextWindow 并更新数据库
@@ -22,11 +23,11 @@ export async function updateContextWindowFromError(
   const contextWindow = parseContextWindowFromError(error);
   
   if (!contextWindow) {
-    console.log('[ContextWindowUpdater] 无法从错误中提取 contextWindow');
+    logger.info(LOG_MODULES.MODEL, '无法从错误中提取 contextWindow');
     return null;
   }
   
-  console.log(`[ContextWindowUpdater] 从错误中提取 contextWindow: ${contextWindow}`);
+  logger.info(LOG_MODULES.MODEL, `从错误中提取 contextWindow: ${contextWindow}`);
   
   try {
     // 更新数据库
@@ -38,10 +39,10 @@ export async function updateContextWindowFromError(
       },
     });
     
-    console.log(`[ContextWindowUpdater] 已更新 ModelConfig ${modelConfigId} 的 contextWindow 为 ${updated.contextWindow}`);
+    logger.info(LOG_MODULES.MODEL, `已更新 ModelConfig ${modelConfigId} 的 contextWindow 为 ${updated.contextWindow}`);
     return updated.contextWindow;
   } catch (dbError) {
-    console.error('[ContextWindowUpdater] 更新数据库失败:', dbError);
+    logger.error(LOG_MODULES.MODEL, '更新数据库失败', { details: { error: dbError instanceof Error ? dbError.message : String(dbError) } });
     return null;
   }
 }

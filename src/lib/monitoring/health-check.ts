@@ -1,6 +1,7 @@
 // src/lib/monitoring/health-check.ts
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { HealthCheckResult, SystemHealthReport, HealthStatus, InfrastructureService, InfrastructureInfo } from '@/types/monitoring';
 import { getAllCacheStats } from '@/lib/cache';
 import { parseDatabaseName } from '@/lib/system-info';
@@ -199,7 +200,7 @@ async function checkDatabase(): Promise<HealthCheckResult> {
       checkedAt: new Date(),
     };
   } catch (error) {
-    console.error('[health-check] 数据库健康检查失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.MONITOR, '数据库健康检查失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       name: 'database',
       status: 'unhealthy',

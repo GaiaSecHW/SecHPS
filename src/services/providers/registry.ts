@@ -6,6 +6,7 @@ import { CursorProvider } from './cursor-provider';
 import { CodexProvider } from './codex-provider';
 import { GeminiProvider } from './gemini-provider';
 import { MultiSourceSession, ProviderSource } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Provider 注册表
@@ -37,7 +38,7 @@ export class ProviderRegistry {
    */
   register(provider: BaseProvider): void {
     if (this.providers.has(provider.source)) {
-      console.warn(`[ProviderRegistry] Provider "${provider.source}" 已存在，将被覆盖`);
+      logger.warn(LOG_MODULES.PROVIDER, 'Provider 已存在，将被覆盖', { details: { source: provider.source } });
     }
     this.providers.set(provider.source, provider);
   }
@@ -73,7 +74,7 @@ export class ProviderRegistry {
           available.push(provider);
         }
       } catch (error) {
-        console.warn(`[ProviderRegistry] Provider "${provider.name}" 检查可用性失败:`, error);
+        logger.warn(LOG_MODULES.PROVIDER, 'Provider 检查可用性失败', { details: { name: provider.name, error: error instanceof Error ? error.message : String(error) } });
       }
     }
     
@@ -92,7 +93,7 @@ export class ProviderRegistry {
         const providerSessions = await provider.discoverSessions();
         sessions.push(...providerSessions);
       } catch (error) {
-        console.error(`[ProviderRegistry] Provider "${provider.name}" 发现会话失败:`, error);
+        logger.error(LOG_MODULES.PROVIDER, 'Provider 发现会话失败', { details: { name: provider.name, error: error instanceof Error ? error.message : String(error) } });
       }
     }
     
@@ -111,14 +112,14 @@ export class ProviderRegistry {
     const provider = this.providers.get(source);
     
     if (!provider) {
-      console.warn(`[ProviderRegistry] Provider "${source}" 不存在`);
+      logger.warn(LOG_MODULES.PROVIDER, 'Provider 不存在', { details: { source } });
       return [];
     }
     
     try {
       return await provider.discoverSessions();
     } catch (error) {
-      console.error(`[ProviderRegistry] Provider "${provider.name}" 发现会话失败:`, error);
+      logger.error(LOG_MODULES.PROVIDER, 'Provider 发现会话失败', { details: { name: provider.name, error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -140,7 +141,7 @@ export class ProviderRegistry {
         const sessions = await provider.discoverSessions();
         counts[source as ProviderSource] = sessions.length;
       } catch (error) {
-        console.error(`[ProviderRegistry] Provider "${provider.name}" 获取会话数量失败:`, error);
+        logger.error(LOG_MODULES.PROVIDER, 'Provider 获取会话数量失败', { details: { name: provider.name, error: error instanceof Error ? error.message : String(error) } });
       }
     }
     

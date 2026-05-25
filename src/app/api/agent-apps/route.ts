@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
   if (!auth.success) return authErrorResponse(auth);
 
   const { tenant, payload } = auth as AuthSuccessResult;
-  
-  console.log('[AgentApp] Creating agent app, userId:', payload.userId, 'username:', payload.username);
+
+  logger.info(LOG_MODULES.AGENT, `Creating agent app, userId: ${payload.userId}, username: ${payload.username}`);
 
   try {
     const formData = await request.formData();
@@ -229,8 +229,8 @@ export async function POST(request: NextRequest) {
     }
 
     const agentHarnessPath = repoName;
-    
-    console.log('[AgentApp] Before create, userId:', payload.userId, 'appId:', appId, 'tenantId:', tenantId);
+
+    logger.info(LOG_MODULES.AGENT, `Before create, userId: ${payload.userId}, appId: ${appId}, tenantId: ${tenantId}`);
 
     const app = await prisma.agentApp.create({
       data: {
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
 
     // 异步同步 SKILL，不阻塞响应
     syncSkillsFromHarness(filesMap, payload.userId, tenantId).catch(err =>
-      console.error('[SkillHarnessSync] 自动同步失败:', err)
+      logger.error(LOG_MODULES.AGENT, '自动同步失败', { details: { error: err instanceof Error ? err.message : String(err) } })
     );
 
     return NextResponse.json({ app });

@@ -3,6 +3,7 @@ import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request);
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ pipelines });
   } catch (error) {
-    console.error('获取 Pipeline 列表失败:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '获取 Pipeline 列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '获取 Pipeline 列表失败', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ pipeline });
   } catch (error) {
-    console.error('创建 Pipeline 失败:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '创建 Pipeline 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '创建 Pipeline 失败', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }

@@ -78,7 +78,7 @@ function parseSkillMarkdown(content: string): ParsedSkill | null {
       cwe,
     };
   } catch (e) {
-    console.error('解析 Skill 文件失败:', e);
+    logger.error(LOG_MODULES.SKILL, '解析 Skill 文件失败', { details: { error: e instanceof Error ? e.message : String(e) } });
     return null;
   }
 }

@@ -128,17 +128,17 @@ export async function recoverInterruptedEvaluations(): Promise<{
     for (const evaluation of activeEvaluations) {
       // 处理 preparing 状态的评估（从头启动）
       if (evaluation.status === 'preparing') {
-        console.log(`${LOG_PREFIX} 检查 preparing 状态评估: ${evaluation.id}`);
-        
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 检查 preparing 状态评估: ${evaluation.id}`);
+
         // 如果没有 NodeExecution，从头启动
         if (!evaluation.NodeExecution || evaluation.NodeExecution.length === 0) {
-          console.log(`${LOG_PREFIX} preparing 评估无节点执行记录，从头启动`);
-          
+          logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估无节点执行记录，从头启动`);
+
           try {
             const prepResult = await recoverPreparingEvaluation(evaluation);
             if (prepResult.success) {
               result.recovered++;
-              console.log(`${LOG_PREFIX} ✅ preparing 评估 ${evaluation.id} 启动成功`);
+              logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估 ${evaluation.id} 启动成功`);
               result.details.push({
                 evaluationId: evaluation.id,
                 projectId: evaluation.projectId,
@@ -150,29 +150,32 @@ export async function recoverInterruptedEvaluations(): Promise<{
               });
             } else {
               result.failed++;
-              console.log(`${LOG_PREFIX} ❌ preparing 评估 ${evaluation.id} 启动失败: ${prepResult.error}`);
+              logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估 ${evaluation.id} 启动失败: ${prepResult.error}`);
             }
           } catch (error) {
             result.failed++;
-            console.log(`${LOG_PREFIX} ❌ preparing 评估 ${evaluation.id} 启动异常: ${error}`);
+            logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估 ${evaluation.id} 启动异常`, { error: error instanceof Error ? error.message : String(error) });
           }
           continue;
         }
-        
+
         // 有 NodeExecution，按正常恢复流程处理
-        console.log(`${LOG_PREFIX} preparing 评估有节点执行记录，按正常恢复流程处理`);
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估有节点执行记录，按正常恢复流程处理`);
       }
       try {
-        console.log(`${LOG_PREFIX} 检查评估: ${evaluation.id}`);
-        console.log(`${LOG_PREFIX}   projectId: ${evaluation.projectId}`);
-        console.log(`${LOG_PREFIX}   workflowId: ${evaluation.workflowId}`);
-        console.log(`${LOG_PREFIX}   workflowType: ${evaluation.workflowType}`);
-        console.log(`${LOG_PREFIX}   Project: ${evaluation.Project ? '存在' : '不存在'}`);
-        console.log(`${LOG_PREFIX}   NodeExecution 数量: ${evaluation.NodeExecution?.length || 0}`);
-        
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 检查评估: ${evaluation.id}`, {
+          projectId: evaluation.projectId,
+          workflowId: evaluation.workflowId,
+          workflowType: evaluation.workflowType,
+          hasProject: !!evaluation.Project,
+          nodeExecutionCount: evaluation.NodeExecution?.length || 0,
+        });
         if (evaluation.NodeExecution?.length > 0) {
           evaluation.NodeExecution.forEach((n: any, i: number) => {
-            console.log(`${LOG_PREFIX}     Node[${i}]: ${n.nodeLabel} - status=${n.status}, opencodeSessionId=${n.opencodeSessionId || '无'}`);
+            logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Node[${i}]: ${n.nodeLabel}`, {
+              status: n.status,
+              opencodeSessionId: n.opencodeSessionId || '无',
+            });
           });
         }
         
@@ -199,11 +202,9 @@ export async function recoverInterruptedEvaluations(): Promise<{
         
         if (recoveryResult.success) {
           result.recovered++;
-          console.log(`${LOG_PREFIX} ✅ 评估 ${evaluation.id} 恢复成功`);
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 恢复成功`);
         } else {
           result.failed++;
-          console.log(`${LOG_PREFIX} ❌ 评估 ${evaluation.id} 恢复失败: ${recoveryResult.error}`);
           logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 恢复失败`, {
             error: recoveryResult.error,
           });
@@ -212,9 +213,6 @@ export async function recoverInterruptedEvaluations(): Promise<{
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
-        const errorStack = error instanceof Error ? error.stack : '';
-        console.log(`${LOG_PREFIX} ❌ 评估 ${evaluation.id} 恢复异常: ${errorMsg}`);
-        console.log(`${LOG_PREFIX} 异常堆栈: ${errorStack}`);
         logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 恢复异常`, {
           error: errorMsg,
         });
@@ -232,12 +230,10 @@ export async function recoverInterruptedEvaluations(): Promise<{
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : '';
-    logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 恢复检查失败`, { 
+    logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 恢复检查失败`, {
       error: errorMsg,
       stack: errorStack,
     });
-    console.error(`${LOG_PREFIX} 恢复检查失败:`, errorMsg);
-    console.error(`${LOG_PREFIX} 错误堆栈:`, errorStack);
     return result;
   }
 }
@@ -249,33 +245,33 @@ export async function recoverInterruptedEvaluations(): Promise<{
  * 恢复逻辑：将状态改为 queued，然后调用 startQueuedEvaluation
  */
 async function recoverPreparingEvaluation(evaluation: any): Promise<{ success: boolean; error?: string }> {
-  console.log(`${LOG_PREFIX} 开始恢复 preparing 评估: ${evaluation.id}`);
-  
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始恢复 preparing 评估: ${evaluation.id}`);
+
   try {
     // 1. 将评估状态改为 queued（放到队列第一个位置）
     await prisma.evaluationSession.update({
       where: { id: evaluation.id },
-      data: { 
+      data: {
         status: 'queued',
         lastActivity: new Date(),
       },
     });
-    
-    console.log(`${LOG_PREFIX} preparing 评估已改为 queued 状态`);
-    
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估已改为 queued 状态`);
+
     // 2. 导入 startQueuedEvaluation 函数
     const { startQueuedEvaluation } = await import('./start-evaluation');
-    
+
     // 3. 启动评估（插队，放到队列第一个）
     await startQueuedEvaluation(evaluation.id);
-    
-    console.log(`${LOG_PREFIX} preparing 评估启动成功`);
-    
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} preparing 评估启动成功`);
+
     return { success: true };
-    
+
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`${LOG_PREFIX} 恢复 preparing 评估失败: ${errorMsg}`);
+    logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 恢复 preparing 评估失败`, { error: errorMsg });
     return { success: false, error: errorMsg };
   }
 }
@@ -353,7 +349,7 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
   
   // 所有节点 pending -> 从头启动评估
   if (statusCounts.pending === nodeExecutions.length) {
-    console.log(`${LOG_PREFIX} 评估 ${evaluation.id} 所有节点 pending，从头启动`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 所有节点 pending，从头启动`);
     return {
       evaluationId: evaluation.id,
       projectId: evaluation.projectId,
@@ -372,17 +368,20 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     // 检查节点最近是否有活动（5分钟内有更新说明正在执行）
     const updatedAt = runningNode?.updatedAt;
     const ageMinutes = updatedAt ? (Date.now() - new Date(updatedAt).getTime()) / 60000 : Infinity;
-    
-    console.log(`${LOG_PREFIX} running 节点 ${runningNode?.nodeLabel}: updatedAt=${updatedAt}, ageMinutes=${ageMinutes.toFixed(2)}`);
-    
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} running 节点 ${runningNode?.nodeLabel}`, {
+      updatedAt,
+      ageMinutes: ageMinutes.toFixed(2),
+    });
+
     if (ageMinutes < 5) {
       // 最近5分钟内有更新，节点正在执行，不需要恢复
-      console.log(`${LOG_PREFIX} 节点正在执行（${ageMinutes.toFixed(2)}分钟前有更新），跳过恢复`);
+      logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 节点正在执行（${ageMinutes.toFixed(2)}分钟前有更新），跳过恢复`);
       return null;
     }
-    
+
     // 超过5分钟无更新，节点真正中断，需要恢复
-    console.log(`${LOG_PREFIX} 节点已中断（${ageMinutes.toFixed(2)}分钟无更新），触发恢复`);
+    logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 节点已中断（${ageMinutes.toFixed(2)}分钟无更新），触发恢复`);
     return {
       evaluationId: evaluation.id,
       projectId: evaluation.projectId,
@@ -426,16 +425,17 @@ async function recoverNodeConversation(
   mcpServers: McpServerConfigForExecution[] | null
 ): Promise<{ success: boolean; error?: string }> {
   const LOG_RECOVERY = '[Recovery-Conversation]';
-  
-  console.log(`${LOG_RECOVERY} 开始通过 opencodeSessionId 恢复对话...`);
-  console.log(`${LOG_RECOVERY}   evaluationId: ${evaluation.id}`);
-  console.log(`${LOG_RECOVERY}   nodeId: ${runningNode.workflowNodeId}`);
-  console.log(`${LOG_RECOVERY}   nodeLabel: ${runningNode.nodeLabel}`);
-  console.log(`${LOG_RECOVERY}   opencodeSessionId: ${runningNode.opencodeSessionId}`);
-  
+
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 开始通过 opencodeSessionId 恢复对话`, {
+    evaluationId: evaluation.id,
+    nodeId: runningNode.workflowNodeId,
+    nodeLabel: runningNode.nodeLabel,
+    opencodeSessionId: runningNode.opencodeSessionId,
+  });
+
   // 1. 检查是否有 opencodeSessionId
   if (!runningNode.opencodeSessionId) {
-    console.log(`${LOG_RECOVERY} 节点没有 opencodeSessionId，无法恢复对话`);
+    logger.warn(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 节点没有 opencodeSessionId，无法恢复对话`);
     return { success: false, error: '节点没有 opencodeSessionId' };
   }
   
@@ -443,10 +443,8 @@ async function recoverNodeConversation(
   
   try {
     // 2. 创建 EnhancedEvaluationCaller 并传入 resumeSession
-    console.log(`${LOG_RECOVERY} 创建 EnhancedEvaluationCaller...`);
-    
-    console.log(`${LOG_RECOVERY} 创建 EnhancedEvaluationCaller...`);
-    
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 创建 EnhancedEvaluationCaller...`);
+
     const caller = createEnhancedEvaluationCaller(
       {
         id: modelConfig.id,
@@ -480,11 +478,10 @@ async function recoverNodeConversation(
       workflowType: evaluation.workflowType || 'custom',
       message: `通过 opencodeSessionId 恢复对话，从节点 ${runningNode.nodeLabel} 继续`,
     });
-    
-    console.log(`${LOG_RECOVERY} ========== 发送恢复消息 ==========`);
-    console.log(`${LOG_RECOVERY} 消息: "检查之前执行的子任务进度，继续完成未完成的任务。"`);
-    
-// 5. 发送恢复消息（提示大模型检查子任务并继续）
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 发送恢复消息: 检查之前执行的子任务进度，继续完成未完成的任务。`);
+
+    // 5. 发送恢复消息（提示大模型检查子任务并继续）
     const recoveryMessage = `请反馈当前任务的进度：
 1. 查看已执行的子任务列表和结果
 2. 找出未完成或失败的子任务
@@ -505,11 +502,11 @@ async function recoverNodeConversation(
       content: recoveryMessage,
       agentCallMsgId: null,
     });
-    console.log(`${LOG_RECOVERY} 用户恢复消息已保存到 JSONL`);
-    
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 用户恢复消息已保存到 JSONL`);
+
     // 8. 收集 assistant 响应文本（用于保存）
     let collectedResponse = '';
-    
+
     // 执行恢复（后台异步，不阻塞）
     void (async () => {
       try {
@@ -521,20 +518,21 @@ async function recoverNodeConversation(
         }, {
           onChunk: (text: string) => {
             // 推送实时文本流
-            console.log(`${LOG_RECOVERY} [chunk] ${text.substring(0, 100)}...`);
+            logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} [chunk] ${text.substring(0, 100)}...`);
             emitMessageChunk(evaluation.id, text);
             // 收集响应文本
             collectedResponse += text;
           },
           onToolCall: (toolUseId: string, name: string, parameters: Record<string, unknown>) => {
-            console.log(`${LOG_RECOVERY} [tool] ${name} (${toolUseId})`);
+            logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} [tool] ${name} (${toolUseId})`);
           },
           onToolResult: (toolUseId: string, content: unknown, isError?: boolean) => {
-            console.log(`${LOG_RECOVERY} [tool-result] ${toolUseId} - isError=${isError}`);
+            logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} [tool-result] ${toolUseId}`, { isError });
           },
           onComplete: async (fullResponse: string) => {
-            console.log(`${LOG_RECOVERY} ========== 恢复对话完成 ==========`);
-            console.log(`${LOG_RECOVERY} 响应长度: ${fullResponse.length}`);
+            logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话完成`, {
+              responseLength: fullResponse.length,
+            });
             
             // 保存 assistant 响应到 JSONL
             try {
@@ -545,20 +543,19 @@ async function recoverNodeConversation(
                 content: fullResponse,
                 agentCallMsgId: null,
               });
-              console.log(`${LOG_RECOVERY} Assistant 响应已保存到 JSONL`);
+              logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} Assistant 响应已保存到 JSONL`);
             } catch (saveError) {
-              console.error(`${LOG_RECOVERY} 保存 assistant 响应失败:`, saveError);
+              logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 保存 assistant 响应失败`, { error: saveError instanceof Error ? saveError.message : String(saveError) });
             }
-            
+
             // 注意：不在恢复时标记节点为 completed
             // 让大模型自己决定什么时候完成所有子任务
             // 节点状态会在正常执行流程中由 evaluation-completion 服务标记
             logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话完成，等待大模型完成子任务`);
           },
           onError: async (error: Error) => {
-            console.error(`${LOG_RECOVERY} ========== 恢复对话失败 ==========`);
-            console.error(`${LOG_RECOVERY} 错误: ${error.message}`);
-            
+            logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话失败`, { error: error.message });
+
             // 保存错误信息到 JSONL（如果有部分响应）
             if (collectedResponse) {
               try {
@@ -570,10 +567,10 @@ async function recoverNodeConversation(
                   agentCallMsgId: null,
                 });
               } catch (saveError) {
-                console.error(`${LOG_RECOVERY} 保存部分响应失败:`, saveError);
+                logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 保存部分响应失败`, { error: saveError instanceof Error ? saveError.message : String(saveError) });
               }
             }
-            
+
             // 更新节点状态为 failed
             await prisma.nodeExecution.update({
               where: { id: runningNode.id },
@@ -583,23 +580,22 @@ async function recoverNodeConversation(
                 updatedAt: new Date(),
               },
             });
-            
+
             logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话失败`, { error: error.message });
           },
         });
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        console.error(`${LOG_RECOVERY} 恢复执行异常:`, err.message);
         logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复执行异常`, { error: err.message });
       }
     })();
-    
-    console.log(`${LOG_RECOVERY} 恢复消息已发送，等待响应...`);
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复消息已发送，等待响应...`);
     return { success: true };
-    
+
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`${LOG_RECOVERY} 创建恢复 caller 失败:`, errorMsg);
+    logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 创建恢复 caller 失败`, { error: errorMsg });
     return { success: false, error: errorMsg };
   }
 }
@@ -612,48 +608,51 @@ async function recoverEvaluation(
   recoveryStatus: RecoveryStatus
 ): Promise<{ success: boolean; error?: string }> {
   const LOG_RECOVER = '[RecoverEvaluation]';
-  console.log(`${LOG_RECOVER} ========== 开始恢复评估 ==========`);
-  console.log(`${LOG_RECOVER}   evaluationId: ${evaluation.id}`);
-  console.log(`${LOG_RECOVER}   projectId: ${evaluation.projectId}`);
-  console.log(`${LOG_RECOVER}   workflowId: ${evaluation.workflowId}`);
-  console.log(`${LOG_RECOVER}   workflowType: ${evaluation.workflowType}`);
-  
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 开始恢复评估`, {
+    evaluationId: evaluation.id,
+    projectId: evaluation.projectId,
+    workflowId: evaluation.workflowId,
+    workflowType: evaluation.workflowType,
+  });
+
   try {
     const projectId = evaluation.projectId;
     const project = evaluation.Project;
-    
-    console.log(`${LOG_RECOVER} Step 1: 检查 workflowId...`);
-    
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 1: 检查 workflowId...`);
+
     // ❌ EvaluationSession 没有 Workflow 关系，需要用 workflowId 查询
     if (!evaluation.workflowId) {
-      console.log(`${LOG_RECOVER} ❌ 失败: 评估没有关联工作流`);
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 失败: 评估没有关联工作流`);
       return { success: false, error: '评估没有关联工作流，无法恢复' };
     }
-    
-    console.log(`${LOG_RECOVER} Step 2: 查询 Workflow...`);
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 2: 查询 Workflow...`);
     const workflow = await prisma.workflow.findUnique({
       where: { id: evaluation.workflowId },
     });
-    
-    console.log(`${LOG_RECOVER}   workflow: ${workflow ? '找到' : '未找到'}`);
-    console.log(`${LOG_RECOVER}   workflowType: ${workflow?.workflowType}`);
-    
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Workflow 查询结果`, {
+      found: !!workflow,
+      workflowType: workflow?.workflowType,
+    });
+
     if (!project || !workflow) {
-      console.log(`${LOG_RECOVER} ❌ 失败: 缺少项目或工作流信息`);
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 失败: 缺少项目或工作流信息`);
       return { success: false, error: '缺少项目或工作流信息' };
     }
-    
-    console.log(`${LOG_RECOVER} Step 3: 锁定项目...`);
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 3: 锁定项目...`);
     // 1. 锁定项目（防止并发恢复）
     const locked = await lockProject(projectId, evaluation.id);
-    console.log(`${LOG_RECOVER}   locked: ${locked}`);
-    
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 项目锁定结果`, { locked });
+
     if (!locked) {
-      console.log(`${LOG_RECOVER} ❌ 失败: 项目已被锁定，无法恢复`);
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 失败: 项目已被锁定，无法恢复`);
       return { success: false, error: '项目已被锁定，无法恢复' };
     }
-    
-    console.log(`${LOG_RECOVER} Step 4: 更新评估状态为 recovering...`);
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 4: 更新评估状态为 recovering...`);
     // 2. 更新评估状态为恢复中
     try {
       await prisma.evaluationSession.update({
@@ -663,68 +662,83 @@ async function recoverEvaluation(
           lastActivity: new Date(),
         },
       });
-      console.log(`${LOG_RECOVER}   状态更新成功: recovering`);
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 状态更新成功: recovering`);
     } catch (dbError: any) {
-      console.log(`${LOG_RECOVER} ❌ 状态更新失败: ${dbError.message}`);
-      console.log(`${LOG_RECOVER}   错误详情: ${JSON.stringify(dbError)}`);
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 状态更新失败`, {
+        error: dbError.message,
+        details: JSON.stringify(dbError),
+      });
       // 继续执行，不因状态更新失败而中断恢复
     }
-    
-    console.log(`${LOG_RECOVER} Step 5: 发送恢复事件...`);
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 5: 发送恢复事件...`);
     // 3. 发送恢复事件
     emitPreparingProgress(evaluation.id, {
       stage: 'evaluation_start',
       message: `开始恢复评估，从节点 ${recoveryStatus.nextNodeToExecute + 1} 继续`,
     });
-    
-    console.log(`${LOG_RECOVER} Step 6: 获取模型配置...`);
+
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 6: 获取模型配置...`);
     // 4. 获取模型配置
     const modelConfig = await getModelConfigForRecovery(evaluation);
-    console.log(`${LOG_RECOVER}   modelConfig: ${modelConfig ? '找到' : '未找到'}`);
-    
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 模型配置查询结果`, {
+      found: !!modelConfig,
+    });
+
     if (!modelConfig) {
-      console.log(`${LOG_RECOVER} ❌ 失败: 无法获取模型配置`);
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 失败: 无法获取模型配置`);
       return { success: false, error: '无法获取模型配置' };
     }
-    
+
     // 5. 获取 MCP 配置
     const mcpServers = await loadMcpServersForProject(projectId, project.userId);
-    console.log(`${LOG_RECOVER}   mcpServers: ${mcpServers?.length || 0} 个`);
-    
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} MCP 配置`, {
+      count: mcpServers?.length || 0,
+    });
+
     // 🔑 优先使用 opencodeSessionId 恢复对话（如果有 running 状态节点且有 sessionId）
-    console.log(`${LOG_RECOVER} Step 7: 检查 running 节点...`);
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} Step 7: 检查 running 节点...`);
     const nodeExecutions = evaluation.NodeExecution || [];
-    console.log(`${LOG_RECOVER}   nodeExecutions 数量: ${nodeExecutions.length}`);
-    
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 节点执行数量`, {
+      count: nodeExecutions.length,
+    });
+
     const runningNode = nodeExecutions.find((n: any) => n.status === 'running');
-    console.log(`${LOG_RECOVER}   runningNode: ${runningNode ? '找到' : '未找到'}`);
-    
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} running 节点查询`, {
+      found: !!runningNode,
+    });
+
     if (runningNode) {
-      console.log(`${LOG_RECOVER}   runningNode.workflowNodeId: ${runningNode.workflowNodeId}`);
-      console.log(`${LOG_RECOVER}   runningNode.nodeLabel: ${runningNode.nodeLabel}`);
-      console.log(`${LOG_RECOVER}   runningNode.opencodeSessionId: ${runningNode.opencodeSessionId || '无'}`);
+      logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} running 节点详情`, {
+        workflowNodeId: runningNode.workflowNodeId,
+        nodeLabel: runningNode.nodeLabel,
+        opencodeSessionId: runningNode.opencodeSessionId || '无',
+      });
     }
-    
+
     if (runningNode && runningNode.opencodeSessionId) {
-      console.log(`${LOG_RECOVER} ✅ 发现 running 节点有 opencodeSessionId，优先恢复对话`);
-      console.log(`${LOG_RECOVER}   opencodeSessionId: ${runningNode.opencodeSessionId}`);
-      
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 发现 running 节点有 opencodeSessionId，优先恢复对话`, {
+        opencodeSessionId: runningNode.opencodeSessionId,
+      });
+
       // 尝试通过 opencodeSessionId 恢复对话
       const recoveryResult = await recoverNodeConversation(evaluation, runningNode, modelConfig, mcpServers);
-      
-      console.log(`${LOG_RECOVER}   recoveryResult.success: ${recoveryResult.success}`);
-      console.log(`${LOG_RECOVER}   recoveryResult.error: ${recoveryResult.error || '无'}`);
-      
-if (recoveryResult.success) {
-        console.log(`${LOG_RECOVER} ✅ opencodeSessionId 恢复对话成功`);
+
+      logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 恢复对话结果`, {
+        success: recoveryResult.success,
+        error: recoveryResult.error,
+      });
+
+      if (recoveryResult.success) {
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVER} opencodeSessionId 恢复对话成功`);
         return { success: true };
       } else {
-        console.log(`${LOG_RECOVER} ❌ opencodeSessionId 恢复对话失败: ${recoveryResult.error}`);
-        console.log(`${LOG_RECOVER} 从头启动评估`);
-        
+        logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} opencodeSessionId 恢复对话失败`, { error: recoveryResult.error });
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 从头启动评估`);
+
         // 解锁项目
         await unlockProject(projectId);
-        
+
         // 改状态为 queued
         await prisma.evaluationSession.update({
           where: { id: evaluation.id },
@@ -733,20 +747,22 @@ if (recoveryResult.success) {
             lastActivity: new Date(),
           },
         });
-        
+
         // 调用 startQueuedEvaluation 从头启动
         const { startQueuedEvaluation } = await import('@/services/start-evaluation');
         const startResult = await startQueuedEvaluation(evaluation.id);
-        
-        console.log(`${LOG_RECOVER} startQueuedEvaluation 结果: ${startResult.success}`);
-        
+
+        logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} startQueuedEvaluation 结果`, {
+          success: startResult.success,
+        });
+
         return { success: startResult.success, error: startResult.error };
       }
     } else {
-      console.log(`${LOG_RECOVER} ⚠️ 没有找到有 opencodeSessionId 的 running 节点`);
-      
+      logger.warn(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 没有找到有 opencodeSessionId 的 running 节点`);
+
       // 从头启动评估
-      console.log(`${LOG_RECOVER} 从头启动评估: 改状态为 queued，调用 startQueuedEvaluation`);
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVER} 从头启动评估: 改状态为 queued，调用 startQueuedEvaluation`);
       
       // 解锁项目（startQueuedEvaluation 会重新锁定）
       await unlockProject(projectId);
@@ -763,17 +779,17 @@ if (recoveryResult.success) {
       // 调用 startQueuedEvaluation 从头启动
       const { startQueuedEvaluation } = await import('@/services/start-evaluation');
       const startResult = await startQueuedEvaluation(evaluation.id);
-      
-      console.log(`${LOG_RECOVER} startQueuedEvaluation 结果: ${startResult.success}`);
-      
+
+      logger.debug(LOG_MODULES.EVALUATION, `${LOG_RECOVER} startQueuedEvaluation 结果`, {
+        success: startResult.success,
+      });
+
       return { success: startResult.success, error: startResult.error };
     }
-    
+
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : '';
-    console.log(`${LOG_RECOVER} ❌ recoverEvaluation 异常: ${errorMsg}`);
-    console.log(`${LOG_RECOVER} 异常堆栈: ${errorStack}`);
+    logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVER} recoverEvaluation 异常`, { error: errorMsg });
     return { success: false, error: errorMsg };
   }
 }
@@ -1039,9 +1055,7 @@ async function recoverFSMEvaluation(
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : '';
-    console.log(`[recoverFSMEvaluation] ❌ 异常: ${errorMsg}`);
-    console.log(`[recoverFSMEvaluation] 异常堆栈: ${errorStack}`);
+    logger.error(LOG_MODULES.EVALUATION, `[recoverFSMEvaluation] 异常`, { error: errorMsg });
     return { success: false, error: errorMsg };
   }
 }
@@ -1222,9 +1236,7 @@ async function recoverDAGEvaluation(
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : '';
-    console.log(`[recoverDAGEvaluation] ❌ 异常: ${errorMsg}`);
-    console.log(`[recoverDAGEvaluation] 异常堆栈: ${errorStack}`);
+    logger.error(LOG_MODULES.EVALUATION, `[recoverDAGEvaluation] 异常`, { error: errorMsg });
     return { success: false, error: errorMsg };
   }
 }

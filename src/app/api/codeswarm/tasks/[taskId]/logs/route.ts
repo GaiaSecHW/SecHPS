@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -40,7 +41,7 @@ export async function GET(
       total: logs.length,
     });
   } catch (error) {
-    console.error('[CodeSwarm] Get task logs error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Get task logs error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to fetch logs' }, { status: 500 });
   }
 }

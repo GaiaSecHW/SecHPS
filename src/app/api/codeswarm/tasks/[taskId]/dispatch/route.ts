@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
@@ -57,7 +58,7 @@ export async function POST(
       return NextResponse.json({ error: '无在线 Worker 或所有 Worker 满载' }, { status: 400 });
     }
     if (task.preferredWorkerNodeId && targetWorker.nodeId !== task.preferredWorkerNodeId) {
-      console.log(`[Dispatch] 指定的 Worker ${task.preferredWorkerNodeId} 不在线或满载，fallback 到 ${targetWorker.nodeId}`);
+      logger.info(LOG_MODULES.CODESWARM, `指定的 Worker ${task.preferredWorkerNodeId} 不在线或满载，fallback 到 ${targetWorker.nodeId}`);
     }
 
     const updated = await prisma.codeswarmTask.updateMany({
@@ -76,7 +77,7 @@ export async function POST(
 
     const addresses: string[] = targetWorker.address.split(',').map((a: string) => a.trim()).filter(Boolean);
     if (addresses.length === 0) {
-      console.error(`[Dispatch] Worker ${targetWorker.id} has no valid address`);
+      logger.error(LOG_MODULES.CODESWARM, `Worker ${targetWorker.id} has no valid address`);
       await rollbackDispatch(task.id);
       return NextResponse.json({ error: 'Worker 地址无效' }, { status: 500 });
     }
@@ -130,25 +131,25 @@ export async function POST(
         }
         if (resp.status === 400) {
           const respBody = await resp.text().catch(() => '');
-          console.error(`[Dispatch] Task ${task.taskId} payload validation failed (400): ${respBody.substring(0, 200)}`);
+          logger.error(LOG_MODULES.CODESWARM, `Task ${task.taskId} payload validation failed (400): ${respBody.substring(0, 200)}`);
           await prisma.codeswarmTask.update({
             where: { id: task.id },
             data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
-          }).catch(e => console.error('[Dispatch] 标记任务 failed 失败:', e));
+          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
           return NextResponse.json({ error: 'Payload validation failed' }, { status: 400 });
         }
 
         const respBody = await resp.text().catch(() => '');
         lastError = `Worker at ${addr} returned ${resp.status}: ${respBody.substring(0, 200)}`;
-        console.warn(`[Dispatch] Worker ${targetWorker.id} at ${addr} returned ${resp.status}, trying next address`);
+        logger.warn(LOG_MODULES.CODESWARM, `Worker ${targetWorker.id} at ${addr} returned ${resp.status}, trying next address`);
       } catch (err) {
         lastError = `Worker at ${addr} unreachable: ${err instanceof Error ? err.message : String(err)}`;
-        console.warn(`[Dispatch] Worker ${targetWorker.id} at ${addr} unreachable:`, err);
+        logger.warn(LOG_MODULES.CODESWARM, `Worker ${targetWorker.id} at ${addr} unreachable`, { details: { error: err instanceof Error ? err.message : String(err) } });
       }
     }
 
     if (!dispatchedAddr) {
-      console.error(`[Dispatch] All addresses failed for worker ${targetWorker.id}: [${sorted.join(', ')}]`);
+      logger.error(LOG_MODULES.CODESWARM, `All addresses failed for worker ${targetWorker.id}: [${sorted.join(', ')}]`);
       await rollbackDispatch(task.id);
       return NextResponse.json({ error: `Worker 不可达: ${lastError || 'all addresses failed'}` }, { status: 500 });
     }
@@ -165,7 +166,7 @@ export async function POST(
       await codeswarmDispatcher.registerTaskTimeout(task.id, task.timeoutSec);
     }
 
-    console.log(`[Dispatch] Task ${task.taskId} dispatched to ${targetWorker.id} via ${dispatchedAddr}`);
+    logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} dispatched to ${targetWorker.id} via ${dispatchedAddr}`);
 
     return NextResponse.json({
       success: true,
@@ -173,7 +174,7 @@ export async function POST(
       worker: { nodeId: targetWorker.nodeId, address: dispatchedAddr },
     });
   } catch (err) {
-    console.error('[Dispatch] Error:', err);
+    logger.error(LOG_MODULES.CODESWARM, 'Dispatch Error', { details: { error: err instanceof Error ? err.message : String(err) } });
     return NextResponse.json({ error: 'Dispatch failed' }, { status: 500 });
   }
 }
@@ -182,5 +183,5 @@ async function rollbackDispatch(taskId: string) {
   await prisma.codeswarmTask.updateMany({
     where: { id: taskId, state: 'dispatched' },
     data: { state: 'queued', workerId: null, updatedAt: new Date() },
-  }).catch(e => console.error('[Dispatch] 回滚任务状态失败:', e));
+  }).catch(e => logger.error(LOG_MODULES.CODESWARM, '回滚任务状态失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
 }

@@ -50,12 +50,10 @@ export async function getMaxConcurrent(): Promise<number> {
  * 改进：循环启动所有可启动的排队评估，直到名额用完
  */
 export async function processQueue(): Promise<void> {
-  console.log(`\n${LOG_PREFIX} ========== 开始处理队列 ==========`);
-  logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始处理队列...`);
-  
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始处理队列`, { maxConcurrent: await getMaxConcurrent() });
+
   try {
     const maxConcurrent = await getMaxConcurrent();
-    console.log(`${LOG_PREFIX} 最大并发限制: ${maxConcurrent}`);
     
     // 循环启动所有可启动的排队评估
     let startedCount = 0;
@@ -64,14 +62,14 @@ export async function processQueue(): Promise<void> {
       const activeCount = await getRunningCount();
       const queuedCount = await getQueuedCount();
       
-      console.log(`${LOG_PREFIX} 循环检查 #${startedCount + 1}: activeCount=${activeCount}, queuedCount=${queuedCount}, maxConcurrent=${maxConcurrent}`);
+      logger.info(LOG_MODULES.EVALUATION, `循环检查 #${startedCount + 1}: activeCount=${activeCount}, queuedCount=${queuedCount}, maxConcurrent=${maxConcurrent}`);
       logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 当前状态`, {
         activeCount,
         queuedCount,
         maxConcurrent,
         startedCount,
       });
-      
+
       // 发送队列处理事件
       emitQueueStatusChange({
         activeCount,
@@ -79,26 +77,26 @@ export async function processQueue(): Promise<void> {
         maxConcurrent,
         trigger: 'processing',
       });
-      
+
       // 如果没有空闲名额或没有排队评估，退出循环
       if (activeCount >= maxConcurrent || queuedCount === 0) {
-        console.log(`${LOG_PREFIX} 退出循环条件: activeCount(${activeCount}) >= maxConcurrent(${maxConcurrent}) ? ${activeCount >= maxConcurrent} : queuedCount(${queuedCount}) === 0 ? ${queuedCount === 0}`);
+        const exitCondition = activeCount >= maxConcurrent ? `activeCount(${activeCount}) >= maxConcurrent(${maxConcurrent})` : `queuedCount(${queuedCount}) === 0 ? ${queuedCount === 0}`;
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 退出循环条件`, { exitCondition });
+
         if (activeCount >= maxConcurrent) {
-          console.log(`${LOG_PREFIX} 无空闲名额，退出循环`);
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 无空闲名额`, {
             activeCount,
             maxConcurrent,
           });
         }
         if (queuedCount === 0) {
-          console.log(`${LOG_PREFIX} 没有排队评估，退出循环`);
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 没有排队评估`);
         }
         break;
       }
       
       // 获取最早的排队评估
-      console.log(`${LOG_PREFIX} 查询最早的排队评估...`);
+      logger.info(LOG_MODULES.EVALUATION, '查询最早的排队评估...');
       // 使用 select 而非 include 避免 Prisma findMany bug
       const queuedEvaluation = await prisma.evaluationSession.findFirst({
         where: { status: 'queued' },
@@ -112,7 +110,7 @@ export async function processQueue(): Promise<void> {
       });
       
       if (!queuedEvaluation) {
-        console.log(`${LOG_PREFIX} 查询返回空，退出循环`);
+        logger.info(LOG_MODULES.EVALUATION, '查询返回空，退出循环');
         logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 没有排队评估`);
         break;
       }
@@ -123,7 +121,7 @@ export async function processQueue(): Promise<void> {
         select: { id: true, name: true, projectPath: true },
       });
       const projectName = project?.name || '未知项目';
-      console.log(`${LOG_PREFIX} 发现排队评估: ID=${queuedEvaluation.id}, 项目=${projectName}, projectId=${queuedEvaluation.projectId}`);
+      logger.info(LOG_MODULES.EVALUATION, `发现排队评估: ID=${queuedEvaluation.id}, 项目=${projectName}, projectId=${queuedEvaluation.projectId}`);
       logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现排队评估`, {
         evaluationId: queuedEvaluation.id,
         projectName,
@@ -141,15 +139,15 @@ export async function processQueue(): Promise<void> {
       
       // 触发排队评估的启动 - 直接调用服务函数（不走 HTTP）
       try {
-        console.log(`${LOG_PREFIX} 直接调用 startQueuedEvaluation 服务函数...`);
+        logger.info(LOG_MODULES.EVALUATION, '直接调用 startQueuedEvaluation 服务函数...');
         
         const result = await startQueuedEvaluation(queuedEvaluation.id);
         
-        console.log(`${LOG_PREFIX} startQueuedEvaluation 结果: success=${result.success}, error=${result.error || '无'}`);
+        logger.info(LOG_MODULES.EVALUATION, `startQueuedEvaluation 结果: success=${result.success}, error=${result.error || '无'}`);
         
         if (result.success) {
           startedCount++;
-          console.log(`${LOG_PREFIX} ✓ 排队评估启动成功! startedCount=${startedCount}`);
+          logger.info(LOG_MODULES.EVALUATION, `✓ 排队评估启动成功! startedCount=${startedCount}`);
           
           // 计算等待时间
           const waitTime = Math.round((Date.now() - queuedEvaluation.startedAt.getTime()) / 1000);

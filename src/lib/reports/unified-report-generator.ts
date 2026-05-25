@@ -1,6 +1,6 @@
 /**
  * Unified Markdown Report Generator
- * 
+ *
  * Generates a unified Markdown report for both DAG and FSM workflows,
  * including vulnerability summary, execution process summary, loaded Skills,
  * Skill execution duration, and problem counts.
@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { prisma } from '@/lib/prisma';
 import { scanWorkspaceReports, WorkspaceVulnerability } from '@/lib/workspace/report-scanner';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============ Type Definitions ============
 
@@ -389,7 +390,7 @@ async function scanWorkspaceVulnerabilities(
         }
       }
     } catch (err) {
-      console.warn(`Failed to parse vulnerabilities.json: ${err}`);
+      logger.warn(LOG_MODULES.REPORT, `Failed to parse vulnerabilities.json: ${err}`);
     }
   }
   
@@ -507,7 +508,7 @@ async function readAgentZoneResultPaths(workspacePath: string): Promise<string[]
       }
     }
   } catch (err) {
-    console.warn(`Failed to read agent zone results: ${err}`);
+    logger.warn(LOG_MODULES.REPORT, `Failed to read agent zone results: ${err}`);
   }
   
   return results;

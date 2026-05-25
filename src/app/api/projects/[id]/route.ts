@@ -165,7 +165,7 @@ export async function PATCH(
 
     return NextResponse.json({ project });
   } catch (error) {
-    console.error('更新项目错误:', error);
+    logger.error(LOG_MODULES.PROJECT, '更新项目错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

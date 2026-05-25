@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export { Prisma };
 
@@ -26,7 +27,7 @@ export async function withRetry<T>(
       if (!TRANSIENT_ERROR_CODES.has(error.code) || attempt === maxRetries) {
         throw error;
       }
-      console.warn(`[Prisma] 瞬时错误 ${error.code}，正在重试 (${attempt + 1}/${maxRetries})...`);
+      logger.warn(LOG_MODULES.CONFIG, `瞬时错误 ${error.code}，正在重试 (${attempt + 1}/${maxRetries})`);
       await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
     }
   }
@@ -60,19 +61,19 @@ async function ensureMaxConnections() {
     const current = result[0]?.current_value ?? 0;
     const pendingRestart = result[0]?.pending_restart ?? false;
     if (current < requiredMax) {
-      console.warn(`[DB] max_connections=${current}, 需要调整到 ${requiredMax}`);
+      logger.warn(LOG_MODULES.CONFIG, `max_connections=${current}, 需要调整到 ${requiredMax}`);
       await prisma.$executeRawUnsafe(`ALTER SYSTEM SET max_connections = ${requiredMax}`);
       if (pendingRestart) {
-        console.warn(`[DB] max_connections 需要重启 PostgreSQL 才能生效（已设置 ALTER SYSTEM, 当前值仍为 ${current}）`);
+        logger.warn(LOG_MODULES.CONFIG, `max_connections 需要重启 PostgreSQL 才能生效（已设置 ALTER SYSTEM, 当前值仍为 ${current}）`);
       } else {
         await prisma.$executeRaw`SELECT pg_reload_conf()`;
-        console.log(`[DB] max_connections 已调整为 ${requiredMax}`);
+        logger.info(LOG_MODULES.CONFIG, `max_connections 已调整为 ${requiredMax}`);
       }
     } else {
-      console.log(`[DB] max_connections=${current}, 满足要求`);
+      logger.info(LOG_MODULES.CONFIG, `max_connections=${current}, 满足要求`);
     }
   } catch (e) {
-    console.warn('[DB] 检查/调整 max_connections 失败:', e);
+    logger.warn(LOG_MODULES.CONFIG, '检查/调整 max_connections 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
   }
 }
 

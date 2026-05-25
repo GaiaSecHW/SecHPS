@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -52,7 +53,7 @@ export async function GET(
       completedAt: task.completedAt,
     });
   } catch (error) {
-    console.error('获取任务结果失败:', error);
+    logger.error(LOG_MODULES.AGENT, '获取任务结果失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取任务结果失败' }, { status: 500 });
   }
 }

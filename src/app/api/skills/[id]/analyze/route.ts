@@ -10,6 +10,7 @@ import { getCompactCases } from '@/services/skill-evolution/case-extractor';
 import { calculateSkillMetrics } from '@/services/skill-evolution/metrics-calculator';
 import { prisma } from '@/lib/prisma';
 import { buildTenantFilter } from '@/lib/tenant-filter';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(
   request: Request,
@@ -119,7 +120,7 @@ export async function POST(
       analyzedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[API] 分析 Skill 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '分析 Skill 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '分析失败' },
       { status: 500 }

@@ -1,7 +1,7 @@
 // src/services/analysis-report.ts
 /**
  * 分析报告存储服务
- * 
+ *
  * 功能：
  * 1. 存储大模型分析的项目架构、入口点、认证鉴权等内容
  * 2. 存储到数据库 AnalysisReport 模型
@@ -9,6 +9,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 项目概况
@@ -135,8 +136,8 @@ export async function createEmptyAnalysisReport(params: {
       updatedAt: new Date(),
     },
   });
-  
-  console.log(`[AnalysisReport] 创建分析报告: ${id}`);
+
+  logger.info(LOG_MODULES.REPORT, '创建分析报告', { details: { id } });
   return id;
 }
 
@@ -187,11 +188,11 @@ export async function updateAnalysisReport(params: {
         analyzedAt: new Date(),
       },
     });
-    
-    console.log(`[AnalysisReport] 更新分析报告: evaluationId=${params.evaluationId}`);
+
+    logger.info(LOG_MODULES.REPORT, '更新分析报告', { details: { evaluationId: params.evaluationId } });
     return true;
   } catch (error) {
-    console.error('[AnalysisReport] 更新失败:', error);
+    logger.error(LOG_MODULES.REPORT, '更新失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -260,7 +261,7 @@ export async function getAnalysisReport(evaluationId: string): Promise<AnalysisR
       createdAt: report.createdAt,
     };
   } catch (error) {
-    console.error('[AnalysisReport] 获取失败:', error);
+    logger.error(LOG_MODULES.REPORT, '获取失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }
@@ -300,7 +301,7 @@ export function parseAnalysisFromOutput(output: string): Partial<AnalysisReportD
       const parsed = JSON.parse(jsonMatch[1]);
       
       if (parsed.projectOverview || parsed.architecture || parsed.entryPoints || parsed.authentication) {
-        console.log('[AnalysisReport] 从输出中解析到分析报告');
+        logger.info(LOG_MODULES.REPORT, '从输出中解析到分析报告');
         return parsed;
       }
     }
@@ -316,7 +317,7 @@ export function parseAnalysisFromOutput(output: string): Partial<AnalysisReportD
     
     return null;
   } catch (error) {
-    console.error('[AnalysisReport] 解析失败:', error);
+    logger.error(LOG_MODULES.REPORT, '解析失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }

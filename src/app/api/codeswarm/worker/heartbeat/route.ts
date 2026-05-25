@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, Prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import { generateWorkerToken, verifyWorkerToken, extractBearerToken } from '@/lib/codeswarm-worker-auth';
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
           for (const cw of conflictingWorkers) {
             codeswarmDispatcher.removeWorker(cw.nodeId);
             codeswarmDispatcher.rescheduleWorkerTasksById(cw.id).catch(e =>
-              console.error('[CodeSwarm] 同地址冲突 Worker 任务重调度失败:', e)
+              logger.error(LOG_MODULES.CODESWARM, '同地址冲突 Worker 任务重调度失败', { details: { error: e instanceof Error ? e.message : String(e) } })
             );
           }
         }
@@ -118,13 +119,13 @@ export async function POST(request: Request) {
     // DB 模式 fallback：Redis 不可用时仍用心跳触发分发
     if (!codeswarmDispatcher.isAvailable) {
       dispatchQueuedTasks().catch(err => {
-        console.error('[CodeSwarm] Background dispatch error:', err);
+        logger.error(LOG_MODULES.CODESWARM, 'Background dispatch error', { details: { error: err instanceof Error ? err.message : String(err) } });
       });
     }
 
     return NextResponse.json({ success: true, nodeId, token: workerToken });
   } catch (error) {
-    console.error('[CodeSwarm] Heartbeat error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Heartbeat error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: 'Failed to register heartbeat' },
       { status: 500 }
@@ -154,7 +155,7 @@ async function dispatchQueuedTasks(): Promise<void> {
       });
 
       for (const w of staleWorkers) {
-        console.warn(`[CodeSwarm] DB fallback: Worker ${w.nodeId} 心跳过期，标记为 offline`);
+        logger.warn(LOG_MODULES.CODESWARM, `DB fallback: Worker ${w.nodeId} 心跳过期，标记为 offline`);
       }
 
       // 批量重调度 stuck 任务
@@ -218,10 +219,10 @@ async function dispatchQueuedTasks(): Promise<void> {
         worker.currentTasks++;
         // 同步 dispatcher 内存负载，避免后续分发超出容量
         codeswarmDispatcher.syncWorkerLoad(worker.nodeId, worker.currentTasks);
-        console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
+        logger.info(LOG_MODULES.CODESWARM, `DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       }
     }
   } catch (error) {
-    console.error('[CodeSwarm] DB fallback 分发错误:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'DB fallback 分发错误', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }

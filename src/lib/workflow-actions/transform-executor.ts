@@ -2,6 +2,7 @@
 
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, TransformConfig, getNestedValue } from './index';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 执行数据转换
@@ -56,7 +57,7 @@ export async function executeTransform(
     };
   } catch (error) {
     logs.push(`[Transform] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error('[workflow-actions/transform-executor] 数据转换失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, '数据转换失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       output: null,

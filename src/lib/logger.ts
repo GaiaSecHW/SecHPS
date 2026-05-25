@@ -1,9 +1,39 @@
 /**
  * 统一的日志工具
  * 确保所有日志都包含操作人信息
+ * 按天输出到日志文件 + 控制台
  */
 
 import { JWTPayload } from '@/lib/auth';
+
+const isServer = typeof window === 'undefined';
+
+let logDirReady = false;
+let LOG_DIR = '';
+
+function dateStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+}
+
+async function writeToFile(level: string, message: string) {
+  if (!isServer) return;
+  try {
+    // webpackIgnore: prevent webpack from bundling Node.js built-ins
+    const { appendFile } = await import(/* webpackIgnore: true */ 'fs/promises');
+    const { existsSync } = await import(/* webpackIgnore: true */ 'fs');
+    const { join } = await import(/* webpackIgnore: true */ 'path');
+    if (!LOG_DIR) LOG_DIR = process.env.LOG_DIR || join(process.cwd(), 'logs');
+    if (!logDirReady) {
+      if (!existsSync(LOG_DIR)) {
+        const { mkdir } = await import(/* webpackIgnore: true */ 'fs/promises');
+        await mkdir(LOG_DIR, { recursive: true });
+      }
+      logDirReady = true;
+    }
+    await appendFile(join(LOG_DIR, `log-${dateStr()}.log`), `${message}\n`);
+  } catch {}
+}
 
 // 日志级别
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
@@ -49,6 +79,14 @@ export const LOG_MODULES = {
   CODE: 'CODE',
   FSM: 'FSM',
   REPORT: 'REPORT',
+  CODESWARM: 'CODESWARM',
+  GITEA: 'GITEA',
+  STREAM: 'STREAM',
+  MINIO: 'MINIO',
+  PROVIDER: 'PROVIDER',
+  TOOL: 'TOOL',
+  MONITOR: 'MONITOR',
+  WEBSOCKET: 'WEBSOCKET',
 };
 
 // 格式化用户信息
@@ -61,7 +99,7 @@ function formatUserInfo(payload?: JWTPayload): string {
 
 // 格式化时间戳
 function formatTimestamp(): string {
-  return new Date().toISOString().replace('T', ' ').substring(0, 19);
+  return new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }).replace(/\//g, '-');
 }
 
 // 核心日志函数
@@ -76,8 +114,9 @@ function log(level: LogLevel, module: string, message: string, context?: LogCont
   const resource = context?.resource ? `[资源:${context.resource}]` : '';
   const details = context?.details ? JSON.stringify(context.details) : '';
   
-  const logMessage = `[${timestamp}] [${module}] ${userInfo} ${targetUser} ${resource} ${message} ${details}`;
-  
+  const logMessage = `[${timestamp}] [${level.toUpperCase()}] [${module}] ${userInfo} ${targetUser} ${resource} ${message} ${details}`;
+
+  // 输出到控制台
   switch (level) {
     case 'info':
       console.log(logMessage);
@@ -93,6 +132,11 @@ function log(level: LogLevel, module: string, message: string, context?: LogCont
         console.log(logMessage);
       }
       break;
+  }
+
+  // 写入日志文件（非 debug，或开发环境下 debug 也写）
+  if (level !== 'debug' || process.env.NODE_ENV === 'development') {
+    writeToFile(level, logMessage);
   }
 }
 

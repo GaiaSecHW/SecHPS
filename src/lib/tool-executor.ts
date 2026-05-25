@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const execAsync = promisify(exec);
 
@@ -40,7 +41,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.TOOL, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         success: false,
         output: null,
@@ -79,7 +80,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.TOOL, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         success: true,
         output: { matches: [], count: 0, message: '未找到匹配项' },
@@ -106,7 +107,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.TOOL, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         success: false,
         output: null,
@@ -143,7 +144,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.TOOL, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         success: false,
         output: { stdout: '', stderr: error instanceof Error ? error.message : '执行失败' },
@@ -247,7 +248,7 @@ export class ToolExecutor {
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.TOOL, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         success: false,
         output: null,
@@ -284,7 +285,7 @@ export class ToolExecutor {
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.TOOL, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         success: false,
         output: null,

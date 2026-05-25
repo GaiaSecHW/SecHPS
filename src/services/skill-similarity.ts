@@ -3,11 +3,12 @@
  * 三层相似度检测服务：关键词匹配、类别+CWE匹配、内容深度分析（可选LLM）
  */
 
-import { 
-  analyzeSkillDuplication, 
-  type SkillForLLMAnalysis, 
-  type LLMAnalysisResult 
+import {
+  analyzeSkillDuplication,
+  type SkillForLLMAnalysis,
+  type LLMAnalysisResult
 } from './skill-llm-analysis';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================================================
 // Types
@@ -340,7 +341,7 @@ export async function computeContentSimilarity(
   try {
     return await computeLLMContentSimilarity(skillA, skillB);
   } catch (error) {
-    console.warn('[SkillSimilarity] LLM分析失败，降级到文本相似度:', error);
+    logger.warn(LOG_MODULES.SKILL, 'LLM分析失败，降级到文本相似度', { details: { error: error instanceof Error ? error.message : String(error) } });
     // 降级方案：使用文本相似度
     return computeTextSimilarity(skillA.content, skillB.content);
   }

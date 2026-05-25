@@ -1,12 +1,13 @@
 /**
  * system-token-tracker.ts
  * 系统级 Token 使用统计服务
- * 
+ *
  * 用于统计系统自身消耗的 Token（如 skill 创建、优化、自动进化等）
  * 使用虚拟的"系统项目"来记录这些消耗
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 系统项目的固定 ID
 export const SYSTEM_PROJECT_ID = 'system-00000000-0000-0000-0000-000000000001';
@@ -45,14 +46,14 @@ export async function ensureSystemProject(): Promise<void> {
           updatedAt: new Date(),
         },
       });
-      console.log('[SystemTokenTracker] 创建系统用户');
+      logger.info(LOG_MODULES.TOKEN, '创建系统用户');
     }
-    
+
     // 检查系统项目是否存在
     const systemProject = await prisma.project.findUnique({
       where: { id: SYSTEM_PROJECT_ID },
     });
-    
+
     if (!systemProject) {
       // 创建系统项目
       await prisma.project.create({
@@ -66,10 +67,10 @@ export async function ensureSystemProject(): Promise<void> {
           updatedAt: new Date(),
         },
       });
-      console.log('[SystemTokenTracker] 创建系统项目');
+      logger.info(LOG_MODULES.TOKEN, '创建系统项目');
     }
   } catch (error) {
-    console.error('[SystemTokenTracker] 初始化系统项目失败:', error);
+    logger.error(LOG_MODULES.TOKEN, '初始化系统项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }
 
@@ -121,16 +122,16 @@ export async function trackSystemTokenUsage(
         errorMessage: null,
       },
     });
-    
-    console.log('[SystemTokenTracker] 记录系统 Token:', {
+
+    logger.info(LOG_MODULES.TOKEN, '记录系统 Token', { details: {
       callType,
       modelName,
       inputTokens,
       outputTokens,
       estimatedCost,
-    });
+    } });
   } catch (error) {
-    console.error('[SystemTokenTracker] 记录 Token 使用失败:', error);
+    logger.error(LOG_MODULES.TOKEN, '记录 Token 使用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }
 
@@ -178,10 +179,10 @@ export function extractTokenUsageFromResponse(response: any): {
       }
     }
     
-    console.warn('[SystemTokenTracker] 未知的 usage 格式:', usage);
+    logger.warn(LOG_MODULES.TOKEN, '未知的 usage 格式', { details: { usage } });
     return null;
   } catch (error) {
-    console.error('[SystemTokenTracker] 提取 Token 使用量失败:', error);
+    logger.error(LOG_MODULES.TOKEN, '提取 Token 使用量失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }

@@ -6,6 +6,8 @@
  * 注意：exportAsSkillFile 和 copySkillMdToClipboard 仅在浏览器环境中可用
  */
 
+import { logger, LOG_MODULES } from '@/lib/logger';
+
 export interface SkillExportData {
   name: string;
   displayName: string;
@@ -31,7 +33,7 @@ export function generateSkillMd(skill: SkillExportData): string {
 export async function exportAsSkillFile(skill: SkillExportData): Promise<void> {
   // 检查是否在浏览器环境中
   if (typeof window === 'undefined' || typeof document === 'undefined') {
-    console.warn('[SkillExport] exportAsSkillFile 仅在浏览器环境中可用');
+    logger.warn(LOG_MODULES.SKILL, 'exportAsSkillFile 仅在浏览器环境中可用');
     return;
   }
 
@@ -56,7 +58,7 @@ export async function exportAsSkillFile(skill: SkillExportData): Promise<void> {
 export async function copySkillMdToClipboard(skill: SkillExportData): Promise<void> {
   // 检查是否在浏览器环境中
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    console.warn('[SkillExport] copySkillMdToClipboard 仅在浏览器环境中可用');
+    logger.warn(LOG_MODULES.SKILL, 'copySkillMdToClipboard 仅在浏览器环境中可用');
     return;
   }
 

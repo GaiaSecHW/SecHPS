@@ -1,6 +1,7 @@
 // src/services/ai/claude.ts
 
 import { AIProvider, AIMessage, AIStreamCallbacks, AIProviderConfig } from './base';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export class ClaudeProvider extends AIProvider {
   constructor(config: AIProviderConfig) {
@@ -28,10 +29,12 @@ export class ClaudeProvider extends AIProvider {
       baseUrl = baseUrl.replace(/\/+$/, '') + '/v1/messages';
     }
 
-    console.log('[ClaudeProvider] 调用 Claude API:', {
-      url: baseUrl,
-      model: this.config.model,
-      hasApiKey: !!this.config.apiKey,
+    logger.info(LOG_MODULES.AGENT, '调用 Claude API', {
+      details: {
+        url: baseUrl,
+        model: this.config.model,
+        hasApiKey: !!this.config.apiKey,
+      }
     });
 
     await this.withRetry(async () => {

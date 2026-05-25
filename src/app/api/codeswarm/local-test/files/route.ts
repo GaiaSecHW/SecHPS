@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { listTaskFiles, TaskFileInfo } from '@/lib/minio-vulnerability';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
 
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
       totalFiles: files.length,
     });
   } catch (error) {
-    console.error('[LocalTestFiles] Error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'LocalTestFiles Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

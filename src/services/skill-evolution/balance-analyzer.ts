@@ -4,6 +4,7 @@
  */
 
 import { routeRequestWithDefaultModel } from '@/lib/model-client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { TokenUsageContext } from '@/types/call-scene';
 import type { CompactCase } from './case-extractor';
 import { DEFAULT_EVOLUTION_CONFIG } from './evolution-scheduler';
@@ -432,7 +433,7 @@ export async function analyzeBalance(
       options
     );
     
-    console.log(`[BalanceAnalyzer] 开始分析: ${falsePositives.length} 误报案例`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `开始分析: ${falsePositives.length} 误报案例`);
     
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
@@ -451,14 +452,14 @@ export async function analyzeBalance(
     // 提取内容
     const content = extractContent(response);
     
-    console.log(`[BalanceAnalyzer] LLM 原始响应 (前${DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH}字符): ${content.substring(0, DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH)}`);
+    logger.debug(LOG_MODULES.SKILL_EVOLUTION, `LLM 原始响应 (前${DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH}字符): ${content.substring(0, DEFAULT_EVOLUTION_CONFIG.LOG_PREVIEW_LENGTH)}`);
     
     // 解析 JSON
     const parsed = parseJsonFromContent(content);
     
     if (!parsed) {
-      console.warn('[BalanceAnalyzer] 无法从 LLM 响应解析 JSON，使用默认值');
-      console.warn('[BalanceAnalyzer] 完整响应内容:', content);
+      logger.warn(LOG_MODULES.SKILL_EVOLUTION, '无法从 LLM 响应解析 JSON，使用默认值');
+      logger.warn(LOG_MODULES.SKILL_EVOLUTION, `完整响应内容: ${content}`);
       return createDefaultResult();
     }
     
@@ -476,12 +477,12 @@ export async function analyzeBalance(
       warnings: parsed.warnings ?? [],
     };
     
-    console.log(`[BalanceAnalyzer] 分析完成: ${result.recommendations.length} 条排除规则建议`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `分析完成: ${result.recommendations.length} 条排除规则建议`);
     
     return result;
     
   } catch (error) {
-    console.error('[BalanceAnalyzer] LLM 分析失败:', error);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, 'LLM 分析失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return createDefaultResult();
   }
 }
@@ -518,15 +519,15 @@ export async function analyzeInBatches(
 
   const totalBatches = fpBatches.length;
 
-  console.log(`[BalanceAnalyzer] 分批分析: ${falsePositives.length}个误报案例, 共${totalBatches}批次`);
-  console.log(`[BalanceAnalyzer] 正确发现案例: ${confirmedCases.length}个（用于回测验证，不参与分析）`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `分批分析: ${falsePositives.length}个误报案例, 共${totalBatches}批次`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `正确发现案例: ${confirmedCases.length}个（用于回测验证，不参与分析）`);
 
   for (let i = 0; i < totalBatches; i++) {
     const fpBatch = fpBatches[i];
 
     if (fpBatch.length === 0) continue;
 
-    console.log(`[BalanceAnalyzer] 分析批次 ${i + 1}/${totalBatches}: ${fpBatch.length}个误报案例`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `分析批次 ${i + 1}/${totalBatches}: ${fpBatch.length}个误报案例`);
 
     // 只传递误报案例进行分析（方案A）
     const batchResult = await analyzeBalance(skillContent, fpBatch, {
@@ -542,7 +543,7 @@ export async function analyzeInBatches(
   const mergedResult = mergeBatchResults(batchResults);
 
   if (batchResults.length > 1) {
-    console.log(`[BalanceAnalyzer] 综合 ${batchResults.length} 批次结果，生成最终建议`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `综合 ${batchResults.length} 批次结果，生成最终建议`);
     const synthesisResult = await synthesizeResults(skillContent, mergedResult);
     return synthesisResult;
   }
@@ -651,7 +652,7 @@ ${mergedResult.recommendations.map((r, i) => `${i + 1}. ${r.description}`).join(
       };
     }
   } catch (error) {
-    console.warn('[BalanceAnalyzer] 综合分析失败，使用合并结果:', error);
+    logger.warn(LOG_MODULES.SKILL_EVOLUTION, '综合分析失败，使用合并结果', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 
   return mergedResult;

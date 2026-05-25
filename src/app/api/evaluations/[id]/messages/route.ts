@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { createNodeStreamStore } from '@/services/node-stream-store';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/messages - 获取评估会话的消息列表
 // 从 stream.jsonl 读取（新架构：一个 SSE 流对应一个文件）
@@ -87,11 +88,11 @@ export async function GET(
         nodeId,
       });
     } catch (error) {
-      console.error('[messages] 从 stream.jsonl 读取错误:', error);
+      logger.error(LOG_MODULES.EVALUATION, '从 stream.jsonl 读取错误', { details: { error: error instanceof Error ? error.message : String(error) } });
       return NextResponse.json({ messages: [], source: 'stream' });
     }
   } catch (error) {
-    console.error('[messages] 获取错误:', error);
+    logger.error(LOG_MODULES.EVALUATION, '获取错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 import Redis, { Command } from 'ioredis';
 import { prisma } from '@/lib/prisma';
-import { serverLog } from '@/lib/server-log';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const STREAM_KEY = 'codeswarm:task:queue';
 const CONSUMER_GROUP = 'dispatcher';
@@ -35,7 +35,7 @@ class CodeswarmDispatcher {
 
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      serverLog.warn('[CodeSwarm] REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
+      logger.warn(LOG_MODULES.CODESWARM, 'REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
       return;
     }
 
@@ -44,7 +44,7 @@ class CodeswarmDispatcher {
         maxRetriesPerRequest: null,
         retryStrategy: (times) => {
           if (times > 3) {
-            serverLog.warn('[CodeSwarm] Redis 重连超过 3 次，停止重试');
+            logger.warn(LOG_MODULES.CODESWARM, 'Redis 重连超过 3 次，停止重试');
             return null;
           }
           return Math.min(times * 1000, 5000);
@@ -72,12 +72,12 @@ class CodeswarmDispatcher {
         const expectedDb = this.parseDbFromUrl(redisUrl);
         const actualDb = dbMatch ? parseInt(dbMatch[1]) : 0;
         if (expectedDb !== null && actualDb !== expectedDb) {
-          serverLog.warn(`[CodeSwarm] Redis 数据库不匹配: URL 指定 db=${expectedDb}, 实际连接 db=${actualDb}, 执行 SELECT ${expectedDb}`);
+          logger.warn(LOG_MODULES.CODESWARM, `Redis 数据库不匹配: URL 指定 db=${expectedDb}, 实际连接 db=${actualDb}, 执行 SELECT ${expectedDb}`);
           await this.redis.select(expectedDb);
         }
-        serverLog.info(`[CodeSwarm] Redis 已连接 db=${actualDb}`);
+        logger.info(LOG_MODULES.CODESWARM, `Redis 已连接 db=${actualDb}`);
       } catch (e) {
-        serverLog.warn('[CodeSwarm] Redis 数据库验证失败（非致命）:', e);
+        logger.warn(LOG_MODULES.CODESWARM, 'Redis 数据库验证失败（非致命）', { details: { error: e instanceof Error ? e.message : String(e) } });
       }
 
       // 创建消费者组（如果不存在）
@@ -92,7 +92,7 @@ class CodeswarmDispatcher {
 
       this.running = true;
       this.initialized = true;
-      serverLog.info('[CodeSwarm] 调度器已启动，等待任务...');
+      logger.info(LOG_MODULES.CODESWARM, '调度器已启动，等待任务...');
 
       // 启动消费循环
       this.dispatchLoop();
@@ -101,9 +101,9 @@ class CodeswarmDispatcher {
       // 启动掉线检测 + 超时扫描
       this.startHealthChecks();
     } catch (e) {
-      serverLog.warn('[CodeSwarm] Redis 不可用，降级为 DB 轮询模式');
-      serverLog.warn('[CodeSwarm] 错误详情:', e);
-      serverLog.warn('[CodeSwarm] REDIS_URL:', redisUrl);
+      logger.warn(LOG_MODULES.CODESWARM, 'Redis 不可用，降级为 DB 轮询模式');
+      logger.warn(LOG_MODULES.CODESWARM, '错误详情', { details: { error: e instanceof Error ? e.message : String(e) } });
+      logger.warn(LOG_MODULES.CODESWARM, 'REDIS_URL', { details: { redisUrl } });
       this.teardownRedis();
     }
   }
@@ -120,7 +120,7 @@ class CodeswarmDispatcher {
       await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
       return true;
     } catch (e) {
-      serverLog.error('[CodeSwarm] XADD 失败:', e);
+      logger.error(LOG_MODULES.CODESWARM, 'XADD 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
       return false;
     }
   }
@@ -139,7 +139,7 @@ class CodeswarmDispatcher {
     const isLocalWorker = primaryAddr.startsWith('localhost') || primaryAddr.startsWith('127.');
     const callbackUrl = isLocalWorker ? 'http://localhost:3000' : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
     if (addresses.length === 0) {
-      serverLog.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
+      logger.error(LOG_MODULES.CODESWARM, 'Worker has no valid address', { details: { id: worker.id } });
       return false;
     }
     // Sort addresses: externally-configured addresses (from WORKER_ADDRESS) first,
@@ -166,7 +166,7 @@ class CodeswarmDispatcher {
       data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
     });
     if (updateResult.count === 0) {
-      serverLog.info(`[CodeSwarm] Task ${task.taskId} is no longer queued, skipping`);
+      logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} is no longer queued, skipping`);
       return true;
     }
 
@@ -204,39 +204,39 @@ const taskPayload = JSON.stringify({
             where: { id: worker.id },
             data: { currentTasks: { increment: 1 } },
           });
-          serverLog.info(`[CodeSwarm] Task ${task.taskId} dispatched to ${worker.id} via ${addr}`);
+          logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} dispatched to ${worker.id} via ${addr}`);
           return true;
         }
 
         const respBody = await resp.text().catch(() => '');
         // Worker reports task is already being executed (dedup)
         if (resp.status === 409) {
-          serverLog.info(`[CodeSwarm] Task ${task.taskId} already executing on worker, skipping duplicate`);
+          logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} already executing on worker, skipping duplicate`);
           return true;
         }
         if (resp.status === 400) {
-          serverLog.error(`[CodeSwarm] Task ${task.taskId} payload validation failed (400), marking as failed: ${respBody.substring(0, 200)}`);
+          logger.error(LOG_MODULES.CODESWARM, `Task ${task.taskId} payload validation failed (400), marking as failed`, { details: { body: respBody.substring(0, 200) } });
           await prisma.codeswarmTask.update({
             where: { id: task.id },
             data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
-          }).catch(e => serverLog.error('[CodeSwarm] 标记任务 failed 失败:', e));
+          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
           return true;
         }
 
-        serverLog.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} returned ${resp.status}, trying next address`);
+        logger.warn(LOG_MODULES.CODESWARM, `Worker ${worker.id} at ${addr} returned ${resp.status}, trying next address`);
       } catch (err) {
-        serverLog.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} unreachable: ${err}`);
+        logger.warn(LOG_MODULES.CODESWARM, `Worker ${worker.id} at ${addr} unreachable`, { details: { error: err instanceof Error ? err.message : String(err) } });
       }
     }
 
-    // 所有地址都失败，回滚 DB 状态（仅当任务仍为 dispatched 时回滚，避免覆盖 running/completed）
-    serverLog.error(`[CodeSwarm] All addresses failed for worker ${worker.id}: [${sorted.join(', ')}]`);
+// 所有地址都失败，回滚 DB 状态（仅当任务仍为 dispatched 时回滚，避免覆盖 running/completed）
+    logger.error(LOG_MODULES.CODESWARM, 'All addresses failed for worker', { details: { id: worker.id, addresses: sorted.join(', ') } });
     const rollbackResult = await prisma.codeswarmTask.updateMany({
       where: { id: task.id, state: 'dispatched' },
       data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
-    }).catch(e => { serverLog.error('[CodeSwarm] 回滚任务状态失败:', e); return { count: 0 }; });
+    }).catch(e => { logger.error(LOG_MODULES.CODESWARM, '回滚任务状态失败', { details: { error: e instanceof Error ? e.message : String(e) } }); return { count: 0 }; });
     if (rollbackResult.count === 0) {
-      serverLog.info(`[CodeSwarm] Task ${task.taskId} rollback skipped — task no longer in dispatched state`);
+      logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} rollback skipped — task no longer in dispatched state`);
     }
     return false;
   }
@@ -292,7 +292,7 @@ const taskPayload = JSON.stringify({
   removeWorker(nodeId: string) {
     const worker = this.workers.get(nodeId);
     if (worker && worker.currentTasks > 0) {
-      serverLog.warn(`[CodeSwarm] 移除 Worker ${nodeId}，其 ${worker.currentTasks} 个任务将由 checkOfflineWorkers 重调度`);
+      logger.warn(LOG_MODULES.CODESWARM, `移除 Worker ${nodeId}，其 ${worker.currentTasks} 个任务将由 checkOfflineWorkers 重调度`);
     }
     this.workers.delete(nodeId);
   }
@@ -336,10 +336,10 @@ const taskPayload = JSON.stringify({
       }
 
       if (recovered > 0) {
-        serverLog.info(`[CodeSwarm] 恢复了 ${recovered} 条 pending 消息`);
+        logger.info(LOG_MODULES.CODESWARM, `恢复了 ${recovered} 条 pending 消息`);
       }
     } catch (e) {
-      serverLog.error('[CodeSwarm] 恢复 pending 消息失败:', e);
+      logger.error(LOG_MODULES.CODESWARM, '恢复 pending 消息失败', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -369,22 +369,24 @@ const taskPayload = JSON.stringify({
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
+                // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
+                const isDbConnError = this.isDbConnectionError(dbTaskId);
+                if (isDbConnError) {
+                  logger.warn(LOG_MODULES.CODESWARM, 'DB 连接不足，延迟 10 秒后重入队');
+                  await this.sleep(10000);
+                }
+
                 const retries = (this.retryCounts.get(dbTaskId) || 0) + 1;
                 this.retryCounts.set(dbTaskId, retries);
 
                 if (retries >= CodeswarmDispatcher.MAX_REQUEUE_ATTEMPTS) {
-                  serverLog.error(`[CodeSwarm] Task ${dbTaskId} failed after ${retries} dispatch attempts, marking as failed`);
+                  logger.error(LOG_MODULES.CODESWARM, `Task ${dbTaskId} failed after ${retries} dispatch attempts, marking as failed`);
                   await prisma.codeswarmTask.updateMany({
                     where: { id: dbTaskId, state: 'queued' },
                     data: { state: 'failed', error: `No available worker after ${retries} attempts`, completedAt: new Date(), updatedAt: new Date() },
-                  }).catch(e => serverLog.error('[CodeSwarm] 标记任务 failed 失败:', e));
+                  }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
                   this.retryCounts.delete(dbTaskId);
                 } else {
-                  const isDbConnError = this.isDbConnectionError(dbTaskId);
-                  if (isDbConnError) {
-                    serverLog.warn('[CodeSwarm] DB 连接不足，延迟 10 秒后重入队');
-                    await this.sleep(10000);
-                  }
                   await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
                 }
               } else {
@@ -396,17 +398,17 @@ const taskPayload = JSON.stringify({
       } catch (e: any) {
         const errMsg = e?.message || String(e);
         if (errMsg.includes('NOGROUP')) {
-          serverLog.warn('[CodeSwarm] NOGROUP 错误，尝试重建 Consumer Group...');
+          logger.warn(LOG_MODULES.CODESWARM, 'NOGROUP 错误，尝试重建 Consumer Group...');
           const rebuilt = await this.ensureConsumerGroup();
           if (rebuilt) {
-            serverLog.info('[CodeSwarm] Consumer Group 重建成功，继续消费');
+            logger.info(LOG_MODULES.CODESWARM, 'Consumer Group 重建成功，继续消费');
           }
           await this.sleep(2000);
         } else if (errMsg.includes('too many clients') || errMsg.includes('Too many database connections')) {
-          serverLog.warn('[CodeSwarm] DB 连接耗尽，等待 15 秒后重试...');
+          logger.warn(LOG_MODULES.CODESWARM, 'DB 连接耗尽，等待 15 秒后重试...');
           await this.sleep(15000);
         } else {
-          serverLog.error('[CodeSwarm] 消费循环错误:', e);
+          logger.error(LOG_MODULES.CODESWARM, '消费循环错误', { details: { error: errMsg } });
           await this.sleep(2000);
         }
       }
@@ -422,11 +424,11 @@ const taskPayload = JSON.stringify({
       // 优先使用指定的 Worker，否则自动分配
       let worker = this.selectWorker(task.preferredWorkerNodeId ?? undefined);
       if (!worker) {
-        serverLog.info('[CodeSwarm] 指定 Worker 不可用，尝试自动分配...');
+        logger.info(LOG_MODULES.CODESWARM, '指定 Worker 不可用，尝试自动分配...');
         worker = this.selectWorker();
       }
       if (!worker) {
-        serverLog.info('[CodeSwarm] 无可用 Worker，任务保持排队:', task.taskId);
+        logger.info(LOG_MODULES.CODESWARM, '无可用 Worker，任务保持排队', { details: { taskId: task.taskId } });
         return false;
       }
 
@@ -449,15 +451,15 @@ const taskPayload = JSON.stringify({
         await this.registerTaskTimeout(dbTaskId, task.timeoutSec);
       }
 
-      serverLog.info(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
+      logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       return true;
     } catch (e: any) {
       const errMsg = e?.message || String(e);
       if (errMsg.includes('too many clients') || errMsg.includes('Too many database connections')) {
-        serverLog.warn('[CodeSwarm] DB 连接耗尽，任务暂时跳过:', dbTaskId);
+        logger.warn(LOG_MODULES.CODESWARM, 'DB 连接耗尽，任务暂时跳过', { details: { dbTaskId } });
         this.lastDbErrorTaskId = dbTaskId;
       } else {
-        serverLog.error('[CodeSwarm] 分发失败:', dbTaskId, e);
+        logger.error(LOG_MODULES.CODESWARM, '分发失败', { details: { dbTaskId, error: e instanceof Error ? e.message : String(e) } });
       }
       return false;
     }
@@ -472,12 +474,12 @@ const taskPayload = JSON.stringify({
         const isHealthy = Date.now() - preferred.lastHeartbeat <= 90000;
         const hasCapacity = preferred.currentTasks < preferred.maxConcurrent;
         if (isHealthy && hasCapacity) {
-          serverLog.info(`[CodeSwarm] 使用手动选择的 Worker: ${preferredNodeId}`);
+          logger.info(LOG_MODULES.CODESWARM, `使用手动选择的 Worker: ${preferredNodeId}`);
           return preferred;
         }
-        serverLog.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 不可用 (健康=${isHealthy}, 容量=${hasCapacity})`);
+        logger.warn(LOG_MODULES.CODESWARM, `指定的 Worker ${preferredNodeId} 不可用`, { details: { healthy: isHealthy, capacity: hasCapacity } });
       } else {
-        serverLog.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 未注册`);
+        logger.warn(LOG_MODULES.CODESWARM, `指定的 Worker ${preferredNodeId} 未注册`);
       }
     }
 
@@ -516,9 +518,9 @@ const taskPayload = JSON.stringify({
           lastHeartbeat: w.lastHeartbeat.getTime(),
         });
       }
-      serverLog.info(`[CodeSwarm] 从 DB 恢复 ${workers.length} 个 Worker`);
+      logger.info(LOG_MODULES.CODESWARM, `从 DB 恢复 ${workers.length} 个 Worker`);
     } catch (e) {
-      serverLog.error('[CodeSwarm] 恢复 Worker 失败:', e);
+      logger.error(LOG_MODULES.CODESWARM, '恢复 Worker 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -539,11 +541,11 @@ const taskPayload = JSON.stringify({
     if (!this.redis) return false;
     try {
       await this.redis.xgroup('CREATE', STREAM_KEY, CONSUMER_GROUP, '0', 'MKSTREAM');
-      serverLog.info('[CodeSwarm] Consumer Group 已重建');
+      logger.info(LOG_MODULES.CODESWARM, 'Consumer Group 已重建');
       return true;
     } catch (e: any) {
       if (e.message.includes('BUSYGROUP')) return true;
-      serverLog.error('[CodeSwarm] 重建 Consumer Group 失败:', e);
+      logger.error(LOG_MODULES.CODESWARM, '重建 Consumer Group 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
       return false;
     }
   }
@@ -599,7 +601,7 @@ const taskPayload = JSON.stringify({
                 claimedCount++;
               }
             } catch (claimErr) {
-              serverLog.warn('[CodeSwarm] claim pending 消息失败:', claimErr);
+              logger.warn(LOG_MODULES.CODESWARM, 'claim pending 消息失败', { details: { error: claimErr instanceof Error ? claimErr.message : String(claimErr) } });
             }
           }
 
@@ -607,7 +609,7 @@ const taskPayload = JSON.stringify({
             await this.redisExec('XGROUP', 'DELCONSUMER', STREAM_KEY, CONSUMER_GROUP, nameStr);
             deletedCount++;
           } catch (delErr) {
-            serverLog.warn('[CodeSwarm] 删除死消费者失败:', delErr);
+            logger.warn(LOG_MODULES.CODESWARM, '删除死消费者失败', { details: { error: delErr instanceof Error ? delErr.message : String(delErr) } });
           }
         }
       }
@@ -617,10 +619,10 @@ const taskPayload = JSON.stringify({
       } catch { /* non-critical */ }
 
       if (deletedCount > 0 || claimedCount > 0) {
-        serverLog.info(`[CodeSwarm] Stream 清理完成: 删除 ${deletedCount} 个死消费者, 清理 ${claimedCount} 条 pending 消息`);
+        logger.info(LOG_MODULES.CODESWARM, 'Stream 清理完成', { details: { deletedCount, claimedCount } });
       }
     } catch (e) {
-      serverLog.error('[CodeSwarm] Stream 清理失败:', e);
+      logger.error(LOG_MODULES.CODESWARM, 'Stream 清理失败', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -643,7 +645,7 @@ const taskPayload = JSON.stringify({
     const now = Date.now();
     for (const [nodeId, worker] of this.workers) {
       if (now - worker.lastHeartbeat > 90_000) {
-        serverLog.warn(`[CodeSwarm] Worker ${nodeId} 掉线（90s 无心跳），currentTasks=${worker.currentTasks}`);
+        logger.warn(LOG_MODULES.CODESWARM, `Worker ${nodeId} 掉线（90s 无心跳）`, { details: { currentTasks: worker.currentTasks } });
 
         const hadTasks = worker.currentTasks > 0;
         worker.currentTasks = 0;
@@ -651,13 +653,13 @@ const taskPayload = JSON.stringify({
 
         if (hadTasks) {
           this.rescheduleWorkerTasks(worker).catch(e =>
-            serverLog.error('[CodeSwarm] 重调度任务失败:', e)
+            logger.error(LOG_MODULES.CODESWARM, '重调度任务失败', { details: { error: e instanceof Error ? e.message : String(e) } })
           );
         } else {
           await prisma.codeswarmWorker.update({
             where: { id: worker.id },
             data: { status: 'offline', currentTasks: 0 },
-          }).catch(e => serverLog.error('[CodeSwarm] 标记 Worker offline 失败:', e));
+          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记 Worker offline 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
         }
       }
     }
@@ -673,7 +675,7 @@ const taskPayload = JSON.stringify({
       ` as any[];
 
       for (const w of dbOfflineWorkers) {
-        serverLog.warn(`[CodeSwarm] DB Worker ${w.nodeId} 标记为 offline`);
+        logger.warn(LOG_MODULES.CODESWARM, `DB Worker ${w.nodeId} 标记为 offline`);
         await prisma.codeswarmWorker.update({
           where: { id: w.id },
           data: { status: 'offline', currentTasks: 0 },
@@ -681,12 +683,12 @@ const taskPayload = JSON.stringify({
 
         if (w.currentTasks > 0) {
           this.rescheduleWorkerTasksById(w.id).catch(e =>
-            serverLog.error('[CodeSwarm] rescheduleWorkerTasksById 失败:', e)
+            logger.error(LOG_MODULES.CODESWARM, 'rescheduleWorkerTasksById 失败', { details: { error: e instanceof Error ? e.message : String(e) } })
           );
         }
       }
     } catch (e) {
-      serverLog.error('[CodeSwarm] 检查 DB offline workers 失败:', e);
+      logger.error(LOG_MODULES.CODESWARM, '检查 DB offline workers 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -717,10 +719,10 @@ const taskPayload = JSON.stringify({
                 body: JSON.stringify({ taskId: task.taskId }),
                 signal: AbortSignal.timeout(5000),
               });
-              serverLog.info(`[CodeSwarm] 已向 Worker ${addr} 发送取消请求: ${task.taskId}`);
+              logger.info(LOG_MODULES.CODESWARM, `已向 Worker ${addr} 发送取消请求: ${task.taskId}`);
               break;  // 第一个可达地址成功即可
             } catch (e) {
-              serverLog.warn(`[CodeSwarm] 取消请求发送失败 ${addr}:`, e);
+              logger.warn(LOG_MODULES.CODESWARM, `取消请求发送失败 ${addr}`, { details: { error: e instanceof Error ? e.message : String(e) } });
             }
           }
         }
@@ -741,10 +743,10 @@ const taskPayload = JSON.stringify({
           await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
         }
 
-        serverLog.info(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
+        logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已重新入队`);
       }
     } catch (e) {
-      serverLog.error('[CodeSwarm] rescheduleWorkerTasksById 异常:', e);
+      logger.error(LOG_MODULES.CODESWARM, 'rescheduleWorkerTasksById 异常', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -797,10 +799,10 @@ const taskPayload = JSON.stringify({
           await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
         }
 
-        serverLog.info(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
+        logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已重新入队`);
       }
     } catch (e) {
-      serverLog.error('[CodeSwarm] rescheduleWorkerTasks 异常:', e);
+      logger.error(LOG_MODULES.CODESWARM, 'rescheduleWorkerTasks 异常', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 
@@ -840,7 +842,7 @@ const taskPayload = JSON.stringify({
           });
 
           if (task) {
-            serverLog.warn(`[CodeSwarm] 任务 ${task.taskId} 超时，标记为 failed`);
+            logger.warn(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 超时，标记为 failed`);
 
             // 释放 Worker 槽位（幂等性检查）
             if (task.workerId) {
@@ -868,7 +870,7 @@ const taskPayload = JSON.stringify({
         await this.redis.zrem('codeswarm:task:timeouts', dbTaskId);
       }
     } catch (e) {
-      serverLog.error('[CodeSwarm] 超时扫描异常:', e);
+      logger.error(LOG_MODULES.CODESWARM, '超时扫描异常', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
   }
 

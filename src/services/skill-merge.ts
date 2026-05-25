@@ -19,6 +19,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { Skill, SkillMergeRecord } from '@prisma/client';
 import { saveSkillToDisk } from './skill-files';
 import { aggregateObservationStats } from './skill-observation-stats';
@@ -149,7 +150,7 @@ export async function executeSkillMerge(options: MergeOptions): Promise<MergeRes
         return { success: false, error: `未知的合并策略: ${options.strategy}` };
     }
   } catch (error) {
-    console.error('[SkillMerge] 合并执行失败:', error);
+    logger.error(LOG_MODULES.SKILL, '合并执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -323,7 +324,7 @@ async function executeContentMerge(
       ...sourceSkills.map(s => s.id),
     ]);
     
-    console.log(`[SkillMerge] content-merge 完成: ${mergedSkill.name} v${mergedSkill.version}`);
+    logger.info(LOG_MODULES.SKILL, `content-merge 完成: ${mergedSkill.name} v${mergedSkill.version}`);
     
     return {
       success: true,
@@ -332,7 +333,7 @@ async function executeContentMerge(
       mergeRecord: mergeRecords[0],  // 返回第一个记录
     };
   } catch (error) {
-    console.error('[SkillMerge] content-merge 执行失败:', error);
+    logger.error(LOG_MODULES.SKILL, 'content-merge 执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -456,7 +457,7 @@ async function executeReplaceMerge(
       ...sourceSkills.map(s => s.id),
     ]);
     
-    console.log(`[SkillMerge] replace 完成: ${mergedSkill.name} v${mergedSkill.version}`);
+    logger.info(LOG_MODULES.SKILL, `replace 完成: ${mergedSkill.name} v${mergedSkill.version}`);
     
     return {
       success: true,
@@ -465,7 +466,7 @@ async function executeReplaceMerge(
       mergeRecord: mergeRecords[0],
     };
   } catch (error) {
-    console.error('[SkillMerge] replace 执行失败:', error);
+    logger.error(LOG_MODULES.SKILL, 'replace 执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -603,7 +604,7 @@ async function executeTechStackSplit(
     // 5. 更新观测统计（拆分后重新聚合）
     await updateObservationStatsAfterMerge(null, allSkills.map(s => s.id));
     
-    console.log(`[SkillMerge] techStack-split 完成: ${updatedSkills.length} 个 Skills 已更新技术栈`);
+    logger.info(LOG_MODULES.SKILL, `techStack-split 完成: ${updatedSkills.length} 个 Skills 已更新技术栈`);
     
     return {
       success: true,
@@ -612,7 +613,7 @@ async function executeTechStackSplit(
       mergeRecord,
     };
   } catch (error) {
-    console.error('[SkillMerge] techStack-split 执行失败:', error);
+    logger.error(LOG_MODULES.SKILL, 'techStack-split 执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -733,7 +734,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
       mergeRecord: mergeRecords[0],
     };
   } catch (error) {
-    console.error('[SkillMerge] 创建合并请求失败:', error);
+    logger.error(LOG_MODULES.SKILL, '创建合并请求失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -801,7 +802,7 @@ export async function approveMergeRequest(
       canExecute,
     };
   } catch (error) {
-    console.error('[SkillMerge] 批准合并请求失败:', error);
+    logger.error(LOG_MODULES.SKILL, '批准合并请求失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -893,7 +894,7 @@ export async function revertMerge(mergeRecordId: string, userId: string): Promis
     ];
     await updateObservationStatsAfterMerge(null, affectedSkillIds);
 
-    console.log(`[SkillMerge] 撤销合并完成: ${mergeRecordId}`);
+    logger.info(LOG_MODULES.SKILL, `撤销合并完成: ${mergeRecordId}`);
 
     return {
       success: true,
@@ -901,7 +902,7 @@ export async function revertMerge(mergeRecordId: string, userId: string): Promis
       updatedSkills: restoredSkills,
     };
   } catch (error) {
-    console.error('[SkillMerge] 撤销合并失败:', error);
+    logger.error(LOG_MODULES.SKILL, '撤销合并失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -926,7 +927,7 @@ export async function getMergeHistory(skillId: string): Promise<SkillMergeRecord
 
     return records;
   } catch (error) {
-    console.error('[SkillMerge] 获取合并历史失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取合并历史失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -959,7 +960,7 @@ export async function getPendingMergeRequests(userId?: string): Promise<SkillMer
 
     return records;
   } catch (error) {
-    console.error('[SkillMerge] 获取待处理合并请求失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取待处理合并请求失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -1052,7 +1053,7 @@ export async function checkMergeCompatibility(
       warnings,
     };
   } catch (error) {
-    console.error('[SkillMerge] 检查合并兼容性失败:', error);
+    logger.error(LOG_MODULES.SKILL, '检查合并兼容性失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       compatible: false,
       issues: ['检查失败'],
@@ -1081,10 +1082,10 @@ async function updateObservationStatsAfterMerge(
       await aggregateObservationStats(skillId);
     }
 
-    console.log(`[SkillMerge] 观测统计已更新: ${affectedSkillIds.length} 个 Skills`);
+    logger.info(LOG_MODULES.SKILL, `观测统计已更新: ${affectedSkillIds.length} 个 Skills`);
   } catch (error) {
     // 观测统计更新失败不影响合并结果
-    console.error('[SkillMerge] 观测统计更新失败:', error);
+    logger.error(LOG_MODULES.SKILL, '观测统计更新失败', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }
 
@@ -1175,7 +1176,7 @@ export async function getSkillVersionHistory(skillId: string): Promise<Skill[]> 
 
     return versions;
   } catch (error) {
-    console.error('[SkillMerge] 获取版本历史失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取版本历史失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -1214,7 +1215,7 @@ export async function getFullMergeHistory(skillId: string): Promise<{
       allRecords,
     };
   } catch (error) {
-    console.error('[SkillMerge] 获取完整合并历史失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取完整合并历史失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       asSource: [],
       asTarget: [],

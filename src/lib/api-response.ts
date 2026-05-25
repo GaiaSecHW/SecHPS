@@ -1,10 +1,11 @@
 /**
  * API 响应助手
- * 
+ *
  * 提供标准化的 API 响应函数，确保响应格式一致
  */
 
 import { NextResponse } from 'next/server';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 默认错误消息（与现有代码保持一致）
 const DEFAULT_MESSAGES = {
@@ -130,7 +131,7 @@ export function badRequest(message: string): NextResponse {
 export function serverError(message?: string, details?: unknown): NextResponse {
   // 如果提供了 details，记录到日志但不返回给客户端
   if (details) {
-    console.error('[API Error]', details);
+    logger.error(LOG_MODULES.CONFIG, 'API Error', { details });
   }
   
   return NextResponse.json(
@@ -191,16 +192,16 @@ export function noContent(): NextResponse {
 export function handleApiError(
   error: unknown,
   context: string,
-  logger?: (message: string, details?: unknown) => void
+  errorLogger?: (message: string, details?: unknown) => void
 ): NextResponse {
   // 提取错误消息
   const errorMessage = error instanceof Error ? error.message : String(error);
-  
+
   // 记录错误（服务端日志）
-  if (logger) {
-    logger(`${context}失败`, { error: errorMessage });
+  if (errorLogger) {
+    errorLogger(`${context}失败`, { error: errorMessage });
   } else {
-    console.error(`[API Error] ${context}:`, error);
+    logger.error(LOG_MODULES.CONFIG, `${context}失败`, { details: { error: errorMessage } });
   }
   
   // 返回安全的错误响应（不泄露内部细节）

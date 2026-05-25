@@ -1,8 +1,10 @@
 /**
  * API 客户端工具
- * 
+ *
  * 提供前端 API 调用的统一工具函数
  */
+
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 从 API 响应中提取错误消息
@@ -93,10 +95,10 @@ export async function apiRequest<T = unknown>(
     const data = await response.json() as T;
     return { data, error: null };
   } catch (err) {
-    console.error('[api-client] 网络请求失败:', err instanceof Error ? err.message : String(err));
-    return { 
-      data: null, 
-      error: err instanceof Error ? err.message : '网络请求失败' 
+    logger.error(LOG_MODULES.CONFIG, '网络请求失败', { details: { error: err instanceof Error ? err.message : String(err) } });
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : '网络请求失败'
     };
   }
 }

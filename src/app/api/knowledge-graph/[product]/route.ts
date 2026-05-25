@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const KG_BUCKET = 'codedmap-dbs';
 const CACHE_DIR = path.join(os.tmpdir(), 'kg_cache');
@@ -305,7 +306,7 @@ export async function GET(
 
     return NextResponse.json({ error: 'Invalid view' }, { status: 400 });
   } catch (error: any) {
-    console.error('[knowledge-graph]', error);
+    logger.error(LOG_MODULES.CODE, 'Knowledge graph error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

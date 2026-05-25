@@ -4,6 +4,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { buildTenantFilter } from '@/lib/tenant-filter';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/agent-definitions - 获取 Agent 定义列表
 // 支持多租户隔离：
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ agents });
   } catch (error) {
-    console.error('获取 Agent 列表失败:', error);
+    logger.error(LOG_MODULES.AGENT, '获取 Agent 列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取 Agent 列表失败' }, { status: 500 });
   }
 }

@@ -11,6 +11,7 @@ import {
   NormalizedMessage,
   CodexMessage,
 } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Codex Provider
@@ -70,7 +71,7 @@ export class CodexProvider extends BaseProvider {
 
       return sessions;
     } catch (error) {
-      console.error('[CodexProvider] 发现会话失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '发现会话失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -120,7 +121,7 @@ export class CodexProvider extends BaseProvider {
       
       return messages.slice(start, end);
     } catch (error) {
-      console.error('[CodexProvider] 获取消息失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '获取消息失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -233,7 +234,7 @@ export class CodexProvider extends BaseProvider {
 
       return { messageCount, summary, cwd };
     } catch (error) {
-      console.error('[CodexProvider] 解析会话信息失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '解析会话信息失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return { messageCount: 0, summary: 'Codex Session' };
     }
   }

@@ -5,6 +5,7 @@
 
 import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import type { TokenUsageContext } from '@/types/call-scene';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================================================
 // Types
@@ -176,9 +177,9 @@ export async function analyzeSkillDuplication(
 ): Promise<LLMAnalysisResult> {
   try {
     const prompt = buildAnalysisPrompt(skillA, skillB);
-    
-    console.log(`[SkillLLMAnalysis] 分析: ${skillA.name} vs ${skillB.name}`);
-    
+
+    logger.info(LOG_MODULES.SKILL, `分析: ${skillA.name} vs ${skillB.name}`);
+
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
       {
@@ -191,60 +192,62 @@ export async function analyzeSkillDuplication(
         },
       }
     );
-    
+
     // 解析 LLM 响应 - 支持 OpenAI 和 Claude 格式
     let content = '';
-    
+
     // 调试：打印完整响应结构
     try {
-      console.log('[SkillLLMAnalysis] response type:', typeof response);
-      console.log('[SkillLLMAnalysis] response is null:', response === null);
-      console.log('[SkillLLMAnalysis] response is undefined:', response === undefined);
+      logger.debug(LOG_MODULES.SKILL, 'response details', {
+        type: typeof response,
+        isNull: response === null,
+        isUndefined: response === undefined,
+      });
       if (response) {
-        console.log('[SkillLLMAnalysis] response keys:', Object.keys(response));
-        console.log('[SkillLLMAnalysis] response JSON:', JSON.stringify(response).substring(0, 2000));
+        logger.debug(LOG_MODULES.SKILL, 'response keys:', { details: { keys: Object.keys(response) } });
+        logger.debug(LOG_MODULES.SKILL, `response JSON: ${JSON.stringify(response).substring(0, 2000)}`);
       }
     } catch (e) {
-      console.error('[SkillLLMAnalysis] 无法序列化 response:', e);
+      logger.error(LOG_MODULES.SKILL, '无法序列化 response', { details: { error: e instanceof Error ? e.message : String(e) } });
     }
     
     // Claude 格式: response.content[0].text
     if (response?.content?.[0]?.text) {
       content = response.content[0].text;
-      console.log('[SkillLLMAnalysis] 使用 Claude 格式解析');
+      logger.debug(LOG_MODULES.SKILL, '使用 Claude 格式解析');
     }
     // OpenAI 格式: response.choices[0].message.content
     else if (response?.choices?.[0]?.message?.content) {
       content = response.choices[0].message.content;
-      console.log('[SkillLLMAnalysis] 使用 OpenAI 格式解析');
+      logger.debug(LOG_MODULES.SKILL, '使用 OpenAI 格式解析');
     }
     // 某些模型可能直接在 response.text 返回
     else if (response?.text) {
       content = response.text;
-      console.log('[SkillLLMAnalysis] 使用 response.text 解析');
+      logger.debug(LOG_MODULES.SKILL, '使用 response.text 解析');
     }
     // 某些模型可能在 response.result 返回
     else if (response?.result) {
       content = typeof response.result === 'string' ? response.result : JSON.stringify(response.result);
-      console.log('[SkillLLMAnalysis] 使用 response.result 解析');
+      logger.debug(LOG_MODULES.SKILL, '使用 response.result 解析');
     }
     // 某些模型可能在 response.output 返回
     else if (response?.output) {
       content = typeof response.output === 'string' ? response.output : JSON.stringify(response.output);
-      console.log('[SkillLLMAnalysis] 使用 response.output 解析');
+      logger.debug(LOG_MODULES.SKILL, '使用 response.output 解析');
     }
     // 兜底
     else if (typeof response === 'string') {
       content = response;
-      console.log('[SkillLLMAnalysis] 使用字符串格式解析');
+      logger.debug(LOG_MODULES.SKILL, '使用字符串格式解析');
     }
     // 最后尝试：直接 JSON 序列化整个响应
     else {
       content = JSON.stringify(response);
-      console.log('[SkillLLMAnalysis] 使用 JSON.stringify 兜底解析');
+      logger.debug(LOG_MODULES.SKILL, '使用 JSON.stringify 兜底解析');
     }
     
-    console.log(`[SkillLLMAnalysis] LLM 原始响应 (前500字符): ${content.substring(0, 500)}`);
+    logger.debug(LOG_MODULES.SKILL, `LLM 原始响应 (前500字符): ${content.substring(0, 500)}`);
     
     // 多种方式提取 JSON
     let parsed: any = null;
@@ -254,9 +257,9 @@ export async function analyzeSkillDuplication(
     if (jsonBlockMatch) {
       try {
         parsed = JSON.parse(jsonBlockMatch[1].trim());
-        console.log('[SkillLLMAnalysis] 从 ```json 代码块解析成功');
+        logger.debug(LOG_MODULES.SKILL, '从 ```json 代码块解析成功');
       } catch (e) {
-        console.warn('[SkillLLMAnalysis] ```json 代码块解析失败:', e);
+        logger.warn(LOG_MODULES.SKILL, '```json 代码块解析失败', { details: { error: e instanceof Error ? e.message : String(e) } });
       }
     }
     
@@ -266,7 +269,7 @@ export async function analyzeSkillDuplication(
       if (codeBlockMatch) {
         try {
           parsed = JSON.parse(codeBlockMatch[1].trim());
-          console.log('[SkillLLMAnalysis] 从 ``` 代码块解析成功');
+          logger.debug(LOG_MODULES.SKILL, '从 ``` 代码块解析成功');
         } catch (e) {
           // 忽略，继续尝试其他方式
         }
@@ -284,11 +287,11 @@ export async function analyzeSkillDuplication(
           // 清理 JSON 中的控制字符
           const cleanedJson = cleanJsonString(jsonStr);
           parsed = JSON.parse(cleanedJson);
-          console.log('[SkillLLMAnalysis] 从独立 JSON 对象解析成功');
+          logger.debug(LOG_MODULES.SKILL, '从独立 JSON 对象解析成功');
         } catch (e) {
-          console.warn('[SkillLLMAnalysis] 独立 JSON 解析失败:', e);
+          logger.warn(LOG_MODULES.SKILL, '独立 JSON 解析失败', { details: { error: e instanceof Error ? e.message : String(e) } });
           // 打印有问题的 JSON 片段帮助调试
-          console.warn('[SkillLLMAnalysis] JSON 内容 (前200字符):', jsonStr.substring(0, 200));
+          logger.warn(LOG_MODULES.SKILL, `JSON 内容 (前200字符): ${jsonStr.substring(0, 200)}`);
         }
       }
     }
@@ -301,7 +304,7 @@ export async function analyzeSkillDuplication(
         if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
           try {
             parsed = JSON.parse(trimmed);
-            console.log('[SkillLLMAnalysis] 从单行 JSON 解析成功');
+            logger.debug(LOG_MODULES.SKILL, '从单行 JSON 解析成功');
             break;
           } catch (e) {
             // 继续尝试下一行
@@ -311,8 +314,8 @@ export async function analyzeSkillDuplication(
     }
     
     if (!parsed) {
-      console.warn('[SkillLLMAnalysis] 无法从 LLM 响应解析 JSON，使用默认值');
-      console.warn('[SkillLLMAnalysis] 完整响应内容:', content);
+      logger.warn(LOG_MODULES.SKILL, '无法从 LLM 响应解析 JSON，使用默认值');
+      logger.warn(LOG_MODULES.SKILL, `完整响应内容: ${content}`);
       return createDefaultResult(skillA, skillB);
     }
     
@@ -327,7 +330,7 @@ export async function analyzeSkillDuplication(
     };
     
   } catch (error) {
-    console.error('[SkillLLMAnalysis] LLM 分析失败:', error);
+    logger.error(LOG_MODULES.SKILL, 'LLM 分析失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return createDefaultResult(skillA, skillB);
   }
 }

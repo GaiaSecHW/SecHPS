@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { getTenantIdForCreate } from '@/lib/tenant-filter';
 import { createTaskWithFiles } from '@/lib/task-creation';
-import { serverLog } from '@/lib/server-log';
 
 export async function POST(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ task: result.task });
   } catch (error) {
-    serverLog.error('创建任务失败:', error);
+    logger.error(LOG_MODULES.AGENT, '创建任务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '创建任务失败' }, { status: 500 });
   }
 }
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    serverLog.error('获取任务列表失败:', error);
+    logger.error(LOG_MODULES.AGENT, '获取任务列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取任务列表失败' }, { status: 500 });
   }
 }

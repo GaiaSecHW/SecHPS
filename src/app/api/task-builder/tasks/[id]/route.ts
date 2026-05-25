@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -50,7 +51,7 @@ export async function GET(
 
     return NextResponse.json({ task, logs: task.TaskExecutionLog, codeswarmStatus });
   } catch (error) {
-    console.error('获取任务详情失败:', error);
+    logger.error(LOG_MODULES.AGENT, '获取任务详情失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取任务详情失败' }, { status: 500 });
   }
 }
@@ -87,7 +88,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '任务已删除' });
   } catch (error) {
-    console.error('删除任务失败:', error);
+    logger.error(LOG_MODULES.AGENT, '删除任务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '删除任务失败' }, { status: 500 });
   }
 }

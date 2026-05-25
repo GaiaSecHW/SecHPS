@@ -3,6 +3,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { runBacktest, getBacktestDetailRows } from '@/services/skill-evolution/backtest-validator';
 import type { CompactCase } from '@/services/skill-evolution/case-extractor';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(
   request: Request,
@@ -58,7 +59,7 @@ export async function POST(
         falsePositiveCases = JSON.parse(task.SkillImprovement.falsePositiveCases);
       }
     } catch {
-      console.warn('Failed to parse falsePositiveCases');
+      logger.warn(LOG_MODULES.SKILL, 'Failed to parse falsePositiveCases');
     }
 
     try {
@@ -66,15 +67,15 @@ export async function POST(
         confirmedCases = JSON.parse(task.SkillImprovement.confirmedCases);
       }
     } catch {
-      console.warn('Failed to parse confirmedCases');
+      logger.warn(LOG_MODULES.SKILL, 'Failed to parse confirmedCases');
     }
 
     if (falsePositiveCases.length === 0 && confirmedCases.length === 0) {
       return NextResponse.json({ error: 'No cases available for backtest' }, { status: 400 });
     }
 
-    console.log(`[BacktestAPI] Running backtest for task ${taskId}`);
-    console.log(`[BacktestAPI] FP cases: ${falsePositiveCases.length}, CC cases: ${confirmedCases.length}`);
+    logger.info(LOG_MODULES.SKILL, `Running backtest for task ${taskId}`);
+    logger.info(LOG_MODULES.SKILL, `FP cases: ${falsePositiveCases.length}, CC cases: ${confirmedCases.length}`);
 
     const backtestResult = await runBacktest(
       task.SkillImprovement.improvedContent,
@@ -104,7 +105,7 @@ export async function POST(
       detailRows: getBacktestDetailRows(backtestResult),
     });
   } catch (error) {
-    console.error('[BacktestAPI] Error:', error);
+    logger.error(LOG_MODULES.SKILL, 'Backtest error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Backtest failed' },
       { status: 500 }

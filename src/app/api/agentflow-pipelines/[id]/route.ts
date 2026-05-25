@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 
 interface RouteContext {
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ pipeline });
   } catch (error) {
-    console.error('获取 Pipeline 失败:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '获取 Pipeline 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '获取 Pipeline 失败', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
@@ -84,7 +85,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ pipeline });
   } catch (error) {
-    console.error('更新 Pipeline 失败:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '更新 Pipeline 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '更新 Pipeline 失败', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }
@@ -118,7 +119,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('删除 Pipeline 失败:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '删除 Pipeline 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '删除 Pipeline 失败', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
 import { gitSkillSync } from '@/services/git-skill-sync';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const DEFAULT_CATEGORY_ID = 'cat-code-audit';
 
@@ -78,7 +79,7 @@ export async function syncSkillsFromHarness(
 
   if (skillEntries.length === 0) return;
 
-  console.log(`[SkillHarnessSync] 发现 ${skillEntries.length} 个 SKILL，开始同步`);
+  logger.info(LOG_MODULES.SKILL, `发现 ${skillEntries.length} 个 SKILL，开始同步`);
 
   for (const { skillName, skillMdContent, skillFiles } of skillEntries) {
     try {
@@ -87,13 +88,13 @@ export async function syncSkillsFromHarness(
         where: { name: { equals: skillName, mode: 'insensitive' }, userId },
       });
       if (existing) {
-        console.log(`[SkillHarnessSync] 跳过已存在的 SKILL: ${skillName}`);
+        logger.info(LOG_MODULES.SKILL, `跳过已存在的 SKILL: ${skillName}`);
         continue;
       }
 
       const parsed = parseSkillMarkdown(skillMdContent);
       if (!parsed) {
-        console.error(`[SkillHarnessSync] 解析 SKILL.md 失败: ${skillName}`);
+        logger.error(LOG_MODULES.SKILL, `解析 SKILL.md 失败: ${skillName}`);
         continue;
       }
 
@@ -118,12 +119,12 @@ export async function syncSkillsFromHarness(
 
       const gitResult = await gitSkillSync.uploadSkill(skillName, skillFiles);
       if (!gitResult.success) {
-        console.error(`[SkillHarnessSync] Git 上传 SKILL 失败: ${skillName}`, gitResult.errors);
+        logger.error(LOG_MODULES.SKILL, `Git 上传 SKILL 失败: ${skillName}`, { details: { errors: gitResult.errors } });
       }
 
-      console.log(`[SkillHarnessSync] 成功创建 SKILL: ${skillName} (id: ${skill.id})`);
+      logger.info(LOG_MODULES.SKILL, `成功创建 SKILL: ${skillName} (id: ${skill.id})`);
     } catch (err) {
-      console.error(`[SkillHarnessSync] 处理 SKILL ${skillName} 失败:`, err);
+      logger.error(LOG_MODULES.SKILL, `处理 SKILL ${skillName} 失败`, { details: { error: err instanceof Error ? err.message : String(err) } });
     }
   }
 }

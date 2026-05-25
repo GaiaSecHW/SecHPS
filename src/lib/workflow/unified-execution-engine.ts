@@ -135,31 +135,31 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         if (nodeType === 'start') {
           const hasDescription = this.config.workflowConfig?.startNodeDescription || node.description;
           if (!hasDescription) {
-            console.log(`[UnifiedEngine] 标记跳过 start 节点: ${node.label} (未配置 startNodeDescription)`);
+            logger.info(LOG_MODULES.WORKFLOW, `标记跳过 start 节点: ${node.label} (未配置 startNodeDescription)`);
             return { ...node, skip: true, skipReason: '未配置开始节点描述' };
           }
         }
-        
+
         // end 节点：如果没有 endNodeDescription 则跳过
         if (nodeType === 'end') {
           const hasDescription = this.config.workflowConfig?.endNodeDescription || node.description;
           if (!hasDescription) {
-            console.log(`[UnifiedEngine] 标记跳过 end 节点: ${node.label} (未配置 endNodeDescription)`);
+            logger.info(LOG_MODULES.WORKFLOW, `标记跳过 end 节点: ${node.label} (未配置 endNodeDescription)`);
             return { ...node, skip: true, skipReason: '未配置结束节点描述' };
           }
         }
-        
+
         return { ...node, skip: false };
       });
-      
+
       this.nodes = processedNodes;
       const skippedCount = processedNodes.filter(n => n.skip).length;
-      console.log(`[UnifiedEngine] 设置节点列表: ${processedNodes.length} 个节点 (${skippedCount} 个将跳过)`);
+      logger.info(LOG_MODULES.WORKFLOW, `设置节点列表: ${processedNodes.length} 个节点 (${skippedCount} 个将跳过)`);
       for (const node of processedNodes) {
         if (node.skip && 'skipReason' in node) {
-          console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (跳过: ${node.skipReason})`);
+          logger.info(LOG_MODULES.WORKFLOW, `Node ${node.id}: ${node.label} (跳过: ${node.skipReason})`);
         } else {
-          console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (type: ${node.type || 'task'}, roleId: ${node.roleId || 'default'})`);
+          logger.info(LOG_MODULES.WORKFLOW, `Node ${node.id}: ${node.label} (type: ${node.type || 'task'}, roleId: ${node.roleId || 'default'})`);
         }
       }
     }
@@ -168,7 +168,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
    * 中止执行
    */
   abort(): void {
-    console.log('[UnifiedEngine] 收到中止请求，设置中止标志');
+    logger.info(LOG_MODULES.WORKFLOW, '收到中止请求，设置中止标志');
     this.aborted = true;
     if (this.currentAgent) {
       this.currentAgent.abort();
@@ -187,10 +187,8 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
    */
   async execute(): Promise<WorkflowExecutionResult> {
     this.startTime = new Date();
-    console.log(`[UnifiedEngine] 开始执行工作流: ${this.config.workflowId}`);
-    console.log(`[UnifiedEngine] 项目: ${this.config.projectName}`);
-    console.log(`[UnifiedEngine] 节点数量: ${this.nodes.length}`);
-    
+    logger.info(LOG_MODULES.WORKFLOW, `开始执行工作流: ${this.config.workflowId}`, { details: { project: this.config.projectName, nodeCount: this.nodes.length } });
+
     // 1. 更新数据库状态为 'running'
     await this.updateSessionStatus('running', '工作流开始执行');
 
@@ -200,16 +198,15 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
       // 2. 串行执行所有节点
       for (let i = 0; i < this.nodes.length; i++) {
         if (this.aborted) {
-          console.log('[UnifiedEngine] 检测到中止信号，停止执行');
+          logger.info(LOG_MODULES.WORKFLOW, '检测到中止信号，停止执行');
           break;
         }
 
         const node = this.nodes[i];
-        
+
         // 检查节点是否需要跳过
         if (node.skip) {
-          console.log(`[UnifiedEngine] ========== 跳过节点 ${i + 1}/${this.nodes.length}: ${node.label} ==========`);
-          console.log(`[UnifiedEngine] 跳过原因: ${node.skipReason}`);
+          logger.info(LOG_MODULES.WORKFLOW, `跳过节点 ${i + 1}/${this.nodes.length}: ${node.label}`, { details: { skipReason: node.skipReason } });
           
           // 为跳过的节点创建执行记录（status=completed, skipped=true）
           await this.saveSkippedNodeExecution(i, node);
@@ -235,21 +232,21 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
           
           continue; // 跳过此节点
         }
-        
-        console.log(`[UnifiedEngine] ========== 开始执行节点 ${i + 1}/${this.nodes.length}: ${node.label} ==========`);
-        
+
+        logger.info(LOG_MODULES.WORKFLOW, `开始执行节点 ${i + 1}/${this.nodes.length}: ${node.label}`);
+
         const result = await this.executeNode(i, node);
         nodeResults.push(result);
 
         // 3. 节点失败时停止
         if (result.status === 'failed') {
-          console.log(`[UnifiedEngine] 节点 ${node.label} 执行失败，停止工作流`);
+          logger.info(LOG_MODULES.WORKFLOW, `节点 ${node.label} 执行失败，停止工作流`);
           break;
         }
 
         // 注意：不再在这里累加 Token，因为 onUsage 回调已经实时更新了 cumulativeTokens
         // 避免重复累加（onUsage 使用 nodeTokens 对象正确处理累计）
-        console.log(`[UnifiedEngine] 节点完成后累计 Token: input=${this.cumulativeTokens.input}, output=${this.cumulativeTokens.output}`);
+        logger.info(LOG_MODULES.WORKFLOW, `节点完成后累计 Token`, { details: { input: this.cumulativeTokens.input, output: this.cumulativeTokens.output } });
       }
 
       // 4. 生成最终结果
@@ -283,16 +280,13 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
       // 6. 调用完成回调（漏洞入库由调用方在项目结束时处理）
       await this.callbacks.onWorkflowComplete(workflowResult);
 
-      console.log(`[UnifiedEngine] 工作流执行完成: ${status}`);
-      console.log(`[UnifiedEngine] 总耗时: ${workflowResult.totalDuration}ms`);
-      console.log(`[UnifiedEngine] 总 Token: input=${workflowResult.totalInputTokens}, output=${workflowResult.totalOutputTokens}`);
+      logger.info(LOG_MODULES.WORKFLOW, `工作流执行完成: ${status}`, { details: { duration: workflowResult.totalDuration, inputTokens: workflowResult.totalInputTokens, outputTokens: workflowResult.totalOutputTokens } });
 
       return workflowResult;
 
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error('[UnifiedEngine] 工作流执行异常:', err.message);
-      console.error('[UnifiedEngine] 错误堆栈:', err.stack);
+      logger.error(LOG_MODULES.WORKFLOW, '工作流执行异常', { details: { error: err.message, stack: err.stack } });
 
       // 更新数据库状态为失败
       await this.updateSessionStatus('failed', '执行异常', {
@@ -349,12 +343,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     const nodeName = node.label;
     const nodeId = node.id;
 
-    console.log(`[executeNode] 开始执行节点: ${nodeName}`);
-    console.log(`[executeNode] nodeId: ${nodeId}`);
-    console.log(`[executeNode] roleId: ${node.roleId || 'default'}`);
-    console.log(`[executeNode] skillPath: ${node.skillPath || 'none'}`);
-    console.log(`[executeNode] node.skills: ${JSON.stringify(node.skills)}`);
-    console.log(`[executeNode] node.vulnerabilityCategories: ${JSON.stringify(node.vulnerabilityCategories)}`);
+    logger.info(LOG_MODULES.WORKFLOW, `开始执行节点: ${nodeName}`, { details: { nodeId, roleId: node.roleId || 'default', skillPath: node.skillPath || 'none' } });
 
     // 清空本节点的 Skill 记录列表（每个节点独立记录）
     this.currentSkillExecutionIds = [];
@@ -363,18 +352,16 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     this.skillNameToExecutionId.clear();
     this.currentStopReason = null;
     this.currentCompactionTriggered = false;
-    console.log(`[executeNode] 已清空 Skill 记录列表和状态变量，准备记录本节点的 Skills`);
 
     // 调用节点开始回调
     await this.callbacks.onNodeStart(nodeIndex, nodeId, nodeName);
 
     // 初始化节点目录（创建 node-{nodeId}/ 和 agents/ 目录）
     await this.nodeStreamStore.initNodeDir(nodeId);
-    console.log(`[executeNode] 初始化节点目录: node-${nodeId}`);
 
     // 获取模型配置
     const modelConfig = await this.getModelConfigForRole(node.roleId ?? undefined);
-    console.log(`[executeNode] 使用模型: ${modelConfig.name} (${modelConfig.providerType})`);
+    logger.info(LOG_MODULES.WORKFLOW, `使用模型`, { details: { name: modelConfig.name, provider: modelConfig.providerType } });
 
     // 创建节点执行记录（status='running'）- 让 token 更新能找到记录
     await this.createNodeExecutionRecord(node, nodeIndex, modelConfig);
@@ -388,7 +375,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     
     // Skill 串行执行模式：当 skills.length >= 1 且是 vulnerability/manual 模式
     if (skills.length >= 1 && mode !== 'description') {
-      console.log(`[executeNode] 检测到 Skill 节点 (${skills.length} 个)，启用串行执行模式，mode=${mode}`);
+      logger.info(LOG_MODULES.WORKFLOW, `检测到 Skill 节点，启用串行执行模式`, { details: { skillCount: skills.length, mode } });
       return await this.executeMultiSkillNode(nodeIndex, node, modelConfig);
     }
     
@@ -403,7 +390,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
 
     while (retryCount <= maxRetries) {
       if (this.aborted) {
-        console.log(`[executeNode] 检测到中止信号，停止节点执行`);
+        logger.info(LOG_MODULES.WORKFLOW, '检测到中止信号，停止节点执行');
         return {
           nodeIndex,
           nodeId,
@@ -433,7 +420,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         this.nodeStreamStore.appendToStream(nodeId, {
           event: 'user',
           data: { text: prompt },
-        }).catch(err => console.error('[executeNode] 保存用户消息失败:', err));
+        }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存用户消息失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
 
         // 累积助手响应文本（用于最终保存）
         let accumulatedAssistantText = '';
@@ -458,7 +445,7 @@ callbacks: {
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'text',
                 data: { text, cumulativeLength: accumulatedAssistantText.length },
-              }).catch(err => console.error('[executeNode] 保存文本失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存文本失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
               
               // 调用外部回调
               this.callbacks.onNodeChunk(nodeIndex, text);
@@ -468,7 +455,7 @@ callbacks: {
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'thinking',
                 data: { text: thinking },
-              }).catch(err => console.error('[executeNode] 保存思考失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存思考失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onToolCall: (toolUseId, name, args) => {
               // 检测 Skill 工具调用，立即创建执行记录（startedAt = 精确时间）
@@ -476,14 +463,14 @@ callbacks: {
                 // 获取 skill 名称（支持多种参数格式）
                 const skillName = (args as any)?.skill || (args as any)?.skill_name || (args as any)?.name;
                 if (skillName && typeof skillName === 'string') {
-                  console.log(`[executeNode] 检测到 Skill 调用: ${skillName}, toolUseId=${toolUseId}`);
-                  
+                  logger.info(LOG_MODULES.WORKFLOW, `检测到 Skill 调用`, { details: { skillName, toolUseId } });
+
                   // 立即创建 SkillExecution 记录（startedAt = 精确时间）
                   this.createSingleSkillExecution(skillName, toolUseId, nodeIndex, nodeName || 'unknown')
-                    .catch((err: Error) => console.error(`[executeNode] 创建 Skill 执行记录失败:`, err));
+                    .catch((err: Error) => logger.error(LOG_MODULES.WORKFLOW, '创建 Skill 执行记录失败', { details: { error: err.message } }));
                 }
               }
-              
+
               // 检测 Agent 工具调用（子 Agent 执行 Skill），记录关联
               if (name === 'Agent' || name === 'task') {
                 const description = (args as any)?.description || '';
@@ -491,12 +478,12 @@ callbacks: {
                 const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
                 if (skillMatch && skillMatch[1]) {
                   const skillName = skillMatch[1];
-                  console.log(`[executeNode] 检测到 Agent 执行 Skill: ${skillName}, toolUseId=${toolUseId}`);
-                  
+                  logger.info(LOG_MODULES.WORKFLOW, `检测到 Agent 执行 Skill`, { details: { skillName, toolUseId } });
+
                   // 根据 skill 名称找到对应的 SkillExecution
                   const executionId = this.skillNameToExecutionId.get(skillName);
                   const skillInfo = executionId ? this.currentExecutingSkills.get(skillName) : null;
-                  
+
                   if (executionId && skillInfo) {
                     // 记录 Agent toolUseId 和 SkillExecution 的关联
                     this.currentExecutingSkills.set(toolUseId, {
@@ -508,19 +495,16 @@ callbacks: {
                     });
                   }
                 }
-                
+
                 // 子Agent交互日志
-                console.log('\n' + '='.repeat(80));
-                console.log('[子Agent交互] 工具调用:', name, toolUseId);
-                console.log('[子Agent交互] 参数:', JSON.stringify(args, null, 2));
-                console.log('='.repeat(80) + '\n');
+                logger.info(LOG_MODULES.WORKFLOW, '子Agent交互', { details: { toolName: name, toolUseId, args } });
               }
-              
+
               // 写入 stream.jsonl
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'tool_use',
                 data: { toolUseId, name, args },
-              }).catch(err => console.error('[executeNode] 保存工具调用失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存工具调用失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
               
               // 调用外部回调
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
@@ -530,66 +514,63 @@ callbacks: {
               const executingSkill = this.currentExecutingSkills.get(toolUseId);
               if (executingSkill) {
                 const skillName = executingSkill.skillName;
-                console.log(`[executeNode] Agent 工具返回，Skill ${skillName} 执行完成, toolUseId=${toolUseId}`);
-                
+                logger.info(LOG_MODULES.WORKFLOW, `Agent 工具返回，Skill 执行完成`, { details: { skillName, toolUseId } });
+
                 // 根据 skill 名称找到对应的 SkillExecution 并完成
                 const executionId = this.skillNameToExecutionId.get(skillName);
                 if (executionId) {
                   this.completeSingleSkillExecutionByAgent(executionId, toolUseId, content, isError || false)
-                    .catch((err: Error) => console.error(`[executeNode] 完成 Skill 执行记录失败:`, err));
+                    .catch((err: Error) => logger.error(LOG_MODULES.WORKFLOW, '完成 Skill 执行记录失败', { details: { error: err.message } }));
                 }
-                
+
                 // 清除关联记录
                 this.currentExecutingSkills.delete(toolUseId);
               }
-              
+
               // 子Agent交互日志
-              console.log('\n' + '='.repeat(80));
-              console.log('[子Agent交互] 工具结果:', toolUseId, 'isError:', isError);
               const resultContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
               // 只输出前300个字符，避免日志过长
-              const truncatedContent = resultContent.length > 300 
-                ? resultContent.substring(0, 300) + '... (截断，总长度: ' + resultContent.length + ')'
+              const truncatedContent = resultContent.length > 300
+                ? resultContent.substring(0, 300) + `... (截断，总长度: ${resultContent.length})`
                 : resultContent;
-              console.log(truncatedContent);
-              console.log('='.repeat(80) + '\n');
-              
+              logger.info(LOG_MODULES.WORKFLOW, '子Agent交互', { details: { toolUseId, isError, content: truncatedContent } });
+
               // 检查是否是 async_launched（子Agent启动）
               const resultData = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return {}; } })() : content;
               if (resultData?.isAsync || resultData?.status === 'async_launched') {
                 const agentId = resultData?.agentId;
                 if (agentId) {
                   this.activeAgentId = agentId;
-                  console.log(`[executeNode] 子Agent启动: agentId=${agentId}`);
-                  
+                  logger.info(LOG_MODULES.WORKFLOW, `子Agent启动`, { details: { agentId } });
+
                   // 写入 stream.jsonl（标记子Agent启动）
                   this.nodeStreamStore.appendToStream(nodeId, {
                     event: 'agent_launched',
                     data: { toolUseId, agentId, description: resultData?.description },
-                  }).catch(err => console.error('[executeNode] 保存 agent_launched 失败:', err));
+                  }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 agent_launched 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
                 }
               }
-              
+
               // 写入 stream.jsonl
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'tool_result',
                 data: { toolUseId, content: resultData, isError },
-              }).catch(err => console.error('[executeNode] 保存工具结果失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存工具结果失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onComplete: () => {
               // 写入 message_stop 到 stream.jsonl
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'message_stop',
                 data: { text: accumulatedAssistantText },
-              }).catch(err => console.error('[executeNode] 保存 message_stop 失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 message_stop 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onError: (error) => {
-              console.error(`[executeNode] Agent 错误: ${error.message}`);
+              logger.error(LOG_MODULES.WORKFLOW, `Agent 错误`, { details: { error: error.message } });
               // 写入 error 到 stream.jsonl
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'error',
                 data: { message: error.message, stack: error.stack },
-              }).catch(err => console.error('[executeNode] 保存 error 失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 error 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onUsage: (usage) => {
               this.nodeTokens[nodeIndex] = {
@@ -604,7 +585,7 @@ callbacks: {
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'token_usage',
                 data: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
-              }).catch(err => console.error('[executeNode] 保存 token_usage 失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 token_usage 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
               this.callbacks.onTokenUsage({
                 nodeIndex,
                 nodeId,
@@ -620,15 +601,15 @@ callbacks: {
               });
             },
             onStopReason: (data) => {
-              console.log(`[executeNode] stop_reason: ${data.stopReason}, terminal_reason: ${data.terminalReason}`);
+              logger.info(LOG_MODULES.WORKFLOW, `stop_reason`, { details: { stopReason: data.stopReason, terminalReason: data.terminalReason } });
               this.currentStopReason = data.stopReason;
             },
             onCompaction: (data) => {
-              console.log(`[executeNode] Compaction 触发: trigger=${data.trigger}, summaryLength=${data.summaryLength}`);
+              logger.info(LOG_MODULES.WORKFLOW, `Compaction 触发`, { details: { trigger: data.trigger, summaryLength: data.summaryLength } });
               this.currentCompactionTriggered = true;
             },
             onMaxTokensTruncated: async (data) => {
-              console.log(`[executeNode] max_tokens 截断: iteration=${data.iteration}, compactionTriggered=${data.compactionTriggered}, textLength=${data.textLength}`);
+              logger.info(LOG_MODULES.WORKFLOW, `max_tokens 截断`, { details: { iteration: data.iteration, compactionTriggered: data.compactionTriggered, textLength: data.textLength } });
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'max_tokens_truncated',
                 data: {
@@ -640,7 +621,7 @@ callbacks: {
                   iteration: data.iteration,
                   message: '输出达到 token 限制，继续下一轮迭代补充内容',
                 },
-              }).catch(err => console.error('[executeNode] 保存 max_tokens_truncated 失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 max_tokens_truncated 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onRalphComplete: async () => {},
           },
@@ -650,7 +631,7 @@ callbacks: {
 
         // 检查执行结果
         if (result.completionReason === 'aborted') {
-          console.log(`[executeNode] 节点被中止`);
+          logger.info(LOG_MODULES.WORKFLOW, '节点被中止');
           return {
             nodeIndex,
             nodeId,
@@ -669,12 +650,12 @@ callbacks: {
         }
 
         // 成功完成 - 执行到这里说明节点没有被中止，写入输出
-        console.log(`[executeNode] 节点执行完成: completionReason=${result.completionReason}, iterations=${result.iterations}`);
+        logger.info(LOG_MODULES.WORKFLOW, `节点执行完成`, { details: { completionReason: result.completionReason, iterations: result.iterations } });
 
         // 确保 Token 数据正确（使用 result.totalUsage 作为最终值）
         // 如果 onUsage 回调没有被正确调用，使用 result.totalUsage 作为备份
         if (result.totalUsage && result.totalUsage.inputTokens > 0) {
-          console.log(`[executeNode] 使用 result.totalUsage 更新 nodeTokens: input=${result.totalUsage.inputTokens}, output=${result.totalUsage.outputTokens}`);
+          logger.info(LOG_MODULES.WORKFLOW, `使用 result.totalUsage 更新 nodeTokens`, { details: { input: result.totalUsage.inputTokens, output: result.totalUsage.outputTokens } });
           this.nodeTokens[nodeIndex] = {
             input: result.totalUsage.inputTokens,
             output: result.totalUsage.outputTokens,
@@ -719,8 +700,7 @@ callbacks: {
 
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        console.error(`[executeNode] 节点执行异常: ${err.message}`);
-        console.error(`[executeNode] 错误堆栈: ${err.stack}`);
+        logger.error(LOG_MODULES.WORKFLOW, `节点执行异常`, { details: { error: err.message, stack: err.stack } });
         lastError = err;
         this.currentAgent = null;
       }
@@ -728,7 +708,7 @@ callbacks: {
       // 重试逻辑
       retryCount++;
       if (retryCount <= maxRetries) {
-        console.log(`[executeNode] 准备重试 (${retryCount}/${maxRetries})，等待 ${retryDelayMs}ms`);
+        logger.info(LOG_MODULES.WORKFLOW, `准备重试`, { details: { retryCount, maxRetries, delay: retryDelayMs } });
         
         // 调用重试回调
         if (lastError) {
@@ -741,7 +721,7 @@ callbacks: {
     }
 
     // 达到最大重试次数，标记为失败
-    console.log(`[executeNode] 达到最大重试次数 ${maxRetries}，节点失败`);
+    logger.info(LOG_MODULES.WORKFLOW, `达到最大重试次数，节点失败`, { details: { maxRetries } });
 
     const failedResult: NodeExecutionResult = {
       nodeIndex,
@@ -817,10 +797,10 @@ callbacks: {
       displayName: exec.Skill?.displayName || '',
       content: exec.Skill?.content || '',
     }));
-    
-    console.log(`[executeMultiSkillNode] 找到 ${skills.length} 个 pending SkillExecution，按 order 排序执行`);
+
+    logger.info(LOG_MODULES.WORKFLOW, `找到 pending SkillExecution，按 order 排序执行`, { details: { count: skills.length } });
     if (skills.length === 0) {
-      console.log(`[executeMultiSkillNode] 无 pending SkillExecution，跳过`);
+      logger.info(LOG_MODULES.WORKFLOW, '无 pending SkillExecution，跳过');
       return {
         nodeIndex,
         nodeId,
@@ -884,22 +864,18 @@ callbacks: {
       if (inquirySent) {
         // 收到响应后重置询问标志
         inquirySent = false;
-        console.log(`[executeMultiSkillNode] 收到响应，重置询问标志`);
+        logger.info(LOG_MODULES.WORKFLOW, '收到响应，重置询问标志');
       }
     };
-    
+
     /**
      * 发送询问消息到 agent
      * 通过写入 stream.jsonl 让前端可见
      */
     const sendInquiryMessage = async (skillName: string) => {
       const inquiryMessage = `【系统询问】请报告当前执行进度，是否遇到问题？当前正在执行 Skill: ${skillName}`;
-      
-      console.log(`\n${'='.repeat(80)}`);
-      console.log(`[executeMultiSkillNode] ⚠️ 10分钟无响应，发送询问消息`);
-      console.log(`[executeMultiSkillNode] Skill: ${skillName}`);
-      console.log(`[executeMultiSkillNode] 消息: ${inquiryMessage}`);
-      console.log(`${'='.repeat(80)}\n`);
+
+      logger.info(LOG_MODULES.WORKFLOW, `10分钟无响应，发送询问消息`, { details: { skillName, message: inquiryMessage } });
       
       // 写入 stream.jsonl（让前端可见）
       await this.nodeStreamStore.appendToStream(nodeId, {
@@ -930,19 +906,19 @@ callbacks: {
         const elapsedMinutes = Math.floor(elapsedMs / 60000);
         
         if (elapsedMs >= NO_RESPONSE_THRESHOLD_MS && !inquirySent && currentExecutingSkillName) {
-          console.log(`[executeMultiSkillNode] 检测到 ${elapsedMinutes} 分钟无响应，准备发送询问`);
-          sendInquiryMessage(currentExecutingSkillName).catch(err => 
-            console.error(`[executeMultiSkillNode] 发送询问消息失败:`, err)
+          logger.info(LOG_MODULES.WORKFLOW, `检测到无响应，准备发送询问`, { details: { elapsedMinutes, skillName: currentExecutingSkillName } });
+          sendInquiryMessage(currentExecutingSkillName).catch(err =>
+            logger.error(LOG_MODULES.WORKFLOW, '发送询问消息失败', { details: { error: err instanceof Error ? err.message : String(err) } })
           );
         } else if (elapsedMinutes > 0 && elapsedMinutes < 10) {
           // 每60秒输出一次状态（仅当超过1分钟时）
-          console.log(`[executeMultiSkillNode] 进度监控: ${elapsedMinutes} 分钟无新输出，Skill: ${currentExecutingSkillName}`);
+          logger.info(LOG_MODULES.WORKFLOW, `进度监控`, { details: { elapsedMinutes, skillName: currentExecutingSkillName } });
         }
       }, CHECK_INTERVAL_MS);
-      
-      console.log(`[executeMultiSkillNode] 进度监控定时器已启动，检查间隔: ${CHECK_INTERVAL_MS / 1000}秒`);
+
+      logger.info(LOG_MODULES.WORKFLOW, `进度监控定时器已启动`, { details: { checkInterval: CHECK_INTERVAL_MS / 1000 } });
     };
-    
+
     /**
      * 停止进度监控定时器
      */
@@ -950,27 +926,27 @@ callbacks: {
       if (progressMonitorTimer) {
         clearInterval(progressMonitorTimer);
         progressMonitorTimer = null;
-        console.log(`[executeMultiSkillNode] 进度监控定时器已停止`);
+        logger.info(LOG_MODULES.WORKFLOW, '进度监控定时器已停止');
       }
     };
-    
+
     // 串行执行每个 skill
     for (let skillIndex = 0; skillIndex < skills.length; skillIndex++) {
       if (this.aborted) {
-        console.log(`[executeMultiSkillNode] 检测到中止信号，停止执行`);
+        logger.info(LOG_MODULES.WORKFLOW, '检测到中止信号，停止执行');
         // 停止进度监控定时器
         stopProgressMonitor();
         break;
       }
-      
+
       const skill = skills[skillIndex];
-      console.log(`[executeMultiSkillNode] ========== 执行 Skill ${skillIndex + 1}/${skills.length}: ${skill.displayName} (order=${skill.order}) ==========`);
-      
+      logger.info(LOG_MODULES.WORKFLOW, `执行 Skill`, { details: { index: skillIndex + 1, total: skills.length, displayName: skill.displayName, order: skill.order } });
+
       // skills 数组已包含所有信息，直接使用
       const executionId = skill.executionId;
       const skillOrder = skill.order;
       const skillStartTime = Date.now();
-      
+
       // 更新 SkillExecution 为 running
       await prisma.skillExecution.update({
         where: { id: executionId },
@@ -979,8 +955,8 @@ callbacks: {
           startedAt: new Date(),
         },
       });
-      
-      console.log(`[executeMultiSkillNode] SkillExecution 更新为 running: ${skill.displayName}, executionId=${executionId}, order=${skillOrder}`);
+
+      logger.info(LOG_MODULES.WORKFLOW, `SkillExecution 更新为 running`, { details: { displayName: skill.displayName, executionId, order: skillOrder } });
       
       // 更新 Skill 的 execCount
       await prisma.skill.update({
@@ -1039,8 +1015,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       
       try {
         // 执行 skill agent
-        console.log(`[executeMultiSkillNode] 🚀 开始执行 skillAgent.loop(): ${skill.name}`);
-        
+        logger.info(LOG_MODULES.WORKFLOW, `开始执行 skillAgent.loop()`, { details: { skillName: skill.name } });
+
         // 超时询问进展机制（基于无活动时间）
         const SKILL_TIMEOUT_MS = 7200000;  // 2小时无活动才触发
         const MAX_INQUIRIES = 10;  // 最大询问次数
@@ -1049,35 +1025,35 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         let skillLastActivityTime = Date.now();  // Skill 级别的活动时间
         let timeoutTimerId: NodeJS.Timeout | null = null;
         let forceAbort = false;  // 强制中止标志
-        
+
         // 更新 Skill 活动时间（在回调中调用）
         const updateSkillActivityTime = () => {
           skillLastActivityTime = Date.now();
           updateActivityTime();  // 也更新全局活动时间
         };
-        
+
         // 启动超时检查定时器（检查无活动时间）
         const startTimeoutTimer = () => {
           // 每1分钟检查一次是否有活动
           timeoutTimerId = setTimeout(() => {
             if (skillCompletedInCallback) {
-              console.log(`[executeMultiSkillNode] ⏰ 超时检查但 Skill 已完成，忽略`);
+              logger.info(LOG_MODULES.WORKFLOW, '超时检查但 Skill 已完成，忽略');
               return;
             }
-            
+
             // 计算无活动时间
             const idleTime = Date.now() - skillLastActivityTime;
             const idleMinutes = Math.round(idleTime / 60000);
-            
-            console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 超时检查: 无活动 ${idleMinutes} 分钟, 阈值 ${SKILL_TIMEOUT_MS / 60000} 分钟`);
-            
+
+            logger.info(LOG_MODULES.WORKFLOW, `Skill 超时检查`, { details: { skillName: skill.name, idleMinutes, threshold: SKILL_TIMEOUT_MS / 60000 } });
+
             // 只有真正无活动超过阈值才触发询问
             if (idleTime >= SKILL_TIMEOUT_MS) {
               inquiryCount++;
-              
+
               if (inquiryCount <= MAX_INQUIRIES) {
-                console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 无活动超时，询问进展 (${inquiryCount}/${MAX_INQUIRIES})`);
-                
+                logger.info(LOG_MODULES.WORKFLOW, `Skill 无活动超时，询问进展`, { details: { skillName: skill.name, inquiryCount, maxInquiries: MAX_INQUIRIES } });
+
                 // 注入进展询问消息
                 skillAgent.injectProgressInquiry(
                   `执行已超过 ${idleMinutes} 分钟无响应。\n` +
@@ -1087,33 +1063,33 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
                   `3) 剩余工作及预计所需时间\n` +
                   `如果任务已完成，请明确说明"任务完成"或"检测完成"。`
                 );
-                
+
                 // 发送 SSE 事件通知前端
                 this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                   event: 'progress_inquiry',
-                  data: { 
-                    skillName: skill.name, 
-                    skillIndex, 
+                  data: {
+                    skillName: skill.name,
+                    skillIndex,
                     inquiryCount,
                     maxInquiries: MAX_INQUIRIES,
                     idleMinutes,
                     message: `无活动 ${idleMinutes} 分钟，系统正在询问进展 (${inquiryCount}/${MAX_INQUIRIES})`
                   },
-                }).catch(err => console.error('[executeMultiSkillNode] 保存 progress_inquiry 失败:', err));
-                
+                }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 progress_inquiry 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
+
                 // 重置活动时间（询问后等待响应）
                 skillLastActivityTime = Date.now();
-                
+
                 // 继续检查
                 startTimeoutTimer();
               } else {
-                console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 已询问 ${MAX_INQUIRIES} 次，强制结束`);
+                logger.info(LOG_MODULES.WORKFLOW, `Skill 已询问最大次数，强制结束`, { details: { skillName: skill.name, maxInquiries: MAX_INQUIRIES } });
                 forceAbort = true;
-                
+
                 // 记录详细错误信息
                 const totalDuration = Math.round((Date.now() - skillStartTime) / 60000);
-                console.log(`[executeMultiSkillNode] 详细错误: 总执行 ${totalDuration} 分钟，输出 ${accumulatedAssistantText.length} 字符`);
-                
+                logger.error(LOG_MODULES.WORKFLOW, `详细错误`, { details: { totalDurationMinutes: totalDuration, outputLength: accumulatedAssistantText.length } });
+
                 skillAgent.abort();
               }
             } else {
@@ -1140,35 +1116,35 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             onChunk: (text) => {
               // 更新 Skill 活动时间（重置超时计时）
               updateSkillActivityTime();
-              
+
               accumulatedAssistantText += text;
-              
+
               // 写入 skill agent 专属的 stream（agents/{executionId}.jsonl）
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'text',
                 data: { text, skillName: skill.name, skillIndex, cumulativeLength: accumulatedAssistantText.length },
-              }).catch(err => console.error('[executeMultiSkillNode] 保存文本失败:', err));
-              
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存文本失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
+
               // 调用外部回调
               this.callbacks.onNodeChunk(nodeIndex, text);
             },
             onThinking: (thinking) => {
               // 更新 Skill 活动时间（重置超时计时）
               updateSkillActivityTime();
-              
+
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'thinking',
                 data: { text: thinking, skillName: skill.name, skillIndex },
-              }).catch(err => console.error('[executeMultiSkillNode] 保存思考失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存思考失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onToolCall: (toolUseId, name, args) => {
               // 更新 Skill 活动时间（重置超时计时）
               updateSkillActivityTime();
-              
+
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'tool_use',
                 data: { toolUseId, name, args, skillName: skill.name, skillIndex },
-              }).catch(err => console.error('[executeMultiSkillNode] 保存工具调用失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存工具调用失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
               
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
@@ -1180,29 +1156,29 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'tool_result',
                 data: { toolUseId, content: resultData, isError, skillName: skill.name, skillIndex },
-              }).catch(err => console.error('[executeMultiSkillNode] 保存工具结果失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存工具结果失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onComplete: async () => {
-              console.log(`[executeMultiSkillNode] 🏁 onComplete 回调触发: ${skill.name}`);
-              
+              logger.info(LOG_MODULES.WORKFLOW, `onComplete 回调触发`, { details: { skillName: skill.name } });
+
               // 立即更新数据库状态为 completed
               if (!skillCompletedInCallback) {
                 skillCompletedInCallback = true;
-                console.log(`[executeMultiSkillNode] onComplete 中更新状态: executionId=${executionId}, status=completed`);
+                logger.info(LOG_MODULES.WORKFLOW, `onComplete 中更新状态`, { details: { executionId, status: 'completed' } });
                 await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
               }
-              
+
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'skill_complete',
                 data: { skillName: skill.name, skillIndex, text: accumulatedAssistantText },
-              }).catch(err => console.error('[executeMultiSkillNode] 保存 skill_complete 失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 skill_complete 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onError: (error) => {
-              console.error(`[executeMultiSkillNode] Skill ${skill.name} Agent 错误: ${error.message}`);
+              logger.error(LOG_MODULES.WORKFLOW, `Skill Agent 错误`, { details: { skillName: skill.name, error: error.message } });
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'error',
                 data: { message: error.message, stack: error.stack, skillName: skill.name, skillIndex },
-              }).catch(err => console.error('[executeMultiSkillNode] 保存 error 失败:', err));
+              }).catch(err => logger.error(LOG_MODULES.WORKFLOW, '保存 error 失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
             },
             onUsage: (usage) => {
               // 更新 Skill 活动时间（token 使用也是活动，重置超时计时）
@@ -1254,10 +1230,10 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         
         // 检查是否被强制中止
         if (forceAbort) {
-          console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 被强制中止（超时询问次数已达上限）`);
+          logger.info(LOG_MODULES.WORKFLOW, `Skill 被强制中止`, { details: { skillName: skill.name, reason: '超时询问次数已达上限' } });
           this.currentAgent = null;
           stopProgressMonitor();
-          
+
           // 生成详细错误信息
           const totalDuration = Math.round((Date.now() - skillStartTime) / 60000);
           const detailedError = `Skill "${skill.name}" 执行超时中止:\n` +
@@ -1268,7 +1244,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             `• 输入Token: ${skillInputTokens}, 输出Token: ${skillOutputTokens}\n` +
             `• 可能原因: MCP工具响应慢、任务复杂、网络超时\n` +
             `• 建议: 检查MCP服务器状态，增加超时时间，简化任务`;
-          
+
           await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, detailedError);
           skillResults.push({
             skillName: skill.name,
@@ -1280,21 +1256,21 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           });
           continue;
         }
-        
-        console.log(`[executeMultiSkillNode] ✅ skillAgent.loop() 返回: ${skill.name}, completionReason=${result.completionReason}, iterations=${result.iterations}, textLength=${result.text?.length || 0}`);
-        
+
+        logger.info(LOG_MODULES.WORKFLOW, `skillAgent.loop() 返回`, { details: { skillName: skill.name, completionReason: result.completionReason, iterations: result.iterations, textLength: result.text?.length || 0 } });
+
         this.currentAgent = null;
-        
+
         // 停止进度监控定时器（skill 执行完成）
         stopProgressMonitor();
-        
+
         // 检查执行结果
         if (result.completionReason === 'aborted') {
-          console.log(`[executeMultiSkillNode] Skill ${skill.name} 被中止`);
-          
+          logger.info(LOG_MODULES.WORKFLOW, `Skill 被中止`, { details: { skillName: skill.name } });
+
           // 更新 SkillExecution 为失败
           await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, '用户中止');
-          
+
           skillResults.push({
             skillName: skill.name,
             skillId: skill.skillId,
@@ -1303,21 +1279,21 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             text: accumulatedAssistantText,
             error: '用户中止',
           });
-          
+
           continue;
         }
-        
+
         // Skill 执行成功
-        console.log(`[executeMultiSkillNode] Skill ${skill.name} 执行完成: completionReason=${result.completionReason}, iterations=${result.iterations}, textLength=${accumulatedAssistantText.length}`);
-        
+        logger.info(LOG_MODULES.WORKFLOW, `Skill 执行完成`, { details: { skillName: skill.name, completionReason: result.completionReason, iterations: result.iterations, textLength: accumulatedAssistantText.length } });
+
         totalIterations += result.iterations;
-        
+
         // 如果 onComplete 回调中已更新，跳过
         if (!skillCompletedInCallback) {
-          console.log(`[executeMultiSkillNode] loop() 返回后更新状态: executionId=${executionId}, status=completed`);
+          logger.info(LOG_MODULES.WORKFLOW, `loop() 返回后更新状态`, { details: { executionId, status: 'completed' } });
           await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
         } else {
-          console.log(`[executeMultiSkillNode] onComplete 已更新状态，跳过`);
+          logger.info(LOG_MODULES.WORKFLOW, 'onComplete 已更新状态，跳过');
         }
         
         skillResults.push({
@@ -1330,16 +1306,16 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         
       } catch (skillError) {
         const err = skillError instanceof Error ? skillError : new Error(String(skillError));
-        console.error(`[executeMultiSkillNode] Skill ${skill.name} 执行异常: ${err.message}`);
-        
+        logger.error(LOG_MODULES.WORKFLOW, `Skill 执行异常`, { details: { skillName: skill.name, error: err.message } });
+
         this.currentAgent = null;
-        
+
         // 停止进度监控定时器（skill 执行异常）
         stopProgressMonitor();
-        
+
         // 更新 SkillExecution 为失败
         await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, err.message);
-        
+
         skillResults.push({
           skillName: skill.name,
           skillId: skill.skillId,
@@ -1348,9 +1324,9 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           text: accumulatedAssistantText,
           error: err.message,
         });
-        
+
         // 继续执行下一个 skill（不中断整个节点）
-        console.log(`[executeMultiSkillNode] Skill ${skill.name} 失败，继续执行下一个 Skill`);
+        logger.info(LOG_MODULES.WORKFLOW, `Skill 失败，继续执行下一个 Skill`, { details: { skillName: skill.name } });
       }
     }
     
@@ -1360,8 +1336,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     
     // 停止进度监控定时器（所有 skill 执行完成）
     stopProgressMonitor();
-    
-    console.log(`[executeMultiSkillNode] 串行执行完成: ${completedCount} 成功, ${failedCount} 失败`);
+
+    logger.info(LOG_MODULES.WORKFLOW, `串行执行完成`, { details: { completedCount, failedCount } });
     
     // 确定节点状态
     const nodeStatus: NodeExecutionStatus = this.aborted 
@@ -1418,13 +1394,11 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     node: UnifiedNodeDefinition,
     skillName: string
   ): Promise<RalphLoopAgent> {
-    console.log(`[createSkillAgent] Creating agent for skill: ${skillName}`);
-    console.log(`[createSkillAgent] Model: ${modelConfig.name}`);
-    console.log(`[createSkillAgent] WorkflowNodeId: ${node.id}`);
-    
+    logger.info(LOG_MODULES.WORKFLOW, `Creating agent for skill`, { details: { skillName, model: modelConfig.name, workflowNodeId: node.id } });
+
     // 默认工具列表
     const defaultAllowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
-    
+
     // 添加 MCP 工具名称到 allowedTools（必须！否则 SDK 不注册 MCP 工具）
     const mcpToolNames: string[] = [];
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {
@@ -1432,7 +1406,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         // 使用 mcp__{serverName}__* 格式授权所有 MCP 工具
         // 不依赖 mcp.tools 字段（可能为空）
         mcpToolNames.push(`mcp__${mcp.name}__*`);
-        
+
         // 如果有具体的工具列表，也添加具体的工具名称
         if (mcp.tools && Array.isArray(mcp.tools)) {
           for (const tool of mcp.tools) {
@@ -1442,21 +1416,18 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           }
         }
       }
-      console.log(`[createSkillAgent] MCP 工具名称: ${mcpToolNames.join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, `MCP 工具名称`, { details: { mcpToolNames } });
     }
-    
+
     // 减去被 deny 的工具
     const deniedTools = this.config.toolPermissions
       ? this.config.toolPermissions.filter(p => p.permission === 'deny').map(p => p.toolPattern)
       : [];
-    
+
     // 合并默认工具 + MCP 工具，过滤 denied
     const allowedTools = [...defaultAllowedTools, ...mcpToolNames].filter(tool => !deniedTools.includes(tool));
-    
-    console.log(`[createSkillAgent] 默认工具: ${defaultAllowedTools.join(', ')}`);
-    console.log(`[createSkillAgent] MCP 工具: ${mcpToolNames.join(', ')}`);
-    console.log(`[createSkillAgent] 拒绝工具: ${deniedTools.join(', ')}`);
-    console.log(`[createSkillAgent] 最终工具: ${allowedTools.join(', ')}`);
+
+    logger.info(LOG_MODULES.WORKFLOW, `工具配置`, { details: { defaultTools: defaultAllowedTools, mcpTools: mcpToolNames, deniedTools, allowedTools } });
     
     const mcpServers = this.config.mcpServers;
     
@@ -1522,9 +1493,9 @@ ai4java MCP 工具：
   ): Promise<void> {
     const completedAt = new Date();
     const duration = completedAt.getTime() - startTime;
-    
-    console.log(`[updateSkillExecutionStatus] 开始更新: executionId=${executionId}, skillId=${skillId}, status=${status}, duration=${duration}ms`);
-    
+
+    logger.info(LOG_MODULES.WORKFLOW, `开始更新 SkillExecution`, { details: { executionId, skillId, status, duration } });
+
     try {
       const result = await prisma.skillExecution.update({
         where: { id: executionId },
@@ -1536,11 +1507,11 @@ ai4java MCP 工具：
           error: status === 'failed' ? outputOrError : undefined,
         },
       });
-      
-      console.log(`[updateSkillExecutionStatus] ✅ 更新成功: executionId=${executionId}, status=${result.status}, completedAt=${result.completedAt}`);
-      
+
+      logger.info(LOG_MODULES.WORKFLOW, `更新成功`, { details: { executionId, status: result.status, completedAt: result.completedAt } });
+
     } catch (updateError) {
-      console.error(`[updateSkillExecutionStatus] ❌ 更新失败: executionId=${executionId}`, updateError);
+      logger.error(LOG_MODULES.WORKFLOW, `更新失败`, { details: { executionId, error: updateError instanceof Error ? updateError.message : String(updateError) } });
     }
   }
 
@@ -1554,7 +1525,7 @@ ai4java MCP 工具：
   private async getModelConfigForRole(roleId?: string): Promise<ModelConfigForExecution> {
     // 如果没有 roleModels 配置，使用默认模型
     if (!this.config.roleModels || this.config.roleModels.length === 0) {
-      console.log(`[getModelConfigForRole] No roleModels config, using default model`);
+      logger.info(LOG_MODULES.WORKFLOW, 'No roleModels config, using default model');
       return this.config.defaultModelConfig;
     }
 
@@ -1564,16 +1535,16 @@ ai4java MCP 工具：
     const roleModel = this.config.roleModels.find(rm => rm.roleId === targetRoleId);
 
     if (!roleModel) {
-      console.log(`[getModelConfigForRole] No model found for role ${targetRoleId}, using default model`);
+      logger.info(LOG_MODULES.WORKFLOW, `No model found for role, using default model`, { details: { roleId: targetRoleId } });
       return this.config.defaultModelConfig;
     }
 
     const modelId = roleModel.modelId;
-    console.log(`[getModelConfigForRole] Role ${targetRoleId} -> Model ${modelId}`);
+    logger.info(LOG_MODULES.WORKFLOW, `Role -> Model`, { details: { roleId: targetRoleId, modelId } });
 
     // 检查缓存
     if (this.modelConfigCache.has(modelId)) {
-      console.log(`[getModelConfigForRole] Using cached model config for ${modelId}`);
+      logger.info(LOG_MODULES.WORKFLOW, `Using cached model config`, { details: { modelId } });
       return this.modelConfigCache.get(modelId)!;
     }
 
@@ -1584,7 +1555,7 @@ ai4java MCP 工具：
       });
 
       if (!modelConfig) {
-        console.warn(`[getModelConfigForRole] Model ${modelId} not found, using default model`);
+        logger.warn(LOG_MODULES.WORKFLOW, `Model not found, using default model`, { details: { modelId } });
         return this.config.defaultModelConfig;
       }
 
@@ -1600,11 +1571,11 @@ ai4java MCP 工具：
 
       // 缓存
       this.modelConfigCache.set(modelId, config);
-      console.log(`[getModelConfigForRole] Loaded model config: ${modelConfig.name} (${modelConfig.providerType})`);
+      logger.info(LOG_MODULES.WORKFLOW, `Loaded model config`, { details: { name: modelConfig.name, provider: modelConfig.providerType } });
 
       return config;
     } catch (error) {
-      console.error(`[getModelConfigForRole] Failed to load model ${modelId}:`, error);
+      logger.error(LOG_MODULES.WORKFLOW, `Failed to load model`, { details: { modelId, error: error instanceof Error ? error.message : String(error) } });
       return this.config.defaultModelConfig;
     }
   }
@@ -1623,15 +1594,13 @@ ai4java MCP 工具：
     modelConfig: ModelConfigForExecution,
     node: UnifiedNodeDefinition
   ): Promise<RalphLoopAgent> {
-    console.log(`[createNodeAgent] Creating agent for node ${nodeIndex}: ${node.label}`);
-    console.log(`[createNodeAgent] Model: ${modelConfig.name}`);
-    console.log(`[createNodeAgent] WorkflowNodeId: ${node.id}`);
+    logger.info(LOG_MODULES.WORKFLOW, `Creating agent for node`, { details: { nodeIndex, nodeLabel: node.label, model: modelConfig.name, workflowNodeId: node.id } });
     
-    console.log(`[TRACE MCP] unified-execution-engine.ts: this.config.mcpServers=${this.config.mcpServers?.length || 0}个`);
+    logger.info(LOG_MODULES.WORKFLOW, `MCP TRACE unified-execution-engine.ts: this.config.mcpServers=${this.config.mcpServers?.length || 0}个`);
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {
-      console.log(`[TRACE MCP] unified-execution-engine.ts: MCP服务器=${this.config.mcpServers.map(s => s.name).join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, `MCP TRACE unified-execution-engine.ts: MCP服务器=${this.config.mcpServers.map(s => s.name).join(', ')}`);
     } else {
-      console.log(`[TRACE MCP] unified-execution-engine.ts: ⚠️ this.config.mcpServers 为空！`);
+      logger.info(LOG_MODULES.WORKFLOW, `MCP TRACE unified-execution-engine.ts: ⚠️ this.config.mcpServers 为空！`);
     }
 
     // 动态查询节点配置的 Skills
@@ -1661,8 +1630,8 @@ ai4java MCP 工具：
     // 合并基础工具 + MCP 工具
     const allowedTools = [...baseTools, ...mcpToolNames];
     
-    console.log(`[createNodeAgent] MCP 工具名称: ${mcpToolNames.join(', ')}`);
-    console.log(`[createNodeAgent] allowedTools: ${allowedTools.join(', ')}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` MCP 工具名称: ${mcpToolNames.join(', ')}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` allowedTools: ${allowedTools.join(', ')}`);
     
     // Skills 注册：使用 SDK 的 skills 参数（直接传 skill name）
     const skillNames = skills.map(s => s.name);
@@ -1689,31 +1658,20 @@ ai4java MCP 工具：
       model: 'inherit',  // 使用父 Agent 的模型
     };
     
-    console.log(`[createNodeAgent] 配置子Agent 'general-purpose' 继承:`);
-    console.log(`  - allowedTools: ${allowedTools.join(', ')}`);
-    if (mcpServerNames.length > 0) {
-      console.log(`  - MCP Servers: ${mcpServerNames.join(', ')}`);
-    } else {
-      console.log(`  - MCP Servers: 无（父Agent未配置）`);
-    }
-    if (skillNames.length > 0) {
-      console.log(`  - Skills: ${skillNames.join(', ')}`);
-    } else {
-      console.log(`  - Skills: 无（父Agent未配置）`);
-    }
+    logger.info(LOG_MODULES.WORKFLOW, `配置子Agent 'general-purpose' 继承`, { details: { allowedTools, mcpServers: mcpServerNames.length > 0 ? mcpServerNames : '无（父Agent未配置）', skills: skillNames.length > 0 ? skillNames : '无（父Agent未配置）' } });
     
-    console.log(`[createNodeAgent] allowedTools: ${allowedTools.join(', ')}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` allowedTools: ${allowedTools.join(', ')}`);
     if (skillNames.length > 0) {
-      console.log(`[createNodeAgent] 注册 Skills: ${skillNames.join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` 注册 Skills: ${skillNames.join(', ')}`);
     }
     if (mcpServers && mcpServers.length > 0) {
-      console.log(`[createNodeAgent] MCP 服务器: ${mcpServers.map(m => m.name).join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` MCP 服务器: ${mcpServers.map(m => m.name).join(', ')}`);
     }
     
-    console.log(`[TRACE MCP] unified-execution-engine.ts: 调用 createRalphLoopAgent，mcpServers=${mcpServers?.length || 0}个`);
+    logger.info(LOG_MODULES.WORKFLOW, `MCP TRACE unified-execution-engine.ts: 调用 createRalphLoopAgent，mcpServers=${mcpServers?.length || 0}个`);
     if (mcpServers && mcpServers.length > 0) {
-      console.log(`[TRACE MCP] unified-execution-engine.ts: 传递给RalphLoopAgent的MCP=${mcpServers.map(s => s.name).join(', ')}`);
-      console.log(`[TRACE MCP] unified-execution-engine.ts: 第一个MCP详情: ${JSON.stringify(mcpServers[0])}`);
+      logger.info(LOG_MODULES.WORKFLOW, `MCP TRACE unified-execution-engine.ts: 传递给RalphLoopAgent的MCP=${mcpServers.map(s => s.name).join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, `MCP TRACE unified-execution-engine.ts: 第一个MCP详情: ${JSON.stringify(mcpServers[0])}`);
     }
 
     return createRalphLoopAgent(
@@ -1743,7 +1701,7 @@ ai4java MCP 工具：
       }
     );
     
-    console.log(`[createNodeAgent] systemPrompt 传递完成: length=${this.config.systemPrompt?.length || 0}, preview=${(this.config.systemPrompt || '').substring(0, 100)}...`);
+    logger.info(LOG_MODULES.WORKFLOW, ` systemPrompt 传递完成: length=${this.config.systemPrompt?.length || 0}, preview=${(this.config.systemPrompt || '').substring(0, 100)}...`);
   }
 
 /**
@@ -1757,15 +1715,15 @@ ai4java MCP 工具：
     * 3. 否则 -> description 模式，不需要 Skills
     */
   private async getNodeSkills(node: UnifiedNodeDefinition): Promise<Array<{ name: string; displayName: string }>> {
-    console.log(`[getNodeSkills] 节点: ${node.label}`);
-    console.log(`[getNodeSkills] node.skills: ${JSON.stringify(node.skills)}`);
-    console.log(`[getNodeSkills] node.vulnerabilityCategories: ${JSON.stringify(node.vulnerabilityCategories)}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` 节点: ${node.label}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` node.skills: ${JSON.stringify(node.skills)}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` node.vulnerabilityCategories: ${JSON.stringify(node.vulnerabilityCategories)}`);
     
     // 优先级 1: manual 模式 - node.skills 有 skill ID 数组
     if (node.skills && node.skills.length > 0) {
       const skillIds = node.skills;
       
-      console.log(`[getNodeSkills] manual 模式 (node.skills), skillIds: ${skillIds.join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` manual 模式 (node.skills), skillIds: ${skillIds.join(', ')}`);
       
       // 从数据库查询 Skill 详情
       try {
@@ -1780,10 +1738,10 @@ ai4java MCP 工具：
           },
         });
         
-        console.log(`[getNodeSkills] 查询到 ${skills.length} 个 Skills`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 查询到 ${skills.length} 个 Skills`);
         return skills;
       } catch (error) {
-        console.error(`[getNodeSkills] 查询失败:`, error);
+        logger.error(LOG_MODULES.WORKFLOW, `查询失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
         return [];
       }
     }
@@ -1792,7 +1750,7 @@ ai4java MCP 工具：
     if (node.vulnerabilityCategories && node.vulnerabilityCategories.length > 0) {
       const categories = node.vulnerabilityCategories;
       
-      console.log(`[getNodeSkills] vulnerability 模式 (node.vulnerabilityCategories), categories: ${categories.join(', ')}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` vulnerability 模式 (node.vulnerabilityCategories), categories: ${categories.join(', ')}`);
       
       // 从数据库查询匹配漏洞分类的 Skills
       // 步骤1: 先找到这些分类对应的 VulnerabilityPattern IDs
@@ -1814,10 +1772,10 @@ ai4java MCP 工具：
         });
         
         const patternIds = vulnPatterns.map(p => p.id);
-        console.log(`[getNodeSkills] 找到 ${patternIds.length} 个 VulnerabilityPattern IDs`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 找到 ${patternIds.length} 个 VulnerabilityPattern IDs`);
         
         if (patternIds.length === 0) {
-          console.log(`[getNodeSkills] 未找到匹配的 VulnerabilityPattern，返回空`);
+          logger.info(LOG_MODULES.WORKFLOW, ` 未找到匹配的 VulnerabilityPattern，返回空`);
           return [];
         }
         
@@ -1845,16 +1803,16 @@ ai4java MCP 工具：
           },
         });
         
-        console.log(`[getNodeSkills] 查询到 ${skills.length} 个匹配漏洞分类的 Skills (isActive + isLatest + 技术栈)`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 查询到 ${skills.length} 个匹配漏洞分类的 Skills (isActive + isLatest + 技术栈)`);
         return skills;
       } catch (error) {
-        console.error(`[getNodeSkills] 查询失败:`, error);
+        logger.error(LOG_MODULES.WORKFLOW, `查询失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
         return [];
       }
     }
 
     // 优先级 3: description 模式 - 无 Skills 配置
-    console.log(`[getNodeSkills] description 模式，节点 ${node.label} 无 Skills 配置`);
+    logger.info(LOG_MODULES.WORKFLOW, ` description 模式，节点 ${node.label} 无 Skills 配置`);
     return [];
   }
 
@@ -1889,7 +1847,7 @@ ai4java MCP 工具：
       } else {
         // 默认使用 threat-modeling（如果找不到 Template skillPath）
         fullSkillPath = `threat-modeling/${nodeSkillPath}`;
-        console.warn(`[loadFSMPhaseSkillContent] 未找到 FSM Template skillPath，使用默认前缀 threat-modeling`);
+        logger.warn(LOG_MODULES.WORKFLOW, ` 未找到 FSM Template skillPath，使用默认前缀 threat-modeling`);
       }
     }
 
@@ -1900,11 +1858,11 @@ ai4java MCP 工具：
       // 完整物理路径: process.cwd()/skills/threat-modeling/phases/P1-xxx.md
       const fullPath = path.join(process.cwd(), 'skills', fullSkillPath);
       
-      console.log(`[loadFSMPhaseSkillContent] Reading skill file: ${fullPath}`);
-      console.log(`[loadFSMPhaseSkillContent] Node skillPath: ${nodeSkillPath}, Full skillPath: ${fullSkillPath}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` Reading skill file: ${fullPath}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` Node skillPath: ${nodeSkillPath}, Full skillPath: ${fullSkillPath}`);
       
       const content = await fs.readFile(fullPath, 'utf-8');
-      console.log(`[loadFSMPhaseSkillContent] Loaded ${content.length} bytes from ${fullSkillPath}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` Loaded ${content.length} bytes from ${fullSkillPath}`);
       
       // 验证文件内容是否有效（至少包含 Phase 标题）
       if (!content.includes('# Phase') && !content.includes('## Objective')) {
@@ -1963,12 +1921,12 @@ ai4java MCP 工具：
         } catch (error) {
           // Skill 文件读取失败，使用 description 作为 fallback
           const err = error instanceof Error ? error : new Error(String(error));
-          console.warn(`[buildNodePrompt] FSM Phase ${node.label} Skill 文件读取失败，使用 description:`, err.message);
+          logger.warn(LOG_MODULES.WORKFLOW, `FSM Phase Skill 文件读取失败，使用 description`, { details: { nodeLabel: node.label, error: err.message } });
           nodeDescription = node.description || '执行节点任务';
         }
       } else {
         // skillPath 为 null（如渗透测试节点），使用 description
-        console.log(`[buildNodePrompt] FSM Phase ${node.label} 无 skillPath，使用 description: ${node.description || '无描述'}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` FSM Phase ${node.label} 无 skillPath，使用 description: ${node.description || '无描述'}`);
         nodeDescription = node.description || '执行节点任务';
       }
     } else {
@@ -1988,7 +1946,7 @@ ai4java MCP 工具：
     if (nodeType === 'fsm_phase') {
       // skillPath 为 null 的节点（如渗透测试）走自定义流程逻辑
       if (!node.skillPath) {
-        console.log(`[buildNodePrompt] FSM Phase ${node.label} 无 skillPath，走自定义流程逻辑`);
+        logger.info(LOG_MODULES.WORKFLOW, ` FSM Phase ${node.label} 无 skillPath，走自定义流程逻辑`);
         
         // 获取节点配置的 Skills（用户编排）
         const skills = await this.getNodeSkills(node);
@@ -2013,7 +1971,7 @@ ${nodeDescription}
 ### 前序节点输出
 ${previousOutputs || '(首个节点，无前序输出)'}
 `;
-          console.log(`[buildNodePrompt] FSM Phase description 模式，提示词: ${prompt.slice(0, 100)}...`);
+          logger.info(LOG_MODULES.WORKFLOW, ` FSM Phase description 模式，提示词: ${prompt.slice(0, 100)}...`);
         } else {
 		throw new Error(`废弃代码2222`);
           // manual 或 vulnerability 模式：根据 Skills 生成提示词（和自定义流程一样）
@@ -2032,7 +1990,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 ### 前序节点输出
 ${previousOutputs || '(首个节点，无前序输出)'}
 `;
-          console.log(`[buildNodePrompt] FSM Phase ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
+          logger.info(LOG_MODULES.WORKFLOW, ` FSM Phase ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
         }
         
         return prompt;
@@ -2102,7 +2060,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     if (mode === 'description' || skills.length === 0) {
       // description 模式或无 Skills：直接用用户写的描述
       prompt = `${nodeDescription}`;
-      console.log(`[buildNodePrompt] description 模式，提示词: ${prompt.slice(0, 100)}...`);
+      logger.info(LOG_MODULES.WORKFLOW, ` description 模式，提示词: ${prompt.slice(0, 100)}...`);
     } else {
 	throw new Error(`废弃代码1111`);
       // manual 或 vulnerability 模式：根据 Skills 生成提示词
@@ -2115,7 +2073,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 ### 重要要求 ，必须严格按下面的要求执行。
 请将任务分解成TODO列表，每个TODO用子代理（Subagent）执行，每个Subagent要独立运行，你的任务只有创建Subagent与监督Subagent进展，你禁止与项目经理干不相关的事，Subagent没有达到的你设定的目标，必须让Subagent重新执行。
 `;
-      console.log(`[buildNodePrompt] ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
+      logger.info(LOG_MODULES.WORKFLOW, ` ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
     }
 
     return prompt;
@@ -2177,7 +2135,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     const outputPath = path.join(phaseDir, 'output.yaml');
     await fs.writeFile(outputPath, yamlContent, 'utf-8');
 
-    console.log(`[writeNodeOutput] 写入 YAML 输出: ${outputPath}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` 写入 YAML 输出: ${outputPath}`);
     return outputPath;
   }
 
@@ -2239,7 +2197,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         },
       });
 
-      console.log(`[saveNodeExecutionToDB] 查询结果: ${node.label}, existing=${existing ? '存在' : '不存在'}, startedAt=${existing?.startedAt || 'null'}, status=${existing?.status || 'null'}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` 查询结果: ${node.label}, existing=${existing ? '存在' : '不存在'}, startedAt=${existing?.startedAt || 'null'}, status=${existing?.status || 'null'}`);
 
       // 检查 modelConfigId 是否存在（避免外键约束失败）
       let safeModelConfigId: string | null = null;
@@ -2252,10 +2210,10 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           if (modelExists) {
             safeModelConfigId = modelConfig.id;
           } else {
-            console.warn(`[saveNodeExecutionToDB] modelConfigId ${modelConfig.id} 不存在于数据库，跳过外键更新`);
+            logger.warn(LOG_MODULES.WORKFLOW, ` modelConfigId ${modelConfig.id} 不存在于数据库，跳过外键更新`);
           }
         } catch (e) {
-          console.warn(`[saveNodeExecutionToDB] 检查 modelConfigId 失败:`, e);
+          logger.warn(LOG_MODULES.WORKFLOW, `检查 modelConfigId 失败`, { details: { error: e instanceof Error ? e.message : String(e) } });
         }
       }
 
@@ -2296,14 +2254,14 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         
         if (!existing.startedAt) {
           updateData.startedAt = new Date(Date.now() - result.duration);
-          console.log(`[saveNodeExecutionToDB] startedAt 为空，倒推设置: ${node.label}`);
+          logger.info(LOG_MODULES.WORKFLOW, ` startedAt 为空，倒推设置: ${node.label}`);
         }
         
         await prisma.nodeExecution.update({
           where: { id: existing.id },
           data: updateData,
         });
-        console.log(`[saveNodeExecutionToDB] 更新节点执行记录成功: ${node.label}, status=${result.status}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 更新节点执行记录成功: ${node.label}, status=${result.status}`);
       } else {
         // 创建新记录
         await prisma.nodeExecution.create({
@@ -2312,11 +2270,11 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             ...data,
           },
         });
-        console.log(`[saveNodeExecutionToDB] 创建节点执行记录成功: ${node.label}, status=${result.status}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 创建节点执行记录成功: ${node.label}, status=${result.status}`);
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`[saveNodeExecutionToDB] 保存失败:`, err.message, err.stack);
+      logger.error(LOG_MODULES.WORKFLOW, `保存失败`, { details: { error: err.message, stack: err.stack } });
       // 记录错误到会话（但不阻塞执行）
       await this.recordDatabaseError('saveNodeExecutionToDB', err, node.label);
     }
@@ -2374,7 +2332,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             updatedAt: now,
           },
         });
-        console.log(`[saveSkippedNodeExecution] 更新跳过节点记录: ${node.label}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 更新跳过节点记录: ${node.label}`);
       } else {
         // 创建新记录
         await prisma.nodeExecution.create({
@@ -2383,10 +2341,10 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             ...data,
           },
         });
-        console.log(`[saveSkippedNodeExecution] 创建跳过节点记录: ${node.label}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 创建跳过节点记录: ${node.label}`);
       }
     } catch (error) {
-      console.error(`[saveSkippedNodeExecution] 保存失败:`, error);
+      logger.error(LOG_MODULES.WORKFLOW, `保存失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -2403,7 +2361,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     this.currentSkillExecutionIds = [];
     this.currentSkillIds = [];
     
-    console.log(`[createSkillExecutions] 节点 ${node.label} 的 skills: ${JSON.stringify(skills)}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` 节点 ${node.label} 的 skills: ${JSON.stringify(skills)}`);
     
     for (const skillIdOrName of skills) {
       try {
@@ -2422,7 +2380,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         }
         
         if (!skill) {
-          console.warn(`[createSkillExecutions] Skill 未找到: ${skillIdOrName}`);
+          logger.warn(LOG_MODULES.WORKFLOW, ` Skill 未找到: ${skillIdOrName}`);
           continue;
         }
         
@@ -2449,13 +2407,13 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         this.currentSkillExecutionIds.push(executionId);
         this.currentSkillIds.push(skill.id);
         
-        console.log(`[createSkillExecutions] Skill 执行记录已创建: ${skill.name} (${skill.displayName}), executionId=${executionId}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` Skill 执行记录已创建: ${skill.name} (${skill.displayName}), executionId=${executionId}`);
       } catch (error) {
-        console.error(`[createSkillExecutions] 创建 Skill 执行记录失败: ${skillIdOrName}`, error);
+        logger.error(LOG_MODULES.WORKFLOW, `创建 Skill 执行记录失败: ${skillIdOrName}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
     
-    console.log(`[createSkillExecutions] 共创建 ${this.currentSkillExecutionIds.length} 条 SkillExecution 记录`);
+    logger.info(LOG_MODULES.WORKFLOW, ` 共创建 ${this.currentSkillExecutionIds.length} 条 SkillExecution 记录`);
   }
 
   /**
@@ -2483,7 +2441,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
       }
       
       if (!skill) {
-        console.warn(`[createSingleSkillExecution] Skill 未找到: ${skillName}`);
+        logger.warn(LOG_MODULES.WORKFLOW, ` Skill 未找到: ${skillName}`);
         return;
       }
       
@@ -2521,9 +2479,9 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
       this.currentSkillExecutionIds.push(executionId);
       this.currentSkillIds.push(skill.id);
       
-      console.log(`[createSingleSkillExecution] Skill 执行记录已创建: ${skill.name}, executionId=${executionId}, startedAt=${new Date().toISOString()}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` Skill 执行记录已创建: ${skill.name}, executionId=${executionId}, startedAt=${new Date().toISOString()}`);
     } catch (error) {
-      console.error(`[createSingleSkillExecution] 创建失败: ${skillName}`, error);
+      logger.error(LOG_MODULES.WORKFLOW, `创建失败: ${skillName}`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -2549,7 +2507,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
       });
       
       if (!existing) {
-        console.warn(`[completeSingleSkillExecutionByAgent] SkillExecution 不存在: ${executionId}`);
+        logger.warn(LOG_MODULES.WORKFLOW, ` SkillExecution 不存在: ${executionId}`);
         return;
       }
       
@@ -2583,7 +2541,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         });
       }
       
-      console.log(`[completeSingleSkillExecutionByAgent] Skill 执行完成: executionId=${executionId}, findings=${findingsCount}, duration=${duration}ms, completedAt=${completedAt.toISOString()}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` Skill 执行完成: executionId=${executionId}, findings=${findingsCount}, duration=${duration}ms, completedAt=${completedAt.toISOString()}`);
       
       // 从列表中移除（避免节点完成时重复处理）
       const index = this.currentSkillExecutionIds.indexOf(executionId);
@@ -2592,7 +2550,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         this.currentSkillIds.splice(index, 1);
       }
     } catch (error) {
-      console.error(`[completeSingleSkillExecutionByAgent] 完成失败:`, error);
+      logger.error(LOG_MODULES.WORKFLOW, `完成失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -2652,16 +2610,16 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           });
         }
         
-        console.log(`[completeSkillExecutions] Skill 执行完成: executionId=${executionId}, duration=${duration}ms, findings=${findingsCount}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` Skill 执行完成: executionId=${executionId}, duration=${duration}ms, findings=${findingsCount}`);
       } catch (error) {
-        console.error(`[completeSkillExecutions] 更新 Skill 执行记录失败: ${executionId}`, error);
+        logger.error(LOG_MODULES.WORKFLOW, `更新 Skill 执行记录失败: ${executionId}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
     
     this.currentSkillExecutionIds = [];
     this.currentSkillIds = [];
     
-    console.log(`[completeSkillExecutions] 共完成 SkillExecution, totalFindings=${totalFindings}`);
+    logger.info(LOG_MODULES.WORKFLOW, ` 共完成 SkillExecution, totalFindings=${totalFindings}`);
   }
 
   /**
@@ -2696,9 +2654,9 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           },
         });
         
-        console.log(`[failSkillExecutions] Skill 执行失败: executionId=${executionId}, error=${error}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` Skill 执行失败: executionId=${executionId}, error=${error}`);
       } catch (err) {
-        console.error(`[failSkillExecutions] 更新 Skill 执行记录失败: ${executionId}`, err);
+        logger.error(LOG_MODULES.WORKFLOW, `更新 Skill 执行记录失败: ${executionId}`, { details: { error: err instanceof Error ? err.message : String(err) } });
       }
     }
     
@@ -2759,10 +2717,10 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         data: { status: status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : status },
       });
 
-      console.log(`[updateSessionStatus] 更新状态: ${status}, reason: ${reason}, 项目状态已同步更新`);
+      logger.info(LOG_MODULES.WORKFLOW, ` 更新状态: ${status}, reason: ${reason}, 项目状态已同步更新`);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`[updateSessionStatus] 更新失败:`, err.message, err.stack);
+      logger.error(LOG_MODULES.WORKFLOW, `更新失败`, { details: { error: err.message, stack: err.stack } });
       // 会话状态更新失败是严重问题，记录错误
       await this.recordDatabaseError('updateSessionStatus', err, `status=${status}`);
     }
@@ -2891,7 +2849,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         try {
           await this.updateNodeExecutionTokens(nodeId, data.input, data.output, data.modelName, data.modelConfigId);
         } catch (e) {
-          console.error(`[updateNodeExecutionTokensDebounced] 更新 ${nodeId} 失败:`, e);
+          logger.error(LOG_MODULES.WORKFLOW, `更新 ${nodeId} 失败`, { details: { error: e instanceof Error ? e.message : String(e) } });
         }
       }
     }, this.TOKEN_UPDATE_INTERVAL);
@@ -2909,7 +2867,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
   ): Promise<void> {
     try {
       const now = new Date();
-      console.log(`[createNodeExecutionRecord] 开始: ${node.label}, nodeIndex=${nodeIndex}, workflowNodeId=${node.id}, evalSessionId=${this.config.evaluationSessionId}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` 开始: ${node.label}, nodeIndex=${nodeIndex}, workflowNodeId=${node.id}, evalSessionId=${this.config.evaluationSessionId}`);
       
       // 检查是否已存在
       const existing = await prisma.nodeExecution.findUnique({
@@ -2926,7 +2884,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         },
       });
       
-      console.log(`[createNodeExecutionRecord] 查询结果: existing=${existing ? '存在' : '不存在'}, id=${existing?.id || 'null'}, startedAt=${existing?.startedAt || 'null'}, status=${existing?.status || 'null'}`);
+      logger.info(LOG_MODULES.WORKFLOW, ` 查询结果: existing=${existing ? '存在' : '不存在'}, id=${existing?.id || 'null'}, startedAt=${existing?.startedAt || 'null'}, status=${existing?.status || 'null'}`);
       
       // 检查 modelConfigId 是否存在（避免外键约束失败）
       let safeModelConfigId: string | null = null;
@@ -2939,10 +2897,10 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           if (modelExists) {
             safeModelConfigId = modelConfig.id;
           } else {
-            console.warn(`[createNodeExecutionRecord] modelConfigId ${modelConfig.id} 不存在于数据库，跳过外键更新`);
+            logger.warn(LOG_MODULES.WORKFLOW, ` modelConfigId ${modelConfig.id} 不存在于数据库，跳过外键更新`);
           }
         } catch (e) {
-          console.warn(`[createNodeExecutionRecord] 检查 modelConfigId 失败:`, e);
+          logger.warn(LOG_MODULES.WORKFLOW, `检查 modelConfigId 失败`, { details: { error: e instanceof Error ? e.message : String(e) } });
         }
       }
       
@@ -2961,13 +2919,13 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         
         // 如果 startedAt 未设置，现在设置（强制设置）
         updateData.startedAt = now;
-        console.log(`[createNodeExecutionRecord] 设置 startedAt: ${node.label}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 设置 startedAt: ${node.label}`);
         
         await prisma.nodeExecution.update({
           where: { id: existing.id },
           data: updateData,
         });
-        console.log(`[createNodeExecutionRecord] 更新节点记录成功: ${node.label}, status=running, startedAt=${now.toISOString()}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 更新节点记录成功: ${node.label}, status=running, startedAt=${now.toISOString()}`);
       } else {
         // 创建新记录
         await prisma.nodeExecution.create({
@@ -2988,11 +2946,11 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             outputTokens: 0,
           },
         });
-        console.log(`[createNodeExecutionRecord] 创建节点记录成功: ${node.label}, status=running, startedAt=${now.toISOString()}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 创建节点记录成功: ${node.label}, status=running, startedAt=${now.toISOString()}`);
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      console.error(`[createNodeExecutionRecord] 创建失败:`, err.message, err.stack);
+      logger.error(LOG_MODULES.WORKFLOW, `创建失败`, { details: { error: err.message, stack: err.stack } });
       // 记录错误到会话（但不阻塞执行）
       await this.recordDatabaseError('createNodeExecutionRecord', err, node.label);
     }
@@ -3052,11 +3010,11 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           where: { id: existing.id },
           data: updateData,
         });
-        console.log(`[updateNodeExecutionTokens] 更新 ${nodeId}: input=${inputTokens}, output=${outputTokens}, modelName=${modelName}`);
+        logger.info(LOG_MODULES.WORKFLOW, ` 更新 ${nodeId}: input=${inputTokens}, output=${outputTokens}, modelName=${modelName}`);
       }
       // 如果不存在，说明节点记录还没创建，等节点开始时创建
     } catch (error) {
-      console.error(`[updateNodeExecutionTokens] 更新失败:`, error);
+      logger.error(LOG_MODULES.WORKFLOW, `更新失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
       // Token 更新失败不记录到会话，因为这是次要操作
     }
   }
@@ -3083,9 +3041,9 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             updatedAt: new Date(),
           },
         });
-        console.warn(`[recordDatabaseError] 已记录 ${this.databaseErrors.length} 个数据库错误到会话 endMessage`);
+        logger.warn(LOG_MODULES.WORKFLOW, `已记录数据库错误到会话 endMessage`, { details: { count: this.databaseErrors.length } });
       } catch (updateErr) {
-        console.error(`[recordDatabaseError] 更新会话 endMessage 失败:`, updateErr);
+        logger.error(LOG_MODULES.WORKFLOW, `更新会话 endMessage 失败`, { details: { error: updateErr instanceof Error ? updateErr.message : String(updateErr) } });
       }
     }
   }

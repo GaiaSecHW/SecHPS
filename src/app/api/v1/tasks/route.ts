@@ -5,6 +5,7 @@ import { badRequest, notFound, internalError } from '@/lib/api-errors';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { createTaskWithFiles } from '@/lib/task-creation';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * POST /api/v1/tasks - Create a new task
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('[v1] Task creation failed:', error);
+    logger.error(LOG_MODULES.CODE, 'Task creation failed', { details: { error: error instanceof Error ? error.message : String(error) } });
     return internalError('Task creation failed');
   }
 }
@@ -186,7 +187,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[v1] Task list failed:', error);
+    logger.error(LOG_MODULES.CODE, 'Task list failed', { details: { error: error instanceof Error ? error.message : String(error) } });
     return internalError('Failed to list tasks');
   }
 }

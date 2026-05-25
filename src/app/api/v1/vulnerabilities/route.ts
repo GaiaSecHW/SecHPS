@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { badRequest, notFound, internalError } from '@/lib/api-errors';
 import { prisma } from '@/lib/prisma';
 import { normalizeSeverity, generateVulnerabilityId } from '@/lib/vulnerability/parser';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const MAX_VULNERABILITIES_PER_REQUEST = 100;
 
@@ -154,7 +155,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
-    console.error('[v1] Vulnerability batch creation failed:', error);
+    logger.error(LOG_MODULES.CODE, 'Vulnerability batch creation failed', { details: { error: error instanceof Error ? error.message : String(error) } });
     return internalError('Vulnerability batch creation failed');
   }
 }

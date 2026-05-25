@@ -154,7 +154,7 @@ export async function PUT(
 
     if (syncedFilesMap) {
       syncSkillsFromHarness(syncedFilesMap, payload.userId, existing.tenantId).catch(err =>
-        console.error('[SkillHarnessSync] 自动同步失败:', err)
+        logger.error(LOG_MODULES.AGENT, '自动同步失败', { details: { error: err instanceof Error ? err.message : String(err) } })
       );
     }
 

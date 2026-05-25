@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, Prisma, withRetry } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
@@ -29,7 +30,7 @@ export async function GET() {
       })),
     });
   } catch (error) {
-    console.error('[CodeSwarm] Get tasks error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Get tasks error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
   }
 }
@@ -58,7 +59,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true, deleted: taskIds.length });
   } catch (error) {
-    console.error('[CodeSwarm] Batch delete tasks error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Batch delete tasks error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to delete tasks' }, { status: 500 });
   }
 }
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
           resolvedApiBaseUrl = modelConfig.apiBaseUrl || null;
         }
       } catch {
-        console.warn('[CodeSwarm] Failed to resolve apiKey from modelId:', modelId);
+        logger.warn(LOG_MODULES.CODESWARM, `Failed to resolve apiKey from modelId: ${modelId}`);
       }
     }
 
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
           if (preferred) {
             targetWorker = preferred;
           } else {
-            console.log(`[CodeSwarm] 指定的 Worker ${task.preferredWorkerNodeId} 不在线或满载，fallback 到 ${worker.nodeId}`);
+            logger.info(LOG_MODULES.CODESWARM, `指定的 Worker ${task.preferredWorkerNodeId} 不在线或满载，fallback 到 ${worker.nodeId}`);
           }
         }
 
@@ -251,7 +252,7 @@ export async function POST(request: Request) {
       queued: true,
     });
   } catch (error) {
-    console.error('[CodeSwarm] Create task error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Create task error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }

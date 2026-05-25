@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { recordMetric, recordTiming, incrementMetric } from '@/lib/metrics/collector';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 请求指标中间件
@@ -60,7 +61,7 @@ export function withMetrics(
 
       return response;
     } catch (error) {
-      console.error('[metrics-middleware] 请求处理失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.CONFIG, '请求处理失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       const duration = Date.now() - startTime;
 
       // 记录异常

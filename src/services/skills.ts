@@ -1,6 +1,7 @@
 // src/services/skills.ts
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { Skill } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -84,7 +85,7 @@ export async function loadActiveSkills(): Promise<LoadedSkill[]> {
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
-    console.error('[SkillsService] 加载 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '加载 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -129,7 +130,7 @@ export async function loadAllAvailableSkills(userId: string | null): Promise<Loa
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
-    console.error('[SkillsService] 加载可用 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '加载可用 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -153,7 +154,7 @@ export async function loadPublicSkills(): Promise<LoadedSkill[]> {
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
-    console.error('[SkillsService] 加载公共 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '加载公共 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -176,7 +177,7 @@ export async function loadUserSkills(userId: string): Promise<LoadedSkill[]> {
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
-    console.error('[SkillsService] 加载用户 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '加载用户 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -232,7 +233,7 @@ export async function createSkill(
 
     return parseSkill(skill);
   } catch (error) {
-    console.error('[SkillsService] 创建 Skill 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '创建 Skill 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     throw error;
   }
 }
@@ -329,7 +330,7 @@ export async function createSkillVersion(
 
     return parseSkill(newSkill);
   } catch (error) {
-    console.error('[SkillsService] 创建 Skill 版本失败:', error);
+    logger.error(LOG_MODULES.SKILL, '创建 Skill 版本失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     throw error;
   }
 }
@@ -422,7 +423,7 @@ export async function rollbackSkillVersion(
 
     return parseSkill(newSkill);
   } catch (error) {
-    console.error('[SkillsService] 回滚 Skill 版本失败:', error);
+    logger.error(LOG_MODULES.SKILL, '回滚 Skill 版本失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     throw error;
   }
 }
@@ -475,7 +476,7 @@ export async function getSkillVersions(skillId: string): Promise<Array<{
       changeDesc: evolutionMap.get(v.id),
     }));
   } catch (error) {
-    console.error('[SkillsService] 获取 Skill 版本失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取 Skill 版本失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -499,7 +500,7 @@ export async function loadSkillsByIds(ids: string[]): Promise<LoadedSkill[]> {
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
-    console.error('[SkillsService] 加载指定 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '加载指定 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -523,7 +524,7 @@ export async function loadSkillsByNames(names: string[]): Promise<LoadedSkill[]>
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
-    console.error('[SkillsService] 加载指定 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '加载指定 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -717,11 +718,11 @@ export async function exportSkillsToProject(
     try {
       const skillFile = exportSkillToFile(skill, skillsDir);
       result.success.push(skillFile);
-      console.log(`[Skills] 导出成功: ${skill.name} (v${skill.version}) -> ${skillFile}`);
+      logger.info(LOG_MODULES.SKILL, `导出成功: ${skill.name} (v${skill.version}) -> ${skillFile}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '未知错误';
       result.failed.push({ name: skill.name, error: errorMsg });
-      console.error(`[Skills] 导出失败: ${skill.name} (v${skill.version})`, error);
+      logger.error(LOG_MODULES.SKILL, `导出失败: ${skill.name} (v${skill.version})`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
   

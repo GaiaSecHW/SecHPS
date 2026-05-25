@@ -3,6 +3,7 @@ import { ClaudeAgentService, createClaudeAgentService } from '@/services/ai';
 import { ToolExecutor } from '@/lib/tool-executor';
 import { parseAIResponse, ParsedVulnerability, ParsedToolCall } from '@/lib/result-parser';
 import { updateContextWindowFromError, isContextOverflowError } from '@/lib/context-window-updater';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface AgentExecutionContext {
   skillId: string;
@@ -193,7 +194,7 @@ export class AgentExecutor {
 
       // 自动学习：如果是 context 超限错误，尝试更新数据库
       if (this.context.modelConfig.id && isContextOverflowError(error)) {
-        console.log('[AgentExecutor] 检测到 context 超限错误，尝试自动学习 contextWindow');
+        logger.info(LOG_MODULES.AGENT, '检测到 context 超限错误，尝试自动学习 contextWindow');
         updateContextWindowFromError(this.context.modelConfig.id, error).catch(() => {});
       }
 
@@ -326,7 +327,7 @@ export class AgentExecutor {
         const result = await this.toolExecutor.execute(toolCall.tool, toolCall.parameters);
         results.push(`[${toolCall.tool}] 执行成功:\n${JSON.stringify(result, null, 2)}`);
       } catch (error) {
-        console.error('[agent-executor] 工具执行失败:', error instanceof Error ? error.message : String(error));
+        logger.error(LOG_MODULES.AGENT, '工具执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
         const errorMsg = error instanceof Error ? error.message : '执行失败';
         results.push(`[${toolCall.tool}] 执行失败: ${errorMsg}`);
       }
@@ -347,7 +348,7 @@ export class AgentExecutor {
     // for (const vuln of vulnerabilities) {
     //   await prisma.vulnerability.create({ ... });
     // }
-    console.log(`[AgentExecutor] saveVulnerabilities 已禁用，漏洞将在评估结束时统一入库`);
+    logger.info(LOG_MODULES.AGENT, 'saveVulnerabilities 已禁用，漏洞将在评估结束时统一入库');
     
     // 更新 Skill.vulnerabilityCount 计数（保留）
     if (vulnerabilities.length > 0) {

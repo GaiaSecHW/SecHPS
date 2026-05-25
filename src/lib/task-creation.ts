@@ -259,19 +259,6 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   let filePath: string | null = null;
   let projectPath: string | null = null;
 
-  // 从本地 AgentHarness 目录拷贝 Agent 文件
-  if (agent?.agentHarnessPath) {
-    serverLog.info(`[TaskCreation] 开始为任务 ${taskId} 从本地拷贝 AgentHarness (${agent.agentHarnessPath})`);
-    const copied = await copyAgentHarnessFromLocal(agent.agentHarnessPath, taskDir);
-    if (copied) {
-      serverLog.info(`[TaskCreation] AgentHarness 拷贝完成`);
-    } else {
-      serverLog.info(`[TaskCreation] AgentHarness 拷贝失败或目录不存在，继续处理上传文件`);
-    }
-  } else {
-    serverLog.info(`[TaskCreation] Agent 未配置 agentHarnessPath，跳过拷贝`);
-  }
-
   if (files && files.length > 0) {
     for (const file of files) {
       const lowerName = file.name.toLowerCase();

@@ -10,6 +10,7 @@ import * as path from 'path';
 import { parse as parseYaml } from 'yaml';
 import { prisma } from '@/lib/prisma';
 import { scanWorkspaceReports, WorkspaceVulnerability } from '@/lib/workspace/report-scanner';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 报告类型定义
 export interface FSMReportData {
@@ -191,11 +192,11 @@ async function readVulnerabilitiesFromDatabase(evaluationId: string): Promise<Db
       orderBy: { createdAt: 'desc' },
     });
     
-    console.log(`[readVulnerabilitiesFromDatabase] 查询到 ${vulnerabilities.length} 个漏洞 for evaluationId=${evaluationId}`);
+    logger.info(LOG_MODULES.REPORT, `[readVulnerabilitiesFromDatabase] 查询到 ${vulnerabilities.length} 个漏洞 for evaluationId=${evaluationId}`);
     
     return vulnerabilities;
   } catch (error) {
-    console.warn(`[readVulnerabilitiesFromDatabase] 查询失败:`, error);
+    logger.warn(LOG_MODULES.REPORT, `[readVulnerabilitiesFromDatabase] 查询失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -281,7 +282,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
 
   // 检查目录是否存在
   if (!fs.existsSync(phasesPath)) {
-    console.warn(`[readPhaseOutputs] 目录不存在: ${phasesPath}`);
+    logger.warn(LOG_MODULES.REPORT, `[readPhaseOutputs] 目录不存在: ${phasesPath}`);
     return phaseOutputs;
   }
 
@@ -334,7 +335,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               entryPointInventory: data.P1_project_context?.entry_point_inventory?.entry_points || data.entry_point_inventory?.entry_points || [],
               techStack: data.P1_project_context?.project_context?.tech_stack || [],
             };
-            console.log(`[readPhaseOutputs] P1 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P1 loaded from ${outputFilePath}`);
             break;
           case 'P2':
             phaseOutputs.P2 = {
@@ -342,7 +343,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               elementMapping: data.P2_dfd_elements?.element_mapping || [],
               l1Coverage: data.P2_dfd_elements?.l1_coverage?.coverage_percentage || data.l1_coverage?.coverage_percentage || 0,
             };
-            console.log(`[readPhaseOutputs] P2 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P2 loaded from ${outputFilePath}`);
             break;
           case 'P3':
             phaseOutputs.P3 = {
@@ -350,7 +351,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               zones: data.P3_boundary_context?.zones || data.zones || [],
               elementZoneMapping: data.P3_boundary_context?.element_zone_mapping || [],
             };
-            console.log(`[readPhaseOutputs] P3 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P3 loaded from ${outputFilePath}`);
             break;
           case 'P4':
             phaseOutputs.P4 = {
@@ -358,7 +359,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               gaps: data.P4_security_gaps?.gaps || data.gaps || [],
               securityScore: data.P4_security_gaps?.security_score?.overall_score || data.security_score?.overall_score || 0,
             };
-            console.log(`[readPhaseOutputs] P4 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P4 loaded from ${outputFilePath}`);
             break;
           case 'P5':
             phaseOutputs.P5 = {
@@ -366,7 +367,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               threatSummary: data.P5_threat_inventory?.threat_summary || data.threat_summary || {},
               elementCoverage: data.P5_threat_inventory?.element_coverage_verification?.coverage_percentage || 0,
             };
-            console.log(`[readPhaseOutputs] P5 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P5 loaded from ${outputFilePath}`);
             break;
           case 'P6':
             phaseOutputs.P6 = {
@@ -374,7 +375,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               pocDetails: data.P6_validated_risks?.poc_details || data.poc_details || [],
               riskSummary: data.P6_validated_risks?.risk_summary || data.risk_summary || {},
             };
-            console.log(`[readPhaseOutputs] P6 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P6 loaded from ${outputFilePath}`);
             break;
           case 'P7':
             phaseOutputs.P7 = {
@@ -382,15 +383,15 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               coverageVerification: data.P7_mitigation_plan?.coverage_verification?.coverage_percentage || 0,
               implementationOrder: data.P7_mitigation_plan?.implementation_order?.priority_sequence || [],
             };
-            console.log(`[readPhaseOutputs] P7 loaded from ${outputFilePath}`);
+            logger.info(LOG_MODULES.REPORT, `[readPhaseOutputs] P7 loaded from ${outputFilePath}`);
             break;
         }
       } else {
-        console.warn(`[readPhaseOutputs] output.yaml 不存在: ${outputFilePath}`);
+        logger.warn(LOG_MODULES.REPORT, `[readPhaseOutputs] output.yaml 不存在: ${outputFilePath}`);
       }
     } catch (err) {
       // 文件读取失败，继续处理其他文件
-      console.warn(`[readPhaseOutputs] Failed to read ${dirName} output: ${err}`);
+      logger.warn(LOG_MODULES.REPORT, `[readPhaseOutputs] Failed to read ${dirName} output: ${err}`);
     }
   }
 
@@ -426,7 +427,7 @@ async function readUserDefinedNodes(
     },
   });
 
-  console.log(`[readUserDefinedNodes] 找到 ${userNodeExecutions.length} 个用户节点`);
+  logger.info(LOG_MODULES.REPORT, `[readUserDefinedNodes] 找到 ${userNodeExecutions.length} 个用户节点`);
 
   // 转换为输出格式
   return userNodeExecutions.map(node => ({
@@ -1413,7 +1414,7 @@ export async function regeneratePenTestReport(
   evaluationId: string,
   workspacePath: string
 ): Promise<void> {
-  console.log(`[regeneratePenTestReport] 重新生成渗透测试报告: evaluationId=${evaluationId}`);
+  logger.info(LOG_MODULES.REPORT, `[regeneratePenTestReport] 重新生成渗透测试报告: evaluationId=${evaluationId}`);
   
   // 1. 从数据库读取漏洞数据
   const vulnerabilities = await readVulnerabilitiesFromDatabase(evaluationId);
@@ -1427,7 +1428,7 @@ export async function regeneratePenTestReport(
   });
   
   if (!session) {
-    console.warn(`[regeneratePenTestReport] 评估会话不存在: ${evaluationId}`);
+    logger.warn(LOG_MODULES.REPORT, `[regeneratePenTestReport] 评估会话不存在: ${evaluationId}`);
     return;
   }
   
@@ -1474,6 +1475,6 @@ export async function regeneratePenTestReport(
   const reportFilePath = path.join(reportsPath, 'PENETRATION-TEST-PLAN.md');
   fs.writeFileSync(reportFilePath, reportContent, 'utf-8');
   
-  console.log(`[regeneratePenTestReport] 报告已更新: ${reportFilePath}`);
-  console.log(`[regeneratePenTestReport] 漏洞数量: ${vulnerabilities.length}`);
+  logger.info(LOG_MODULES.REPORT, `[regeneratePenTestReport] 报告已更新: ${reportFilePath}`);
+  logger.info(LOG_MODULES.REPORT, `[regeneratePenTestReport] 漏洞数量: ${vulnerabilities.length}`);
 }

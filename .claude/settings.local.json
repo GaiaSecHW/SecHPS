@@ -4,7 +4,8 @@
       "Bash(tasklist)",
       "Bash(findstr /i \"node\")",
       "WebFetch(domain:www.avlsec.com)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

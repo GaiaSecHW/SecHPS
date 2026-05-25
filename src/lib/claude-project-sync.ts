@@ -3,6 +3,7 @@
 import { join } from 'path';
 import { homedir } from 'os';
 import { mkdir, readFile, writeFile, access, rm } from 'fs/promises';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Claude 项目配置接口
@@ -42,7 +43,7 @@ export class ClaudeProjectManager {
     try {
       await mkdir(this.claudeProjectsDir, { recursive: true });
     } catch (error) {
-      console.error('[ClaudeProjectManager] 创建 Claude 项目目录失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '创建 Claude 项目目录失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       throw error;
     }
   }
@@ -57,9 +58,9 @@ export class ClaudeProjectManager {
     } catch (error) {
       // 配置文件不存在或解析失败，返回默认配置
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        console.log('[ClaudeProjectManager] 项目配置文件不存在，将使用默认配置');
+        logger.info(LOG_MODULES.PROJECT, '项目配置文件不存在，将使用默认配置');
       } else {
-        console.warn('[ClaudeProjectManager] 读取项目配置失败，使用默认配置:', error);
+        logger.warn(LOG_MODULES.PROJECT, '读取项目配置失败，使用默认配置', { details: { error: error instanceof Error ? error.message : String(error) } });
       }
       return { projects: {} };
     }
@@ -121,15 +122,15 @@ export class ClaudeProjectManager {
 
       await this.writeConfig(config);
 
-      console.log('[ClaudeProjectManager] 创建 Claude 项目成功:', {
+      logger.info(LOG_MODULES.PROJECT, '创建 Claude 项目成功', { details: {
         name: claudeProjectName,
         path: claudeProjectDir,
         originalPath: projectPath,
-      });
+      } });
 
       return { claudeProjectDir, claudeProjectName };
     } catch (error) {
-      console.error('[ClaudeProjectManager] 创建 Claude 项目失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '创建 Claude 项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       throw error;
     }
   }
@@ -152,7 +153,7 @@ export class ClaudeProjectManager {
       const config = await this.readConfig();
 
       if (!config.projects[claudeProjectName]) {
-        console.warn('[ClaudeProjectManager] Claude 项目不存在，跳过更新:', claudeProjectName);
+        logger.warn(LOG_MODULES.PROJECT, `Claude 项目不存在，跳过更新: ${claudeProjectName}`);
         return;
       }
 
@@ -171,9 +172,9 @@ export class ClaudeProjectManager {
 
       await this.writeConfig(config);
 
-      console.log('[ClaudeProjectManager] 更新 Claude 项目配置成功:', claudeProjectName);
+      logger.info(LOG_MODULES.PROJECT, `更新 Claude 项目配置成功: ${claudeProjectName}`);
     } catch (error) {
-      console.error('[ClaudeProjectManager] 更新 Claude 项目配置失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '更新 Claude 项目配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       throw error;
     }
   }
@@ -189,7 +190,7 @@ export class ClaudeProjectManager {
       try {
         await access(claudeProjectDir);
       } catch {
-        console.warn('[ClaudeProjectManager] Claude 项目目录不存在，跳过删除:', claudeProjectDir);
+        logger.warn(LOG_MODULES.PROJECT, `Claude 项目目录不存在，跳过删除: ${claudeProjectDir}`);
         return;
       }
 
@@ -203,9 +204,9 @@ export class ClaudeProjectManager {
         await this.writeConfig(config);
       }
 
-      console.log('[ClaudeProjectManager] 删除 Claude 项目成功:', claudeProjectName);
+      logger.info(LOG_MODULES.PROJECT, `删除 Claude 项目成功: ${claudeProjectName}`);
     } catch (error) {
-      console.error('[ClaudeProjectManager] 删除 Claude 项目失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '删除 Claude 项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       throw error;
     }
   }
@@ -231,7 +232,7 @@ export class ClaudeProjectManager {
 
       return null;
     } catch (error) {
-      console.error('[ClaudeProjectManager] 查找 Claude 项目失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '查找 Claude 项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return null;
     }
   }
@@ -251,7 +252,7 @@ export class ClaudeProjectManager {
 
       return null;
     } catch (error) {
-      console.error('[ClaudeProjectManager] 根据 ID 查找 Claude 项目失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '根据 ID 查找 Claude 项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return null;
     }
   }
@@ -264,7 +265,7 @@ export class ClaudeProjectManager {
       const config = await this.readConfig();
       return config.projects;
     } catch (error) {
-      console.error('[ClaudeProjectManager] 列出 Claude 项目失败:', error);
+      logger.error(LOG_MODULES.PROJECT, '列出 Claude 项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {};
     }
   }

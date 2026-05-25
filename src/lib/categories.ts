@@ -1,6 +1,7 @@
 // src/lib/categories.ts
 
 import type { Category } from '@/types/skills';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export type { Category };
 
@@ -34,7 +35,7 @@ export async function getCategories(): Promise<Category[]> {
     const data = await response.json();
     return data.categories || [];
   } catch (error) {
-    console.error('获取分类失败:', error);
+    logger.error(LOG_MODULES.CONFIG, '获取分类失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }

@@ -11,6 +11,7 @@ import {
   GeminiMessage,
   GeminiSession,
 } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Gemini Provider
@@ -73,7 +74,7 @@ export class GeminiProvider extends BaseProvider {
 
       return sessions;
     } catch (error) {
-      console.error('[GeminiProvider] 发现会话失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '发现会话失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -125,7 +126,7 @@ export class GeminiProvider extends BaseProvider {
       
       return messages.slice(start, end);
     } catch (error) {
-      console.error('[GeminiProvider] 获取消息失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '获取消息失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
 import { copyInnerSkillsToWorkspace, buildReportParseInstruction } from '@/lib/inner-skills';
@@ -217,7 +218,7 @@ export async function POST(request: Request) {
       message: '任务已提交，后台执行中',
     });
   } catch (error) {
-    console.error('[LocalTest] Error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'LocalTest Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -248,7 +249,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ record });
   } catch (error) {
-    console.error('[LocalTest] GET Error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'LocalTest GET Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -391,7 +392,7 @@ function executeTaskAsync(
         durationMs: Date.now() - startTime,
       });
     } catch (error) {
-      console.error(`[LocalTest:${taskId}] Error:`, error);
+      logger.error(LOG_MODULES.CODESWARM, `LocalTest:${taskId} Error`, { details: { error: error instanceof Error ? error.message : String(error) } });
       addLog('error', `异常: ${error instanceof Error ? error.message : String(error)}`);
       await updateRecord({
         status: 'failed',

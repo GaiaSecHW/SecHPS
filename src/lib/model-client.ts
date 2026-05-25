@@ -16,6 +16,7 @@
 import { prisma } from '@/lib/prisma';
 import type { TokenUsageContext, CallScene } from '@/types/call-scene';
 import { Agent, setGlobalDispatcher } from 'undici';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 设置全局 undici agent，延长 headers/body timeout 以支持长时间请求
 setGlobalDispatcher(new Agent({
@@ -25,7 +26,7 @@ setGlobalDispatcher(new Agent({
   keepAliveMaxTimeout: 7200000,
 }));
 
-console.log('[ModelClient] Undici agent configured: headersTimeout=7200000ms, bodyTimeout=7200000ms');
+logger.info(LOG_MODULES.MODEL, 'Undici agent configured: headersTimeout=7200000ms, bodyTimeout=7200000ms');
 
 // ============================================================================
 // Token 裁剪配置
@@ -136,7 +137,7 @@ export function trimMessages(
   const availableForHistory = maxInputTokens - systemTokens;
   
   if (availableForHistory <= 0) {
-    console.warn(`[trimMessages] System prompt too large (${systemTokens} tokens)`);
+    logger.warn(LOG_MODULES.MODEL, `System prompt too large (${systemTokens} tokens)`);
     return preserveSystem ? systemMessages : [];
   }
   
@@ -161,13 +162,13 @@ export function trimMessages(
     const forcedMessages = otherMessages.slice(-minMessages);
     trimmedHistory.length = 0;
     trimmedHistory.push(...forcedMessages);
-    console.warn(`[trimMessages] Force keeping ${minMessages} messages`);
+    logger.warn(LOG_MODULES.MODEL, `Force keeping ${minMessages} messages`);
   }
-  
+
   const result = preserveSystem ? [...systemMessages, ...trimmedHistory] : trimmedHistory;
-  
-  console.log(`[trimMessages] ${messages.length} -> ${result.length} messages, ~${estimateMessagesTokens(result)} tokens`);
-  
+
+  logger.info(LOG_MODULES.MODEL, `${messages.length} -> ${result.length} messages, ~${estimateMessagesTokens(result)} tokens`);
+
   return result;
 }
 
@@ -196,7 +197,7 @@ export function calculateSafeMaxTokens(
   const available = windowSize - inputTokens - bufferTokens;
   
   if (available < minOutputTokens) {
-    console.warn(`[calculateSafeMaxTokens] Input large (${inputTokens} tokens), using minimum`);
+    logger.warn(LOG_MODULES.MODEL, `Input large (${inputTokens} tokens), using minimum`);
     return minOutputTokens;
   }
   
@@ -438,10 +439,10 @@ async function recordTokenUsage(
         requestCompletedAt: new Date(),
       },
     });
-    
-    console.log(`[ModelClient] Token recorded: ${context.scene} | ${model} | ${inputTokens}+${outputTokens} | user=${context.userId}`);
+
+    logger.info(LOG_MODULES.MODEL, `Token recorded: ${context.scene} | ${model} | ${inputTokens}+${outputTokens} | user=${context.userId}`);
   } catch (error) {
-    console.error('[ModelClient] Failed to record token usage:', error);
+    logger.error(LOG_MODULES.MODEL, 'Failed to record token usage', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }
 
@@ -453,7 +454,7 @@ async function recordTokenUsage(
 async function callOpenAI(config: ModelConfig, request: any, timeout: number = DEFAULT_TIMEOUT_MS): Promise<any> {
   const startTime = Date.now();
   let apiUrl = config.apiBaseUrl;
-  
+
   // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
   if (apiUrl.endsWith('#')) {
     apiUrl = apiUrl.slice(0, -1);
@@ -470,14 +471,14 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
   // OpenAI 格式：系统提示词放入 messages 数组
   let messages = request.messages || [];
   if (request.system) {
-    console.log(`[ModelClient] OpenAI: 检测到系统提示词，长度: ${request.system.length} 字符`);
+    logger.info(LOG_MODULES.MODEL, `OpenAI: 检测到系统提示词，长度: ${request.system.length} 字符`);
     messages = [
       { role: 'system', content: request.system },
       ...messages
     ];
-    console.log(`[ModelClient] OpenAI: 系统提示词已添加到 messages 数组开头`);
+    logger.info(LOG_MODULES.MODEL, 'OpenAI: 系统提示词已添加到 messages 数组开头');
   } else {
-    console.log(`[ModelClient] OpenAI: 未检测到系统提示词`);
+    logger.info(LOG_MODULES.MODEL, 'OpenAI: 未检测到系统提示词');
   }
   
   // 构建 OpenAI 请求体（不包含 system 字段）
@@ -492,16 +493,16 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
   };
 
   // 详细日志：请求信息
-  console.log(`[ModelClient] ========== OpenAI API 调用 ==========`);
-  console.log(`[ModelClient] URL: ${apiUrl}`);
-  console.log(`[ModelClient] Model: ${request.model || 'unknown'}`);
-  console.log(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
-  console.log(`[ModelClient] Request body size: ${JSON.stringify(openaiRequest).length} bytes`);
-  console.log(`[ModelClient] Messages count: ${messages.length}`);
-  console.log(`[ModelClient] First message role: ${messages[0]?.role}`);
-  console.log(`[ModelClient] First message content length: ${messages[0]?.content?.length || 0}`);
-  console.log(`[ModelClient] Timeout: ${timeout}ms`);
-  console.log(`[ModelClient] ========================================`);
+  logger.info(LOG_MODULES.MODEL, '========== OpenAI API 调用 ==========');
+  logger.info(LOG_MODULES.MODEL, `URL: ${apiUrl}`);
+  logger.info(LOG_MODULES.MODEL, `Model: ${request.model || 'unknown'}`);
+  logger.info(LOG_MODULES.MODEL, `API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+  logger.info(LOG_MODULES.MODEL, `Request body size: ${JSON.stringify(openaiRequest).length} bytes`);
+  logger.info(LOG_MODULES.MODEL, `Messages count: ${messages.length}`);
+  logger.info(LOG_MODULES.MODEL, `First message role: ${messages[0]?.role}`);
+  logger.info(LOG_MODULES.MODEL, `First message content length: ${messages[0]?.content?.length || 0}`);
+  logger.info(LOG_MODULES.MODEL, `Timeout: ${timeout}ms`);
+  logger.info(LOG_MODULES.MODEL, '========================================');
 
   // 创建超时控制器
   const controller = new AbortController();
@@ -518,11 +519,11 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
       signal: controller.signal,
     });
 
-    console.log(`[ModelClient] OpenAI response status: ${response.status} ${response.statusText}`);
+    logger.info(LOG_MODULES.MODEL, `OpenAI response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[ModelClient] OpenAI API Error:', response.status, errorText);
+      logger.error(LOG_MODULES.MODEL, `OpenAI API Error: ${response.status} ${errorText}`);
       throw new RouteError(
         `OpenAI API error: ${response.status} ${response.statusText}`,
         response.status,
@@ -534,14 +535,14 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
   } catch (error) {
     // 详细错误日志
     if (error instanceof Error) {
-      console.error(`[ModelClient] ========== OpenAI API 调用失败 ==========`);
-      console.error(`[ModelClient] Error name: ${error.name}`);
-      console.error(`[ModelClient] Error message: ${error.message}`);
-      console.error(`[ModelClient] URL: ${apiUrl}`);
-      console.error(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
-      console.error(`[ModelClient] ==============================================`);
+      logger.error(LOG_MODULES.MODEL, '========== OpenAI API 调用失败 ==========');
+      logger.error(LOG_MODULES.MODEL, `Error name: ${error.name}`);
+      logger.error(LOG_MODULES.MODEL, `Error message: ${error.message}`);
+      logger.error(LOG_MODULES.MODEL, `URL: ${apiUrl}`);
+      logger.error(LOG_MODULES.MODEL, `API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+      logger.error(LOG_MODULES.MODEL, '==============================================');
     }
-    
+
     if (error instanceof Error && error.name === 'AbortError') {
       throw new RouteError(`请求超时 (${timeout}ms)`, 408);
     }
@@ -575,20 +576,20 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
   }
 
   // 详细日志：请求信息
-  console.log(`[ModelClient] ========== Claude API 调用 ==========`);
-  console.log(`[ModelClient] URL: ${apiUrl}`);
-  console.log(`[ModelClient] Model: ${request.model || 'unknown'}`);
-  console.log(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
-  console.log(`[ModelClient] Request body size: ${JSON.stringify(request).length} bytes`);
-  console.log(`[ModelClient] Timeout: ${timeout}ms`);
-  console.log(`[ModelClient] Request keys: ${Object.keys(request).join(', ')}`);
-  console.log(`[ModelClient] Has system prompt: ${!!request.system}`);
-  console.log(`[ModelClient] System prompt length: ${request.system?.length || 0}`);
-  console.log(`[ModelClient] Messages count: ${request.messages?.length || 0}`);
-  console.log(`[ModelClient] First message length: ${request.messages?.[0]?.content?.length || 0}`);
-  
+  logger.info(LOG_MODULES.MODEL, '========== Claude API 调用 ==========');
+  logger.info(LOG_MODULES.MODEL, `URL: ${apiUrl}`);
+  logger.info(LOG_MODULES.MODEL, `Model: ${request.model || 'unknown'}`);
+  logger.info(LOG_MODULES.MODEL, `API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+  logger.info(LOG_MODULES.MODEL, `Request body size: ${JSON.stringify(request).length} bytes`);
+  logger.info(LOG_MODULES.MODEL, `Timeout: ${timeout}ms`);
+  logger.info(LOG_MODULES.MODEL, `Request keys: ${Object.keys(request).join(', ')}`);
+  logger.info(LOG_MODULES.MODEL, `Has system prompt: ${!!request.system}`);
+  logger.info(LOG_MODULES.MODEL, `System prompt length: ${request.system?.length || 0}`);
+  logger.info(LOG_MODULES.MODEL, `Messages count: ${request.messages?.length || 0}`);
+  logger.info(LOG_MODULES.MODEL, `First message length: ${request.messages?.[0]?.content?.length || 0}`);
+
   // 打印请求体结构（不含完整内容）
-  console.log(`[ModelClient] Request structure:`, JSON.stringify({
+  logger.info(LOG_MODULES.MODEL, 'Request structure', { details: {
     model: request.model,
     max_tokens: request.max_tokens,
     temperature: request.temperature,
@@ -599,8 +600,8 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
       role: m.role,
       contentLength: m.content?.length || 0
     }))
-  }, null, 2));
-  console.log(`[ModelClient] ========================================`);
+  }});
+  logger.info(LOG_MODULES.MODEL, '========================================');
 
   // 创建超时控制器
   const controller = new AbortController();
@@ -618,11 +619,11 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
       signal: controller.signal,
     });
 
-    console.log(`[ModelClient] Claude response status: ${response.status} ${response.statusText}`);
+    logger.info(LOG_MODULES.MODEL, `Claude response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[ModelClient] Claude API Error:', response.status, errorText);
+      logger.error(LOG_MODULES.MODEL, `Claude API Error: ${response.status} ${errorText}`);
       throw new RouteError(
         `Claude API error: ${response.status} ${response.statusText}`,
         response.status,
@@ -634,36 +635,31 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
   } catch (error) {
     // 详细错误日志
     const duration = Date.now() - startTime;
-    console.error(`[ModelClient] ========== Claude API 调用失败 ==========`);
-    console.error(`[ModelClient] Error type: ${error?.constructor?.name || typeof error}`);
-    console.error(`[ModelClient] Error name: ${error instanceof Error ? error.name : 'N/A'}`);
-    console.error(`[ModelClient] Error message: ${error instanceof Error ? error.message : String(error)}`);
-    console.error(`[ModelClient] URL: ${apiUrl}`);
-    console.error(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
-    console.error(`[ModelClient] Request body size: ${JSON.stringify(request).length} bytes`);
-    console.error(`[ModelClient] Error duration: ${duration}ms`);
+    logger.error(LOG_MODULES.MODEL, '========== Claude API 调用失败 ==========');
+    logger.error(LOG_MODULES.MODEL, `Error type: ${error?.constructor?.name || typeof error}`);
+    logger.error(LOG_MODULES.MODEL, `Error name: ${error instanceof Error ? error.name : 'N/A'}`);
+    logger.error(LOG_MODULES.MODEL, `Error message: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(LOG_MODULES.MODEL, `URL: ${apiUrl}`);
+    logger.error(LOG_MODULES.MODEL, `API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+    logger.error(LOG_MODULES.MODEL, `Request body size: ${JSON.stringify(request).length} bytes`);
+    logger.error(LOG_MODULES.MODEL, `Error duration: ${duration}ms`);
     
     // 尝试获取更详细的错误原因
     if (error instanceof Error && (error as any).cause) {
-      console.error(`[ModelClient] Error cause:`, (error as any).cause);
+      logger.error(LOG_MODULES.MODEL, 'Error cause', { details: { cause: (error as any).cause } });
     }
-    
+
     // 如果是 AggregateError，打印所有错误
     if (error instanceof AggregateError) {
-      console.error(`[ModelClient] AggregateError errors:`, error.errors);
+      logger.error(LOG_MODULES.MODEL, 'AggregateError errors', { details: { errors: error.errors } });
     }
-    
+
     // 如果是网络错误，打印可能的原因
     if (error instanceof Error && (error.message.includes('fetch failed') || error.message.includes('ECONN'))) {
-      console.error(`[ModelClient] ⚠️ 网络错误可能原因:`);
-      console.error(`[ModelClient]   1. 目标服务器不可达`);
-      console.error(`[ModelClient]   2. 请求体过大被拒绝`);
-      console.error(`[ModelClient]   3. 代理服务器不支持某些字段 (如 system)`);
-      console.error(`[ModelClient]   4. 连接被防火墙中断`);
-      console.error(`[ModelClient]   5. 服务器处理超时并关闭连接`);
+      logger.error(LOG_MODULES.MODEL, '⚠️ 网络错误可能原因: 目标服务器不可达, 请求体过大被拒绝, 代理服务器不支持某些字段 (如 system), 连接被防火墙中断, 服务器处理超时并关闭连接');
     }
-    console.error(`[ModelClient] ==============================================`);
-    
+    logger.error(LOG_MODULES.MODEL, '==============================================');
+
     if (error instanceof Error && error.name === 'AbortError') {
       throw new RouteError(`请求超时 (${timeout}ms)`, 408);
     }
@@ -691,7 +687,7 @@ export async function routeRequest(request: any): Promise<any> {
       throw new RouteError(`Model not found: ${modelName}`, 404);
     }
 
-    console.log(`[ModelClient] Routing: ${config.name} (${config.providerType}) -> ${modelName}`);
+    logger.info(LOG_MODULES.MODEL, `Routing: ${config.name} (${config.providerType}) -> ${modelName}`);
 
     // 构建请求体（使用 ModelConfig 中的 maxTokens 和 temperature）
     const internalRequest = {
@@ -712,7 +708,7 @@ export async function routeRequest(request: any): Promise<any> {
       return await callOpenAI(config, internalRequest);
     }
   } catch (error) {
-    console.error('[ModelClient] ERROR routeRequest:', error);
+    logger.error(LOG_MODULES.MODEL, 'ERROR routeRequest', { details: { error: error instanceof Error ? error.message : String(error) } });
     if (error instanceof RouteError) {
       throw error;
     }
@@ -747,7 +743,7 @@ export async function routeStreamRequest(
       throw new RouteError(`Model not found: ${modelName}`, 404);
     }
 
-    console.log(`[ModelClient] Stream Routing: ${config.name} (${config.providerType}) -> ${modelName}`);
+    logger.info(LOG_MODULES.MODEL, `Stream Routing: ${config.name} (${config.providerType}) -> ${modelName}`);
 
     // 构建请求体
     let messages = request.messages || [];
@@ -863,7 +859,7 @@ export async function routeStreamRequest(
 
     onComplete();
   } catch (error) {
-    console.error('[ModelClient] ERROR routeStreamRequest:', error);
+    logger.error(LOG_MODULES.MODEL, 'ERROR routeStreamRequest', { details: { error: error instanceof Error ? error.message : String(error) } });
     onError(error instanceof Error ? error : new Error(String(error)));
   }
 }
@@ -896,9 +892,9 @@ export async function routeRequestWithDefaultModel(
   const finalMaxTokens = options.max_tokens ?? config.maxTokens ?? 32000;
   const finalTemperature = options.temperature ?? config.temperature ?? 0.3;
   
-  console.log(`[ModelClient] Using default model: ${config.name} (${config.providerType}) -> ${model}`);
-  console.log(`[ModelClient] Config: maxTokens=${config.maxTokens}, temperature=${config.temperature}`);
-  console.log(`[ModelClient] Final: maxTokens=${finalMaxTokens}, temperature=${finalTemperature}`);
+  logger.info(LOG_MODULES.MODEL, `Using default model: ${config.name} (${config.providerType}) -> ${model}`);
+  logger.info(LOG_MODULES.MODEL, `Config: maxTokens=${config.maxTokens}, temperature=${config.temperature}`);
+  logger.info(LOG_MODULES.MODEL, `Final: maxTokens=${finalMaxTokens}, temperature=${finalTemperature}`);
 
   const request = {
     model,
@@ -911,13 +907,13 @@ export async function routeRequestWithDefaultModel(
 
   try {
     let response: any;
-    
+
     if (config.providerType === 'claude') {
       response = await callClaude(config, request);
     } else {
       response = await callOpenAI(config, request);
     }
-    
+
     // 提取并记录 Token 使用
     const tokenUsage = extractTokenUsage(response);
     if (tokenUsage) {
@@ -929,9 +925,9 @@ export async function routeRequestWithDefaultModel(
         tokenUsage.outputTokens
       );
     }
-    
+
     const duration = Date.now() - startTime;
-    console.log(`[ModelClient] Request completed in ${duration}ms`);
+    logger.info(LOG_MODULES.MODEL, `Request completed in ${duration}ms`);
     
     return response;
   } catch (error) {
@@ -1026,13 +1022,13 @@ export async function testModelConnection(modelConfig: {
     };
   }
   
-  console.log(`[ModelClient] Testing connection: ${modelName} (${providerType})`);
-  console.log(`[ModelClient] URL: ${url}`);
-  
+  logger.info(LOG_MODULES.MODEL, `Testing connection: ${modelName} (${providerType})`);
+  logger.info(LOG_MODULES.MODEL, `URL: ${url}`);
+
   // 创建超时控制器
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
-  
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -1040,21 +1036,20 @@ export async function testModelConnection(modelConfig: {
       body: JSON.stringify(body),
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
-    
+
     if (response.ok) {
       const data = await response.json();
-      
+
       // 提取响应内容 - 支持多种 API 格式
       let responseContent = '';
       let inputTokens = 0;
       let outputTokens = 0;
-      
+
       // 打印完整响应用于调试（不截断）
-      console.log(`[ModelClient] Test raw response (full):`);
-      console.log(JSON.stringify(data, null, 2));
+      logger.info(LOG_MODULES.MODEL, 'Test raw response (full):', { details: { response: data } });
       
       if (providerType === 'claude') {
         // Claude 格式: content[0].text 或 content[0].thinking（思考模型）
@@ -1147,7 +1142,7 @@ export async function testModelConnection(modelConfig: {
         responseContent = `[API响应格式未知，完整响应: ${JSON.stringify(data).substring(0, 200)}]`;
       }
       
-      console.log(`[ModelClient] Test extracted content: ${responseContent.substring(0, 100)}`);
+      logger.info(LOG_MODULES.MODEL, `Test extracted content: ${responseContent.substring(0, 100)}`);
       
       // 记录 Token 使用到数据库（如果提供了用户上下文）
       if (context && inputTokens > 0) {

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import type { Plugin, PluginManifest, PluginResponse, PluginType, PluginStatus } from '@/types/plugin';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 插件目录路径 - turbopackIgnore 防止 Turbopack 追踪整个项目
 const PLUGINS_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'plugins');
@@ -46,12 +47,12 @@ export class PluginManager {
             const manifest = JSON.parse(content) as PluginManifest;
             manifests.push(manifest);
           } catch (error) {
-            console.error(`Failed to read plugin manifest: ${entry.name}`, error);
+            logger.error(LOG_MODULES.PLUGIN, 'Failed to read plugin manifest', { details: { name: entry.name, error: error instanceof Error ? error.message : String(error) } });
           }
         }
       }
     } catch (error) {
-      console.error('Failed to discover plugins:', error);
+      logger.error(LOG_MODULES.PLUGIN, 'Failed to discover plugins', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
     
     return manifests;
@@ -221,7 +222,7 @@ export class PluginManager {
       try {
         fs.rmSync(plugin.pluginPath, { recursive: true, force: true });
       } catch (error) {
-        console.error('Failed to remove plugin directory:', error);
+        logger.error(LOG_MODULES.PLUGIN, 'Failed to remove plugin directory', { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
   }
