@@ -6,6 +6,10 @@ const STREAM_KEY = 'codeswarm:task:queue';
 const CONSUMER_GROUP = 'dispatcher';
 const CONSUMER_NAME = `dispatcher-${process.pid}`;
 
+function safeJsonParse(str: string): any | null {
+  try { return JSON.parse(str); } catch { return null; }
+}
+
 interface WorkerInfo {
   id: string;
   nodeId: string;
@@ -172,9 +176,9 @@ const taskPayload = JSON.stringify({
       instruction: task.instruction || undefined,
       projectPath: task.projectPath || undefined,
       workspacePath: task.workspacePath || undefined,
-      skills: task.skills ? JSON.parse(task.skills) : undefined,
-      scripts: task.scripts ? JSON.parse(task.scripts) : undefined,
-      mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
+      skills: task.skills ? safeJsonParse(task.skills) : undefined,
+      scripts: task.scripts ? safeJsonParse(task.scripts) : undefined,
+      mcps: task.mcps ? safeJsonParse(task.mcps) : undefined,
       model: task.model || undefined,
       apiKey: task.apiKey || undefined,
       apiBaseUrl: task.apiBaseUrl || undefined,
@@ -225,23 +229,27 @@ const taskPayload = JSON.stringify({
       }
     }
 
-    // 所有地址都失败，回滚 DB 状态
+    // 所有地址都失败，回滚 DB 状态（仅当任务仍为 dispatched 时回滚，避免覆盖 running/completed）
     serverLog.error(`[CodeSwarm] All addresses failed for worker ${worker.id}: [${sorted.join(', ')}]`);
-    await prisma.codeswarmTask.update({
-      where: { id: task.id },
+    const rollbackResult = await prisma.codeswarmTask.updateMany({
+      where: { id: task.id, state: 'dispatched' },
       data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
-    }).catch(e => serverLog.error('[CodeSwarm] 回滚任务状态失败:', e));
+    }).catch(e => { serverLog.error('[CodeSwarm] 回滚任务状态失败:', e); return { count: 0 }; });
+    if (rollbackResult.count === 0) {
+      serverLog.info(`[CodeSwarm] Task ${task.taskId} rollback skipped — task no longer in dispatched state`);
+    }
     return false;
   }
 
   // Worker 心跳：更新内存拓扑
   onHeartbeat(data: { nodeId: string; id: string; address: string; maxConcurrent: number; currentTasks?: number }) {
     const existing = this.workers.get(data.nodeId);
-    // Worker 上报的 currentTasks 用于校准内存（Worker 自身最清楚实际运行数）
-    // 直接使用上报值，不取 max（避免超时处理未释放导致的残留计数）
+    // Worker 上报的 currentTasks 是权威值（Worker 自身最清楚实际运行数）
+    // 直接使用上报值，不取 max：
+    // 1. 避免 dispatcher 侧 phantom increment 导致的残留虚高无法被纠正
+    // 2. 已分发但 Worker 尚未确认的短暂窗口（<30s）在下一次心跳自然修正
     const reportedTasks = data.currentTasks ?? 0;
-    // 使用 max 防止心跳覆盖已分发但 Worker 尚未确认的任务计数
-    const currentTasks = Math.max(existing?.currentTasks || 0, reportedTasks);
+    const currentTasks = reportedTasks;
     this.workers.set(data.nodeId, {
       id: data.id,
       nodeId: data.nodeId,
@@ -278,6 +286,15 @@ const taskPayload = JSON.stringify({
     if (worker) {
       worker.currentTasks = Math.max(worker.currentTasks, currentTasks);
     }
+  }
+
+  /** 从内存拓扑中移除 Worker（地址冲突检测等场景使用） */
+  removeWorker(nodeId: string) {
+    const worker = this.workers.get(nodeId);
+    if (worker && worker.currentTasks > 0) {
+      serverLog.warn(`[CodeSwarm] 移除 Worker ${nodeId}，其 ${worker.currentTasks} 个任务将由 checkOfflineWorkers 重调度`);
+    }
+    this.workers.delete(nodeId);
   }
 
   /** 恢复卡在 pending 的消息（进程重启、之前分发失败等场景） */
@@ -352,13 +369,26 @@ const taskPayload = JSON.stringify({
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
-                const isDbConnError = this.isDbConnectionError(dbTaskId);
-                if (isDbConnError) {
-                  serverLog.warn('[CodeSwarm] DB 连接不足，延迟 10 秒后重入队');
-                  await this.sleep(10000);
+                const retries = (this.retryCounts.get(dbTaskId) || 0) + 1;
+                this.retryCounts.set(dbTaskId, retries);
+
+                if (retries >= CodeswarmDispatcher.MAX_REQUEUE_ATTEMPTS) {
+                  serverLog.error(`[CodeSwarm] Task ${dbTaskId} failed after ${retries} dispatch attempts, marking as failed`);
+                  await prisma.codeswarmTask.updateMany({
+                    where: { id: dbTaskId, state: 'queued' },
+                    data: { state: 'failed', error: `No available worker after ${retries} attempts`, completedAt: new Date(), updatedAt: new Date() },
+                  }).catch(e => serverLog.error('[CodeSwarm] 标记任务 failed 失败:', e));
+                  this.retryCounts.delete(dbTaskId);
+                } else {
+                  const isDbConnError = this.isDbConnectionError(dbTaskId);
+                  if (isDbConnError) {
+                    serverLog.warn('[CodeSwarm] DB 连接不足，延迟 10 秒后重入队');
+                    await this.sleep(10000);
+                  }
+                  await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
                 }
-                await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+              } else {
+                this.retryCounts.delete(dbTaskId);
               }
             })
           );
@@ -519,6 +549,8 @@ const taskPayload = JSON.stringify({
   }
 
   private lastDbErrorTaskId: string | null = null;
+  private readonly retryCounts = new Map<string, number>();
+  private static readonly MAX_REQUEUE_ATTEMPTS = 10;
 
   private isDbConnectionError(dbTaskId: string): boolean {
     if (this.lastDbErrorTaskId === dbTaskId) {

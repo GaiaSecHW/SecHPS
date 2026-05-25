@@ -88,6 +88,7 @@ export async function POST(request: Request) {
             data: { status: 'offline', currentTasks: 0 },
           });
           for (const cw of conflictingWorkers) {
+            codeswarmDispatcher.removeWorker(cw.nodeId);
             codeswarmDispatcher.rescheduleWorkerTasksById(cw.id).catch(e =>
               console.error('[CodeSwarm] 同地址冲突 Worker 任务重调度失败:', e)
             );
