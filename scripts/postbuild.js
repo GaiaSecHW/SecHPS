@@ -55,8 +55,15 @@ const DIR_COPY_RULES = {
   'skills': {
     mode: 'all',
   },
+  'inner_skills': {
+    mode: 'all',
+  },
   'uploads': {
     mode: 'none',
+  },
+  'docs': {
+    mode: 'selective',
+    include: ['agent-harness-developer-guide.md'],
   },
 };
 
@@ -88,6 +95,27 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
 
   if (fs.existsSync(dest)) {
     fs.rmSync(dest, { recursive: true, force: true });
+  }
+
+  if (rules.mode === 'selective') {
+    fs.mkdirSync(dest, { recursive: true });
+    const includeList = rules.include || [];
+    
+    for (const fileName of includeList) {
+      const srcPath = path.join(src, fileName);
+      const destPath = path.join(dest, fileName);
+      
+      if (!fs.existsSync(srcPath)) {
+        console.log(`  ⏭️  跳过 ${fileName} (源不存在)`);
+        continue;
+      }
+      
+      fs.copyFileSync(srcPath, destPath);
+      console.log(`  📄 ${fileName}`);
+    }
+    
+    console.log(`✅ ${dirName} -> ${rules.dest || dirName} (选择性复制 ${includeList.length} 项)`);
+    return true;
   }
 
   if (rules.mode === 'exclude-next') {

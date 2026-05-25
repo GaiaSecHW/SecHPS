@@ -270,6 +270,12 @@ export class EnvironmentFactory {
         progress(`Step 2: 跳过 opencode.json 检查 (claudecode engine)`);
       }
 
+      // Write .opencode/.npmrc (offline=true) — prevent opencode from installing npm packages
+      const opencodeDir = path.join(actualWorkspacePath, '.opencode');
+      fs.mkdirSync(opencodeDir, { recursive: true });
+      fs.writeFileSync(path.join(opencodeDir, '.npmrc'), 'offline=true\n');
+      progress(`写入 .opencode/.npmrc (offline=true)`);
+
       progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
       return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate, model: payload.model };
     }
@@ -294,6 +300,9 @@ export class EnvironmentFactory {
       progress(`Step 3: 创建技能目录`);
       const skillsDir = path.join(workspacePath, '.opencode', 'skills');
       fs.mkdirSync(skillsDir, { recursive: true });
+
+      // Write .opencode/.npmrc (offline=true) — prevent opencode from installing npm packages
+      fs.writeFileSync(path.join(workspacePath, '.opencode', '.npmrc'), 'offline=true\n');
 
       // Step 4: Copy skill files
       if (payload.skills && payload.skills.length > 0) {
