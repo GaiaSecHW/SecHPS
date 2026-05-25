@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Users, Edit, Trash2, X, Layers } from 'lucide-react';
+import { Plus, Search, Users, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import { Alert, ErrorAlert, SuccessAlert } from '@/components/ui/Alert';
+import { Alert, ErrorAlert } from '@/components/ui/Alert';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
 
@@ -90,7 +90,7 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-dark-surface-hover"
+            className="px-4 py-2 text-sm font-medium text-dark-text-secondary bg-dark-surface border border-dark-border rounded-lg hover:bg-dark-surface-hover"
           >
             取消
           </button>
@@ -98,7 +98,7 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
             type="submit"
             form="tenant-form"
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 disabled:opacity-50"
           >
             {loading ? '保存中...' : '保存'}
           </button>
@@ -109,30 +109,30 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
         {error && <ErrorAlert>{error}</ErrorAlert>}
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">租户名称 <span className="text-red-400">*</span></label>
+          <label className="block text-sm font-medium text-dark-text-secondary mb-1">租户名称 <span className="text-red-400">*</span></label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="请输入租户名称"
           />
         </div>
 
         {!tenant && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-red-400">*</span></label>
+            <label className="block text-sm font-medium text-dark-text-secondary mb-1">Slug <span className="text-red-400">*</span></label>
             <input
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               required
               pattern="[a-z0-9-]+"
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="用于 URL，只能包含小写字母、数字和连字符"
             />
-            <p className="mt-1 text-sm text-gray-500">用于 URL，只能包含小写字母、数字和连字符</p>
+            <p className="mt-1 text-sm text-dark-text-muted">用于 URL，只能包含小写字母、数字和连字符</p>
           </div>
         )}
 
@@ -142,9 +142,9 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
             id="isIcsTenant"
             checked={isIcsTenant}
             onChange={(e) => setIsIcsTenant(e.target.checked)}
-            className="h-4 w-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+            className="h-4 w-4 text-indigo-500 border-dark-border rounded focus:ring-indigo-500"
           />
-          <label htmlFor="isIcsTenant" className="ml-2 text-sm text-gray-300">
+          <label htmlFor="isIcsTenant" className="ml-2 text-sm text-dark-text-secondary">
             ICSL 租户（拥有所有权限）
           </label>
         </div>
@@ -304,8 +304,8 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
         )}
 
         {/* 添加用户区域 */}
-        <div className="border border-gray-700/50 rounded-lg p-4 bg-dark-bg">
-          <h4 className="text-sm font-medium text-gray-300 mb-3">添加用户到租户</h4>
+        <div className="border border-dark-border/40 rounded-lg p-4 bg-dark-bg">
+          <h4 className="text-sm font-medium text-dark-text-secondary mb-3">添加用户到租户</h4>
 
           {/* 用户搜索 */}
           <div className="relative">
@@ -317,7 +317,7 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
                 setSelectedUser(null);
               }}
               placeholder="搜索用户名或邮箱..."
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
             />
             {searching && (
               <div className="absolute right-3 top-2">
@@ -327,7 +327,7 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
 
             {/* 搜索结果下拉 */}
             {searchResults.length > 0 && !selectedUser && (
-              <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-700/50 rounded-md shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-dark-border/40 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                 {searchResults.map((user) => (
                   <button
                     key={user.id}
@@ -336,10 +336,10 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
                       setSearchQuery(user.username);
                       setSearchResults([]);
                     }}
-                    className="w-full px-4 py-2 text-left hover:bg-blue-900/20 flex items-center gap-2"
+                    className="w-full px-4 py-2 text-left hover:bg-dark-surface-hover flex items-center gap-2"
                   >
                     <span className="font-medium">{user.username}</span>
-                    <span className="text-gray-400">({user.email})</span>
+                    <span className="text-dark-text-muted">({user.email})</span>
                   </button>
                 ))}
               </div>
@@ -348,14 +348,14 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
 
           {/* 选中用户确认 */}
           {selectedUser && (
-            <div className="mt-3 flex items-center justify-between bg-blue-900/20 rounded-lg p-3">
+            <div className="mt-3 flex items-center justify-between bg-indigo-900/20 rounded-lg p-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium">
+                <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white font-medium">
                   {selectedUser.username.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="font-medium text-gray-100">{selectedUser.username}</p>
-                  <p className="text-sm text-gray-500">{selectedUser.email}</p>
+                  <p className="font-medium text-dark-text">{selectedUser.username}</p>
+                  <p className="text-sm text-dark-text-muted">{selectedUser.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -364,14 +364,14 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
                     setSelectedUser(null);
                     setSearchQuery('');
                   }}
-                  className="text-gray-400 hover:text-gray-400"
+                  className="text-dark-text-muted hover:text-dark-text-secondary"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleAddUser}
                   disabled={addingLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:opacity-50"
                 >
                   {addingLoading ? '添加中...' : '确认添加'}
                 </button>
@@ -382,7 +382,7 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
 
         {/* 用户列表 */}
         <div>
-          <h4 className="text-sm font-medium text-gray-300 mb-3">
+          <h4 className="text-sm font-medium text-dark-text-secondary mb-3">
             租户用户 ({users.length})
           </h4>
           {loading ? (
@@ -390,20 +390,20 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
               <LoadingSpinner />
             </div>
           ) : (
-            <div className="border border-gray-700/50 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-700/50">
-                <thead className="bg-dark-bg">
+            <div className="border border-dark-border/40 rounded-lg overflow-hidden">
+              <table className="min-w-full divide-y divide-dark-border/40">
+                <thead className="bg-dark-surface-hover/50">
                   <tr>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">用户</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">邮箱</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">状态</th>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-500">操作</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-dark-text-muted">用户</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-dark-text-muted">邮箱</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-dark-text-muted w-[100px]">状态</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-dark-text-muted">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700/50">
+                <tbody className="divide-y divide-dark-border/40">
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={4} className="px-4 py-8 text-center text-dark-text-muted">
                         暂无用户
                       </td>
                     </tr>
@@ -412,22 +412,22 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
                       <tr key={user.id} className="hover:bg-dark-surface-hover">
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-xs font-medium">
+                            <div className="w-6 h-6 bg-dark-surface-hover rounded-full flex items-center justify-center text-xs font-medium">
                               {user.username.charAt(0).toUpperCase()}
                             </div>
                             <span className="font-medium">{user.username}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{user.email}</td>
+                        <td className="px-4 py-2 text-sm text-dark-text-muted">{user.email}</td>
                         <td className="px-4 py-2">
-                          <span className={`px-2 py-1 rounded text-xs ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${user.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                             {user.isActive ? '活跃' : '禁用'}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right">
                           <button
                             onClick={() => handleRemoveUser(user)}
-                            className="text-red-400 hover:text-red-800 text-sm"
+                            className="text-red-400 hover:text-red-300 text-sm"
                           >
                             移除
                           </button>
@@ -513,26 +513,6 @@ export default function TenantsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-            <Layers size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">租户管理</h1>
-            <p className="text-sm text-gray-400 mt-0.5">管理平台租户及其用户</p>
-          </div>
-        </div>
-        <button
-          onClick={openCreateModal}
-          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
-        >
-          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
-          创建租户
-        </button>
-      </div>
-
       {/* 提示信息 */}
       {alert && (
         <Alert type={alert.type} dismissible onDismiss={() => setAlert(null)}>
@@ -540,20 +520,36 @@ export default function TenantsPage() {
         </Alert>
       )}
 
-      {/* Search + Table combined */}
-      <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-gray-700/50">
-        {/* Filters section */}
-        <div className="px-5 py-4 border-b border-gray-700/50">
-          <form onSubmit={handleSearch} className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+      {/* Search + Actions + Table combined */}
+      <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-dark-border/40">
+        {/* Toolbar: search + actions */}
+        <div className="px-5 py-4 border-b border-dark-border/40 flex items-center justify-between gap-4">
+          <form onSubmit={handleSearch} className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-text-muted" size={18} />
             <input
               type="text"
               placeholder="搜索租户..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted text-sm"
             />
           </form>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadTenants}
+              className="p-2.5 rounded-lg border border-dark-border text-dark-text-muted hover:bg-dark-surface-hover hover:text-dark-text-secondary transition-colors"
+              title="刷新"
+            >
+              <RefreshCw size={16} />
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-colors bg-indigo-600 text-white hover:bg-indigo-500"
+            >
+              <Plus size={16} />
+              创建租户
+            </button>
+          </div>
         </div>
 
         {/* Table section */}
@@ -562,57 +558,57 @@ export default function TenantsPage() {
             <LoadingSpinner size="lg" />
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-700/50">
-            <thead className="bg-dark-bg">
+          <table className="min-w-full divide-y divide-dark-border/40">
+            <thead className="bg-dark-surface-hover/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">租户名称</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Slug</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户数</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">创建时间</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">租户名称</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">Slug</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">类型</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">用户数</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">创建时间</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-dark-text-muted uppercase tracking-wider">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700/50">
+            <tbody className="divide-y divide-dark-border/40">
               {tenants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-dark-text-muted">
                     未找到租户
                   </td>
                 </tr>
               ) : (
                 tenants.map((tenant) => (
                   <tr key={tenant.id} className="hover:bg-dark-surface-hover">
-                    <td className="px-6 py-4 font-medium text-gray-100">{tenant.name}</td>
-                    <td className="px-6 py-4 text-gray-500">{tenant.slug}</td>
+                    <td className="px-6 py-4 font-medium text-dark-text">{tenant.name}</td>
+                    <td className="px-6 py-4 text-dark-text-muted">{tenant.slug}</td>
                     <td className="px-6 py-4">
                       {tenant.isIcsTenant ? (
                         <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">ICSL</span>
                       ) : (
-                        <span className="px-2 py-1 bg-dark-surface-hover text-gray-200 rounded text-xs font-medium">普通</span>
+                        <span className="px-2 py-1 bg-dark-surface-hover text-dark-text rounded text-xs font-medium">普通</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-gray-500">{tenant.userCount}</td>
-                    <td className="px-6 py-4 text-gray-500">{new Date(tenant.createdAt).toLocaleDateString('zh-CN')}</td>
+                    <td className="px-6 py-4 text-dark-text-muted">{tenant.userCount}</td>
+                    <td className="px-6 py-4 text-dark-text-muted">{new Date(tenant.createdAt).toLocaleDateString('zh-CN')}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end space-x-3">
                         <button
                           onClick={() => setUserModal({ id: tenant.id, name: tenant.name })}
-                          className="text-blue-400 hover:text-blue-800"
+                          className="text-indigo-400 hover:text-indigo-300"
                           title="管理用户"
                         >
                           <Users size={16} />
                         </button>
                         <button
                           onClick={() => openEditModal(tenant)}
-                          className="text-gray-400 hover:text-gray-400"
+                          className="text-dark-text-muted hover:text-dark-text-secondary"
                           title="编辑"
                         >
                           <Edit size={16} />
                         </button>
                         <button
                           onClick={() => handleDelete(tenant)}
-                          className="text-red-400 hover:text-red-400"
+                          className="text-red-400 hover:text-red-300"
                           title="删除"
                         >
                           <Trash2 size={16} />

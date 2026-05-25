@@ -83,7 +83,7 @@ function StatsCards({ tasks, workers }: { tasks: Task[]; workers: Worker[] }) {
       label: '在线节点',
       value: `${stats.onlineWorkers}/${stats.totalWorkers}`,
       icon: Wifi,
-      color: stats.onlineWorkers > 0 ? 'text-green-400' : 'text-gray-400',
+      color: stats.onlineWorkers > 0 ? 'text-green-400' : 'text-dark-text-muted',
       bg: stats.onlineWorkers > 0 ? 'bg-green-100' : 'bg-dark-surface-hover',
     },
     {
@@ -113,11 +113,11 @@ function StatsCards({ tasks, workers }: { tasks: Task[]; workers: Worker[] }) {
   return (
     <div className="grid grid-cols-4 gap-4">
       {cards.map((card) => (
-        <div key={card.label} className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+        <div key={card.label} className="bg-dark-surface rounded-lg border border-dark-border/40 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">{card.label}</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{card.value}</p>
+              <p className="text-sm text-dark-text-muted">{card.label}</p>
+              <p className="text-2xl font-bold text-dark-text mt-1">{card.value}</p>
             </div>
             <div className={`p-3 rounded-lg ${card.bg}`}>
               <card.icon className={`w-6 h-6 ${card.color} ${card.spin ? 'animate-spin' : ''}`} />
@@ -146,8 +146,8 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
         }`}>
           {endpoint.method}
         </span>
-        <code className="text-sm text-gray-200 font-mono flex-1 text-left">{endpoint.path}</code>
-        <span className="text-sm text-gray-500">{endpoint.desc}</span>
+        <code className="text-sm text-dark-text font-mono flex-1 text-left">{endpoint.path}</code>
+        <span className="text-sm text-dark-text-muted">{endpoint.desc}</span>
         {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
       </button>
 
@@ -155,22 +155,22 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
         <div className="p-4 space-y-4 border-t">
           {endpoint.requestParams && endpoint.requestParams.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">URL 参数</h5>
+              <h5 className="text-xs font-medium text-dark-text-muted uppercase mb-2">URL 参数</h5>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-dark-text-muted">
                     <th className="pb-1">参数</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">必填</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-dark-text-secondary">
                   {endpoint.requestParams.map((p) => (
                     <tr key={p.name} className="border-t">
                       <td className="py-2 font-mono text-blue-400">{p.name}</td>
-                      <td className="py-2 text-gray-500">{p.type}</td>
-                      <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className="py-2 text-dark-text-muted">{p.type}</td>
+                      <td className="py-2">{p.required ? <span className="text-red-400">是</span> : <span className="text-dark-text-muted">否</span>}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
                   ))}
@@ -181,8 +181,8 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
           {endpoint.requestBody && endpoint.requestBody.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">请求体 (JSON)</h5>
-              <pre className="bg-gray-900 text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-gray-700">
+              <h5 className="text-xs font-medium text-dark-text-muted uppercase mb-2">请求体 (JSON)</h5>
+              <pre className="bg-dark-bg text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-dark-border">
 {JSON.stringify(
   endpoint.requestBody.reduce((acc, p) => ({ ...acc, [p.name]: p.type }), {}),
   null, 2
@@ -190,19 +190,19 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               </pre>
               <table className="w-full text-sm mt-2">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-dark-text-muted">
                     <th className="pb-1">字段</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">必填</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-dark-text-secondary">
                   {endpoint.requestBody.map((p) => (
                     <tr key={p.name} className="border-t">
                       <td className="py-2 font-mono text-blue-400">{p.name}</td>
-                      <td className="py-2 text-gray-500">{p.type}</td>
-                      <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className="py-2 text-dark-text-muted">{p.type}</td>
+                      <td className="py-2">{p.required ? <span className="text-red-400">是</span> : <span className="text-dark-text-muted">否</span>}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
                   ))}
@@ -213,8 +213,8 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
           {endpoint.response && endpoint.response.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">响应示例</h5>
-              <pre className="bg-gray-900 text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-gray-700">
+              <h5 className="text-xs font-medium text-dark-text-muted uppercase mb-2">响应示例</h5>
+              <pre className="bg-dark-bg text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-dark-border">
 {JSON.stringify(
   endpoint.response.reduce((acc, p) => ({ ...acc, [p.name]: p.type }), {}),
   null, 2
@@ -222,17 +222,17 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               </pre>
               <table className="w-full text-sm mt-2">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-dark-text-muted">
                     <th className="pb-1">字段</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-dark-text-secondary">
                   {endpoint.response.map((p) => (
                     <tr key={p.name} className="border-t">
                       <td className="py-2 font-mono text-blue-400">{p.name}</td>
-                      <td className="py-2 text-gray-500">{p.type}</td>
+                      <td className="py-2 text-dark-text-muted">{p.type}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
                   ))}
@@ -432,7 +432,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'overview'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <Activity className="w-4 h-4" />
@@ -443,7 +443,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'debug'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <Play className="w-4 h-4" />
@@ -454,7 +454,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'workers'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <Server className="w-4 h-4" />
@@ -465,7 +465,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'tasks'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <List className="w-4 h-4" />
@@ -476,7 +476,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'logs'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <Terminal className="w-4 h-4" />
@@ -487,7 +487,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'api'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <BookOpen className="w-4 h-4" />
@@ -498,7 +498,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'local-test'
               ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <FlaskConical className="w-4 h-4" />
@@ -509,7 +509,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'codedmap'
               ? 'bg-dark-surface shadow text-purple-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <Database className="w-4 h-4" />
@@ -520,7 +520,7 @@ function CodeSwarmPageContent() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'session-extract'
               ? 'bg-dark-surface shadow text-emerald-400'
-              : 'text-gray-400 hover:text-gray-100'
+              : 'text-dark-text-muted hover:text-dark-text'
           }`}
         >
           <FileSearch className="w-4 h-4" />
@@ -564,12 +564,12 @@ function CodeSwarmPageContent() {
         <div className="bg-dark-surface rounded-lg">
           <div className="p-4 border-b">
             <h2 className="text-lg font-semibold">CodeSwarm API 文档</h2>
-            <p className="text-sm text-gray-500 mt-1">点击接口查看详细参数说明</p>
+            <p className="text-sm text-dark-text-muted mt-1">点击接口查看详细参数说明</p>
           </div>
           <div className="p-6 space-y-6">
             {apiDocs.map((section) => (
               <div key={section.category}>
-                <h3 className="text-sm font-medium text-gray-300 mb-3 uppercase tracking-wide">
+                <h3 className="text-sm font-medium text-dark-text-secondary mb-3 uppercase tracking-wide">
                   {section.category}
                 </h3>
                 <div className="space-y-2">
@@ -582,7 +582,7 @@ function CodeSwarmPageContent() {
 
             <div className="mt-6 p-4 bg-primary-900/20 border border-primary-700/40 rounded-lg">
               <h4 className="text-sm font-medium text-primary-400 mb-2">Worker 启动配置示例</h4>
-              <pre className="text-xs bg-gray-800 text-gray-200 p-3 rounded overflow-x-auto">
+              <pre className="text-xs bg-dark-surface-hover/50 text-dark-text p-3 rounded overflow-x-auto">
 {`# 环境变量配置
 ORCHESTRATOR_URL=http://your-domain.com   # 指向本服务
 NODE_ID=worker-1                           # 唯一节点标识
@@ -620,13 +620,13 @@ npx tsx packages/worker/src/index.ts`}
       {activeTab !== 'api' && activeTab !== 'overview' && activeTab !== 'local-test' && activeTab !== 'codedmap' && activeTab !== 'session-extract' && (
         <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
           <h3 className="text-sm font-medium text-cyan-400 mb-2">Worker 配置说明</h3>
-          <p className="text-sm text-gray-300 mb-2">
+          <p className="text-sm text-dark-text-secondary mb-2">
             Worker 启动时需要配置回调地址指向本服务：
           </p>
-          <code className="block bg-gray-800 p-2 rounded text-xs text-green-400">
+          <code className="block bg-dark-surface-hover/50 p-2 rounded text-xs text-green-400">
             ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs
           </code>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-dark-text-muted mt-2">
             Worker 注册后会在此页面显示，心跳间隔 30 秒，超时 90 秒判定离线
           </p>
         </div>

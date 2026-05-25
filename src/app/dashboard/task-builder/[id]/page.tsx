@@ -54,9 +54,9 @@ interface CodeswarmStatus {
 
 const statusConfig: Record<string, { bg: string; text: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
   pending: { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '待执行', icon: Clock },
-  running: { bg: 'bg-blue-100', text: 'text-blue-400', label: '执行中', icon: Loader2 },
-  completed: { bg: 'bg-green-100', text: 'text-green-400', label: '已完成', icon: CheckCircle },
-  failed: { bg: 'bg-red-100', text: 'text-red-400', label: '执行失败', icon: XCircle },
+  running: { bg: 'bg-indigo-500/15', text: 'text-indigo-400', label: '执行中', icon: Loader2 },
+  completed: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: '已完成', icon: CheckCircle },
+  failed: { bg: 'bg-red-500/15', text: 'text-red-400', label: '执行失败', icon: XCircle },
 };
 
 const logLevelConfig: Record<string, { bg: string; text: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
@@ -319,7 +319,7 @@ export default function TaskDetailPage() {
         <p className="text-gray-500">任务不存在或已删除</p>
         <button
           onClick={() => router.push('/dashboard/task-builder')}
-          className="mt-4 px-4 py-2 text-blue-400 hover:text-blue-800"
+          className="mt-4 px-4 py-2 text-indigo-400 hover:text-indigo-300"
         >
           返回列表
         </button>
@@ -397,18 +397,10 @@ export default function TaskDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-        <button
-          onClick={() => router.push('/dashboard/task-builder')}
-          className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
-        >
-          <ArrowLeft size={20} className="mr-2" />
-          返回任务列表
-        </button>
-
+      <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-blue-600/10">
+            <div className="p-3 rounded-lg bg-indigo-600/10">
               <Settings size={32} className="text-blue-400" />
             </div>
             <div>
@@ -425,14 +417,14 @@ export default function TaskDetailPage() {
                <button
                  onClick={handleExecute}
                  disabled={executing}
-                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                >
                  {executing ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
                  {executing ? '启动中...' : '执行任务'}
                </button>
              )}
 {task.status === 'running' && (
-               <span className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md">
+               <span className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md">
                  <Loader2 size={16} className="animate-spin" />
                  执行中...
                </span>
@@ -441,7 +433,7 @@ export default function TaskDetailPage() {
               <button
                 onClick={handleDownloadAllReports}
                 disabled={downloading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                 {downloading ? '下载中...' : `下载报告 (${reportFiles.files.length})`}
@@ -450,7 +442,7 @@ export default function TaskDetailPage() {
            </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-4 mt-6 bg-[#0F172A] rounded-lg p-4">
+        <div className="grid grid-cols-4 gap-4 mt-6 bg-dark-bg rounded-lg p-4">
           <div className="flex items-center gap-2">
             <Calendar size={18} className="text-gray-400" />
             <div>
@@ -497,7 +489,7 @@ export default function TaskDetailPage() {
 
       {/* 执行状态卡片（Agent + Codedmap 并行双轨） */}
       {(task.status === 'running' || codeswarmStatus) && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Cpu size={18} className="text-blue-400" />
@@ -511,7 +503,7 @@ export default function TaskDetailPage() {
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#0F172A] rounded-lg p-3 border border-blue-500/20">
+            <div className="bg-dark-bg rounded-lg p-3 border border-blue-500/20">
               <p className="text-xs text-blue-400 mb-1">Agent 执行</p>
               <div className="flex items-center gap-2">
                 {task.status === 'running' && <span className={`inline-block w-2 h-2 rounded-full ${parallelPhases.agentColor === 'text-blue-400' ? 'bg-blue-400 animate-pulse' : parallelPhases.agentColor === 'text-green-400' ? 'bg-green-400' : parallelPhases.agentColor === 'text-red-400' ? 'bg-red-400' : 'bg-yellow-400'}`} />}
@@ -519,7 +511,7 @@ export default function TaskDetailPage() {
               </div>
               {parallelPhases.agentDetail && <p className="text-xs text-gray-500 mt-1">{parallelPhases.agentDetail}</p>}
             </div>
-            <div className="bg-[#0F172A] rounded-lg p-3 border border-purple-500/20">
+            <div className="bg-dark-bg rounded-lg p-3 border border-purple-500/20">
               <p className="text-xs text-purple-400 mb-1">知识图谱 (并行)</p>
               <div className="flex items-center gap-2">
                 <span className={`text-sm font-medium ${parallelPhases.codedmapColor}`}>{parallelPhases.codedmapPhase}</span>
@@ -529,19 +521,19 @@ export default function TaskDetailPage() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
             {codeswarmStatus?.engine && (
-              <div className="bg-[#0F172A] rounded-lg p-2">
+              <div className="bg-dark-bg rounded-lg p-2">
                 <p className="text-xs text-gray-500">引擎</p>
                 <p className="text-sm font-medium text-gray-200">{codeswarmStatus.engine}</p>
               </div>
             )}
             {codeswarmStatus?.agent && (
-              <div className="bg-[#0F172A] rounded-lg p-2">
+              <div className="bg-dark-bg rounded-lg p-2">
                 <p className="text-xs text-gray-500">Agent</p>
                 <p className="text-sm font-medium text-gray-200">{codeswarmStatus.agent}</p>
               </div>
             )}
             {codeswarmStatus?.sessionId && (
-              <div className="bg-[#0F172A] rounded-lg p-2">
+              <div className="bg-dark-bg rounded-lg p-2">
                 <p className="text-xs text-gray-500">Session</p>
                 <p className="text-sm font-mono text-gray-300 truncate" title={codeswarmStatus.sessionId}>{codeswarmStatus.sessionId}</p>
               </div>
@@ -551,7 +543,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.filePath && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText size={20} className="text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">上传文件</h2>
@@ -561,7 +553,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.notes && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText size={20} className="text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">备注说明</h2>
@@ -581,31 +573,31 @@ export default function TaskDetailPage() {
       )}
 
       {task.executionResult && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle size={20} className="text-green-400" />
             <h2 className="text-lg font-semibold text-gray-100">执行结果</h2>
           </div>
-          <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap">
+          <pre className="bg-dark-bg text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap">
             {task.executionResult}
           </pre>
         </div>
       )}
 
       {task.reportPath && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText size={20} className="text-yellow-400" />
             <h2 className="text-lg font-semibold text-gray-100">安全报告</h2>
           </div>
-          <pre className="bg-gray-900 text-yellow-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96">
+          <pre className="bg-dark-bg text-yellow-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96">
             {task.reportPath}
           </pre>
         </div>
       )}
 
       {vulnStats && vulnStats.total > 0 && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <ShieldAlert size={20} className="text-red-400" />
@@ -650,7 +642,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.skills && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <Settings size={20} className="text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">注入的 Skills</h2>
@@ -666,7 +658,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.scripts && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText size={20} className="text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">注入的脚本</h2>
@@ -682,7 +674,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.mergedSkills && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <Settings size={20} className="text-blue-400" />
             <h2 className="text-lg font-semibold text-gray-100">合并后的 Skills</h2>
@@ -705,7 +697,7 @@ export default function TaskDetailPage() {
       )}
 
       {task.mergedScripts && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText size={20} className="text-purple-600" />
             <h2 className="text-lg font-semibold text-gray-100">合并后的 Scripts</h2>
@@ -727,7 +719,7 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+      <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <FileText size={20} className="text-gray-400" />
@@ -765,7 +757,7 @@ function renderAgentText(text: string) {
     if (line.startsWith('```')) {
       if (inCodeBlock) {
         elements.push(
-          <pre key={`code-${i}`} className="bg-black/40 text-emerald-300 p-3 rounded-md text-xs overflow-x-auto my-2 font-mono border border-gray-700/50">
+          <pre key={`code-${i}`} className="bg-black/40 text-emerald-300 p-3 rounded-md text-xs overflow-x-auto my-2 font-mono border border-dark-border">
             {codeBlockLines.join('\n')}
           </pre>
         );
@@ -798,7 +790,7 @@ function renderAgentText(text: string) {
 
     // Horizontal rule
     if (/^---+$/.test(line.trim())) {
-      elements.push(<hr key={`hr-${i}`} className="border-gray-700/50 my-3" />);
+      elements.push(<hr key={`hr-${i}`} className="border-dark-border my-3" />);
       continue;
     }
 

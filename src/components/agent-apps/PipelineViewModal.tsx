@@ -64,25 +64,25 @@ export function PipelineViewModal({ appId, isOpen, onClose }: PipelineViewModalP
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/50">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border">
           <h2 className="text-lg font-semibold text-white">
             Pipeline 视图: {pipelineName}
           </h2>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-300 hover:bg-dark-surface-hover rounded-lg"
+            className="p-2 text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-surface-hover rounded-lg"
           >
             <X size={20} />
           </button>
         </div>
         
-        <div className="h-[70vh] bg-[#0F172A]">
+        <div className="h-[70vh] bg-dark-bg">
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="animate-spin text-primary-500" size={32} />
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
+            <div className="flex items-center justify-center h-full text-dark-text-muted">
               {error}
             </div>
           ) : (

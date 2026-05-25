@@ -49,7 +49,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center space-x-1 px-2 py-1 text-xs text-gray-400 hover:text-gray-200 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
+      className="flex items-center space-x-1 px-2 py-1 text-xs text-dark-text-muted hover:text-dark-text bg-dark-surface-hover hover:bg-dark-border rounded transition-colors"
     >
       {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? '已复制' : '复制'}</span>
@@ -177,7 +177,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
       case 'running':
         return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-400" />;
+        return <Clock className="w-4 h-4 text-dark-text-muted" />;
     }
   };
 
@@ -235,7 +235,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
           )}
           <button
             onClick={() => { refetch(); onRefresh(); }}
-            className="flex items-center space-x-2 px-3 py-2 bg-dark-surface-hover hover:bg-gray-700 rounded-lg transition-colors"
+            className="flex items-center space-x-2 px-3 py-2 bg-dark-surface-hover hover:bg-dark-border rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             <span>刷新</span>
@@ -245,7 +245,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
       {/* State Filters */}
       <div className="flex items-center space-x-1">
-        <Filter className="w-4 h-4 text-gray-400" />
+        <Filter className="w-4 h-4 text-dark-text-muted" />
         {STATE_FILTERS.map(f => {
           const count = f.key === 'all' ? tasks.length : tasks.filter(t => t.state === f.key).length;
           return (
@@ -254,8 +254,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
               onClick={() => setStateFilter(f.key)}
               className={`px-3 py-1 text-xs rounded-full transition-colors ${
                 stateFilter === f.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-dark-surface-hover'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-dark-surface-hover text-dark-text-muted hover:bg-dark-border'
               }`}
             >
               {f.label} ({count})
@@ -265,13 +265,13 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
       </div>
 
       {filteredTasks.length === 0 ? (
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12">
+        <div className="bg-dark-surface rounded-lg shadow border border-dark-border/40 p-12">
           <div className="text-center">
-            <Clock className="mx-auto h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-100">
+            <Clock className="mx-auto h-16 w-16 text-dark-text-muted" />
+            <h3 className="mt-4 text-lg font-medium text-dark-text">
               {stateFilter === 'all' ? '暂无任务' : `暂无${STATE_FILTERS.find(f => f.key === stateFilter)?.label}任务`}
             </h3>
-            <p className="mt-2 text-sm text-gray-400">
+            <p className="mt-2 text-sm text-dark-text-muted">
               在「任务调试」页面创建任务
             </p>
           </div>
@@ -286,7 +286,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
               <div
                 key={task.id}
                 className={`bg-dark-surface rounded-lg shadow border ${
-                  isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700/50'
+                  isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-dark-border/40'
                 } overflow-hidden`}
               >
                 {/* Task Header */}
@@ -306,15 +306,15 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       className="p-1"
                     >
                       {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                        <ChevronDown className="w-4 h-4 text-dark-text-muted" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                        <ChevronRight className="w-4 h-4 text-dark-text-muted" />
                       )}
                     </button>
                     {getStateIcon(task.state)}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-gray-100 truncate">
+                        <span className="text-sm font-medium text-dark-text truncate">
                           {task.taskId}
                         </span>
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
@@ -332,25 +332,25 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                      <p className="text-xs text-dark-text-muted truncate mt-0.5">
                         {task.instruction ? `${task.instruction.slice(0, 80)}${task.instruction.length > 80 ? '...' : ''}` : '无指令'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4 text-xs text-gray-500">
+                  <div className="flex items-center space-x-4 text-xs text-dark-text-muted">
                     {task.CodeswarmWorker && (
                       <span className="flex items-center space-x-1 text-blue-600 bg-blue-900/20 px-2 py-0.5 rounded">
                         <Server className="w-3 h-3" />
                         <span>{task.CodeswarmWorker.nodeId}</span>
-                        <span className="text-gray-400">({pickAddress(task.CodeswarmWorker.address)})</span>
+                        <span className="text-dark-text-muted">({pickAddress(task.CodeswarmWorker.address)})</span>
                       </span>
                     )}
                     <span>{formatTime(task.createdAt)}</span>
-                    <span className="text-gray-400">{formatDuration(task.startedAt, task.completedAt)}</span>
+                    <span className="text-dark-text-muted">{formatDuration(task.startedAt, task.completedAt)}</span>
                     <button
                       onClick={(e) => handleDeleteTask(e, task.taskId)}
                       disabled={deletingTask === task.taskId}
-                      className="p-1 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                      className="p-1 text-dark-text-secondary hover:text-red-400 transition-colors disabled:opacity-50"
                       title="删除任务"
                     >
                       {deletingTask === task.taskId ? (
@@ -364,35 +364,35 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
                 {/* Task Details */}
                 {isExpanded && (
-                  <div className="px-4 py-4 border-t border-gray-700/50 bg-dark-bg space-y-4">
+                  <div className="px-4 py-4 border-t border-dark-border/40 bg-dark-bg space-y-4">
                     {/* Meta Info */}
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Task ID:</span>
+                        <span className="text-dark-text-muted">Task ID:</span>
                         <span className="ml-2 font-mono text-xs">{task.taskId}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Engine:</span>
+                        <span className="text-dark-text-muted">Engine:</span>
                         <span className="ml-2">{task.engine === 'claudecode' ? 'Claude Code' : task.engine === 'opencode' ? 'OpenCode' : task.engine || '-'}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Agent:</span>
+                        <span className="text-dark-text-muted">Agent:</span>
                         <span className="ml-2">{task.agent || '-'}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Model:</span>
+                        <span className="text-dark-text-muted">Model:</span>
                         <span className="ml-2">{task.model || '-'}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">Duration:</span>
+                        <span className="text-dark-text-muted">Duration:</span>
                         <span className="ml-2">{formatDuration(task.startedAt, task.completedAt)}</span>
                       </div>
                     </div>
 
                     {task.projectPath && (
                       <div className="text-sm">
-                        <span className="text-gray-500">Project:</span>
-                        <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
+                        <span className="text-dark-text-muted">Project:</span>
+                        <code className="ml-2 text-xs bg-dark-surface-hover px-2 py-0.5 rounded">
                           {task.projectPath}
                         </code>
                       </div>
@@ -400,8 +400,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
                     {task.workspacePath && (
                       <div className="text-sm">
-                        <span className="text-gray-500">Workspace:</span>
-                        <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
+                        <span className="text-dark-text-muted">Workspace:</span>
+                        <code className="ml-2 text-xs bg-dark-surface-hover px-2 py-0.5 rounded">
                           {task.workspacePath}
                         </code>
                       </div>
@@ -410,7 +410,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {/* Skills */}
                     {task.skills && task.skills.length > 0 && (
                       <div className="text-sm">
-                        <span className="text-gray-500">Skills:</span>
+                        <span className="text-dark-text-muted">Skills:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {task.skills.map((skill, i) => (
                             <span key={i} className="px-2 py-0.5 text-xs bg-purple-900/30 text-purple-400 rounded">
@@ -438,10 +438,10 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       return (
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="text-sm font-medium text-gray-300">输入参数</h4>
+                            <h4 className="text-sm font-medium text-dark-text-secondary">输入参数</h4>
                             <CopyButton text={JSON.stringify(params, null, 2)} />
                           </div>
-                          <div className="bg-gray-900 rounded-lg p-3 max-h-48 overflow-auto">
+                          <div className="bg-dark-bg rounded-lg p-3 max-h-48 overflow-auto">
                             <pre className="text-xs text-cyan-400 font-mono whitespace-pre-wrap">
                               {JSON.stringify(params, null, 2)}
                             </pre>
@@ -487,24 +487,24 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         if (t === 'tool_call_update') return { badge: 'Result', detail: cleanText(event.output || '', 100), color: 'bg-blue-900/50 text-blue-300' };
                         if (t === 'error') return { badge: 'Error', detail: event.message || '', color: 'bg-red-900/50 text-red-400' };
                         if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', detail: event.phase || event.message || '', color: 'bg-cyan-900/50 text-cyan-400' };
-                        if (CHUNK_TYPES.has(t)) return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-gray-700 text-gray-400' };
-                        return { badge: t, detail: event.content || event.message || '', color: 'bg-gray-700 text-gray-300' };
+                        if (CHUNK_TYPES.has(t)) return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-dark-surface-hover text-dark-text-muted' };
+                        return { badge: t, detail: event.content || event.message || '', color: 'bg-dark-surface-hover text-dark-text-secondary' };
                       };
 
                       return (
                         <div>
-                          <h4 className="text-sm font-medium text-gray-400 mb-2">
+                          <h4 className="text-sm font-medium text-dark-text-muted mb-2">
                             执行日志 ({events.length} 条)
                           </h4>
-                          <div className="bg-gray-900 rounded-lg p-3 max-h-72 overflow-y-auto">
+                          <div className="bg-dark-bg rounded-lg p-3 max-h-72 overflow-y-auto">
                             <div className="space-y-0.5 font-mono text-xs">
                               {events.map((event: any, i: number) => {
                                 const { badge, detail, color } = getEventDisplay(event);
                                 return (
                                   <div key={i} className="flex items-start space-x-1.5">
-                                    <span className="text-gray-600 shrink-0">{new Date(event.timestamp || event._createdAt).toLocaleTimeString()}</span>
+                                    <span className="text-dark-text-muted shrink-0">{new Date(event.timestamp || event._createdAt).toLocaleTimeString()}</span>
                                     <span className={`px-1 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
-                                    {detail && <span className="text-gray-400 truncate">{detail}</span>}
+                                    {detail && <span className="text-dark-text-muted truncate">{detail}</span>}
                                   </div>
                                 );
                               })}
@@ -517,8 +517,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {/* Result */}
                     {task.result && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">执行结果</h4>
-                        <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
+                        <h4 className="text-sm font-medium text-dark-text-muted mb-2">执行结果</h4>
+                        <pre className="bg-dark-bg text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
                           {task.result}
                         </pre>
                       </div>
@@ -527,7 +527,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {/* Report Content */}
                     {task.reportContent && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">安全报告</h4>
+                        <h4 className="text-sm font-medium text-dark-text-muted mb-2">安全报告</h4>
                         <pre className="bg-dark-surface-hover p-3 rounded-lg text-xs overflow-x-auto max-h-48">
                           {task.reportContent}
                         </pre>

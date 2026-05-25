@@ -204,12 +204,12 @@ function AgentFlowPipelineEditorContent({
       {/* 中间画布区域 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 工具栏 */}
-        <div className="h-14 bg-dark-surface border-b border-gray-700/50 flex items-center justify-between px-4">
+        <div className="h-14 bg-dark-surface border-b border-dark-border flex items-center justify-between px-4">
           <div className="flex items-center space-x-2">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-dark-surface-hover disabled:cursor-not-allowed"
             >
               <Save size={16} />
               <span>{saving ? '保存中...' : '保存'}</span>
@@ -220,7 +220,7 @@ function AgentFlowPipelineEditorContent({
             <button
               onClick={handleUndo}
               disabled={historyIndex <= 0}
-              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 text-dark-text-muted hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="撤销"
             >
               <Undo size={18} />
@@ -228,28 +228,28 @@ function AgentFlowPipelineEditorContent({
             <button
               onClick={handleRedo}
               disabled={historyIndex >= history.length - 1}
-              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 text-dark-text-muted hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="重做"
             >
               <Redo size={18} />
             </button>
             <button
               onClick={() => zoomIn()}
-              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded"
+              className="p-1.5 text-dark-text-muted hover:bg-dark-surface-hover rounded"
               title="放大"
             >
               <ZoomIn size={18} />
             </button>
             <button
               onClick={() => zoomOut()}
-              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded"
+              className="p-1.5 text-dark-text-muted hover:bg-dark-surface-hover rounded"
               title="缩小"
             >
               <ZoomOut size={18} />
             </button>
             <button
               onClick={() => fitView()}
-              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded"
+              className="p-1.5 text-dark-text-muted hover:bg-dark-surface-hover rounded"
               title="适应视图"
             >
               <Maximize size={18} />
@@ -258,7 +258,7 @@ function AgentFlowPipelineEditorContent({
         </div>
 
         {/* React Flow 画布 */}
-        <div className="flex-1 bg-[#0F172A] relative overflow-hidden" onDrop={onDrop} onDragOver={onDragOver}>
+        <div className="flex-1 bg-dark-bg relative overflow-hidden" onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -296,13 +296,13 @@ function AgentFlowPipelineEditorContent({
               nodeStrokeWidth={3}
               zoomable={true}
               pannable={true}
-              className="!bg-dark-surface !border-2 !border-gray-600 !rounded-lg !shadow-lg"
+              className="!bg-dark-surface !border-2 !border-dark-border !rounded-lg !shadow-lg"
               style={{ width: 200, height: 150 }}
               maskColor="rgba(0, 0, 0, 0.1)"
             />
           </ReactFlow>
 
-          <div className="absolute bottom-4 left-4 bg-dark-surface px-3 py-1.5 rounded-lg shadow-md text-xs text-gray-500 border border-gray-700/50 z-10">
+          <div className="absolute bottom-4 left-4 bg-dark-surface px-3 py-1.5 rounded-lg shadow-md text-xs text-dark-text-muted border border-dark-border z-10">
             从左侧拖拽节点到画布，点击节点配置属性
           </div>
         </div>
@@ -310,15 +310,15 @@ function AgentFlowPipelineEditorContent({
 
       {/* 右侧属性面板 */}
       {selectedTypedNode && (
-        <div className="w-80 flex-shrink-0 bg-dark-surface border-l border border-gray-700/50 overflow-y-auto">
-          <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
+        <div className="w-80 flex-shrink-0 bg-dark-surface border-l border border-dark-border overflow-y-auto">
+          <div className="p-4 border-b border-dark-border flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-dark-text flex items-center gap-2">
               <Settings size={20} />
               节点配置
             </h3>
             <button
               onClick={handleDeleteNode}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 rounded-md"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 rounded-lg"
             >
               <Trash2 size={16} />
               删除

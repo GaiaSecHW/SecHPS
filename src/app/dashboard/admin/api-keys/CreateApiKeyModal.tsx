@@ -189,7 +189,7 @@ export default function CreateApiKeyModal({
         showKeyResult ? (
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-500"
           >
             完成
           </button>
@@ -198,7 +198,7 @@ export default function CreateApiKeyModal({
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-dark-surface-hover"
+              className="px-4 py-2 text-sm font-medium text-dark-text-secondary bg-dark-surface border border-dark-border rounded-lg hover:bg-dark-surface-hover"
             >
               取消
             </button>
@@ -206,7 +206,7 @@ export default function CreateApiKeyModal({
               type="submit"
               form="create-api-key-form"
               disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 disabled:opacity-50"
             >
               {loading ? '创建中...' : '创建'}
             </button>
@@ -223,21 +223,21 @@ export default function CreateApiKeyModal({
 
             <div className="bg-dark-bg rounded-lg p-4 border border-green-700/30">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-400">API Key</span>
+                <span className="text-sm text-dark-text-muted">API Key</span>
                 <button
                   onClick={handleCopyKey}
-                  className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+                  className="flex items-center gap-1 text-sm text-indigo-400 hover:text-indigo-300"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                   {copied ? '已复制' : '复制'}
                 </button>
               </div>
-              <div className="font-mono text-sm text-gray-100 break-all">
+              <div className="font-mono text-sm text-dark-text break-all">
                 {createdKey.key}
               </div>
             </div>
 
-            <div className="text-sm text-gray-400 space-y-1">
+            <div className="text-sm text-dark-text-muted space-y-1">
               <div>名称: {createdKey.name}</div>
               <div>前缀: {createdKey.keyPrefix}</div>
             </div>
@@ -248,7 +248,7 @@ export default function CreateApiKeyModal({
 
             <form id="create-api-key-form" onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
                   名称 <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -256,17 +256,17 @@ export default function CreateApiKeyModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 bg-dark-bg text-dark-text placeholder-dark-text-muted"
                   placeholder="请输入 API Key 名称"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
                   租户 <span className="text-red-400">*</span>
                 </label>
                 {loadingTenants ? (
-                  <div className="flex items-center gap-2 text-gray-400">
+                  <div className="flex items-center gap-2 text-dark-text-muted">
                     <LoadingSpinner size="sm" />
                     <span className="text-sm">加载租户列表...</span>
                   </div>
@@ -275,7 +275,7 @@ export default function CreateApiKeyModal({
                     value={tenantId}
                     onChange={(e) => setTenantId(e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-dark-surface"
+                    className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 bg-dark-surface text-dark-text"
                   >
                     <option value="">请选择租户</option>
                     {tenants.map((tenant) => (
@@ -285,25 +285,25 @@ export default function CreateApiKeyModal({
                     ))}
                   </select>
                 )}
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-dark-text-muted">
                   请选择此 Key 所属的租户
                 </p>
               </div>
 
               {tenantId && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-dark-text-secondary mb-1">
                     Agent <span className="text-red-400">*</span>
                   </label>
                   {loadingAgents ? (
-                    <div className="flex items-center gap-2 text-gray-400">
+                    <div className="flex items-center gap-2 text-dark-text-muted">
                       <LoadingSpinner size="sm" />
                       <span className="text-sm">加载 Agent 列表...</span>
                     </div>
                   ) : agents.length === 0 ? (
-                    <p className="text-sm text-gray-500">该租户暂无 Agent</p>
+                    <p className="text-sm text-dark-text-muted">该租户暂无 Agent</p>
                   ) : (
-                    <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-600 rounded-md p-3">
+                    <div className="space-y-2 max-h-40 overflow-y-auto border border-dark-border rounded-lg p-3">
                       {agents.map((agent) => (
                         <label
                           key={agent.id}
@@ -313,21 +313,21 @@ export default function CreateApiKeyModal({
                             type="checkbox"
                             checked={agentAppIds.includes(agent.id)}
                             onChange={() => handleAgentToggle(agent.id)}
-                            className="h-4 w-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+                            className="h-4 w-4 text-indigo-500 border-dark-border rounded focus:ring-indigo-500"
                           />
-                          <span className="text-sm text-gray-300">{agent.name}</span>
+                          <span className="text-sm text-dark-text-secondary">{agent.name}</span>
                         </label>
                       ))}
                     </div>
                   )}
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-dark-text-muted">
                     可选，限制此 Key 只能用于选定的 Agent。不选则可用于该租户所有 Agent。
                   </p>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
                   限频间隔（分钟）
                 </label>
                 <input
@@ -336,9 +336,9 @@ export default function CreateApiKeyModal({
                   onChange={(e) => setRateLimitInterval(parseInt(e.target.value) || 1)}
                   min="1"
                   required
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 bg-dark-bg text-dark-text"
                 />
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-dark-text-muted">
                   每个 Key 在此间隔内最多调用一次
                 </p>
               </div>

@@ -12,28 +12,28 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
 
 const colorMap: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   blue: {
-    bg: 'bg-blue-900/20',
-    border: 'border-blue-200',
-    text: 'text-blue-400',
-    badge: 'bg-blue-100 text-blue-400',
+    bg: 'bg-indigo-500/10',
+    border: 'border-indigo-500/50',
+    text: 'text-indigo-400',
+    badge: 'bg-indigo-500/15 text-indigo-400',
   },
   red: {
-    bg: 'bg-red-900/20',
-    border: 'border-red-200',
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/50',
     text: 'text-red-400',
-    badge: 'bg-red-100 text-red-400',
+    badge: 'bg-red-500/15 text-red-400',
   },
   orange: {
-    bg: 'bg-orange-900/20',
-    border: 'border-orange-200',
-    text: 'text-orange-600',
-    badge: 'bg-orange-100 text-orange-700',
+    bg: 'bg-orange-500/10',
+    border: 'border-orange-500/50',
+    text: 'text-orange-400',
+    badge: 'bg-orange-500/15 text-orange-400',
   },
   purple: {
-    bg: 'bg-purple-900/20',
-    border: 'border-purple-200',
-    text: 'text-purple-600',
-    badge: 'bg-purple-100 text-purple-700',
+    bg: 'bg-purple-500/10',
+    border: 'border-purple-500/50',
+    text: 'text-purple-400',
+    badge: 'bg-purple-500/15 text-purple-400',
   },
 };
 
@@ -48,15 +48,15 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
   return (
     <div className="space-y-3">
       {!compact && (
-        <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
+        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4">
+          <p className="text-sm text-dark-text-secondary">
             选择一个任务模板开始构建。每个模板预设了安全审计任务的标准参数配置。
           </p>
         </div>
       )}
 
       {compact && (
-        <p className="text-sm text-gray-400 mb-3">选择模板类型：</p>
+        <p className="text-sm text-dark-text-muted mb-3">选择模板类型：</p>
       )}
 
       <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
@@ -72,7 +72,7 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
               className={`relative rounded-lg border-2 cursor-pointer transition-all ${
                 isSelected
                   ? `${colors.bg} ${colors.border} shadow-md`
-                  : 'bg-dark-surface border-gray-700/50 hover:border-gray-600 hover:shadow'
+                  : 'bg-dark-surface border-dark-border hover:border-dark-surface-hover hover:shadow'
               } ${compact ? 'p-3' : 'p-4'}`}
             >
               {isSelected && (
@@ -86,11 +86,11 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
                   <Icon size={compact ? 18 : 24} className={colors.text} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className={`font-semibold text-gray-100 ${compact ? 'text-sm' : ''}`}>
+                  <h3 className={`font-semibold text-dark-text ${compact ? 'text-sm' : ''}`}>
                     {template.name}
                   </h3>
                   {!compact && (
-                    <p className="text-sm text-gray-400 mt-1">{template.description}</p>
+                    <p className="text-sm text-dark-text-muted mt-1">{template.description}</p>
                   )}
 
                   {!compact && template.tags && (

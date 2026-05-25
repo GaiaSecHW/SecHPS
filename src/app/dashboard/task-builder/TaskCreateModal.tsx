@@ -88,10 +88,10 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     const type = providerType.toLowerCase();
     if (type === 'anthropic') return 'text-orange-400 bg-orange-500/20 border-orange-500/50';
     if (type === 'openai') return 'text-green-400 bg-green-500/20 border-green-500/50';
-    if (type === 'deepseek') return 'text-blue-400 bg-blue-500/20 border-blue-500/50';
+    if (type === 'deepseek') return 'text-indigo-400 bg-blue-500/20 border-blue-500/50';
     if (type === 'google') return 'text-purple-400 bg-purple-500/20 border-purple-500/50';
     if (type === 'azure') return 'text-cyan-400 bg-cyan-500/20 border-cyan-500/50';
-    return 'text-gray-400 bg-gray-500/20 border-gray-500/50';
+    return 'text-dark-text-muted bg-gray-500/20 border-gray-500/50';
   };
 
   const fetchAgentApps = async () => {
@@ -249,11 +249,11 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">创建任务</h3>
-          <button onClick={handleClose} disabled={isSubmitting} className="text-gray-400 hover:text-gray-300 disabled:opacity-50">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-dark-border flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-dark-text">创建任务</h3>
+          <button onClick={handleClose} disabled={isSubmitting} className="text-dark-text-muted hover:text-dark-text-secondary disabled:opacity-50 transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -262,7 +262,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           {/* 产品名称 */}
           <div>
             <div className="flex items-center gap-2">
-              <label className="block text-sm font-medium text-gray-300">产品名称</label>
+              <label className="block text-sm font-medium text-dark-text-secondary">产品名称</label>
               <span className="text-xs text-red-400">选择产品可以匹配知识图谱，任务扫描更加精准</span>
             </div>
             <div className="mt-1">
@@ -272,60 +272,60 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 任务名称 */}
           <div>
-            <label htmlFor="taskName" className="block text-sm font-medium text-gray-300">任务名称 <span className="text-red-400">*</span></label>
+            <label htmlFor="taskName" className="block text-sm font-medium text-dark-text-secondary">任务名称 <span className="text-red-400">*</span></label>
             <input
               id="taskName"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="请输入任务名称"
             />
           </div>
 
           {/* 任务描述 */}
           <div>
-            <label htmlFor="taskDescription" className="block text-sm font-medium text-gray-300">任务描述</label>
+            <label htmlFor="taskDescription" className="block text-sm font-medium text-dark-text-secondary">任务描述</label>
             <textarea
               id="taskDescription"
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="对任务的简要描述（可选）..."
             />
           </div>
 
           {/* 选择 Agent */}
           <div>
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-dark-text-secondary">
               选择 Agent <span className="text-red-400">*</span>
               {selectedAgentIds.size > 0 && (
-                <span className="ml-2 text-xs text-blue-400 font-normal">
+                <span className="ml-2 text-xs text-indigo-400 font-normal">
                   已选 {selectedAgentIds.size} 个，将创建 {selectedAgentIds.size} 个任务
                 </span>
               )}
             </label>
             {loadingAgents ? (
               <div className="mt-1 flex items-center justify-center py-8">
-                <Loader2 size={20} className="animate-spin text-blue-400" />
+                <Loader2 size={20} className="animate-spin text-indigo-400" />
               </div>
             ) : agentApps.length === 0 ? (
-              <div className="mt-1 text-center py-8 text-gray-500 text-sm bg-[#0F172A] border border-gray-700/50 rounded-md">
+              <div className="mt-1 text-center py-8 text-dark-text-muted text-sm bg-dark-bg border border-dark-border rounded-md">
                 暂无可用 Agent 应用，请在 Agent应用开发页面创建
               </div>
             ) : (
-              <div className="mt-1 border border-gray-600 rounded-md divide-y divide-gray-700/50 max-h-48 overflow-y-auto">
+              <div className="mt-1 border border-dark-border rounded-md divide-y divide-gray-700/50 max-h-48 overflow-y-auto">
                 {agentApps.map((agent) => (
                   <label key={agent.id} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-dark-surface-hover transition-colors">
                     <input
                       type="checkbox"
                       checked={selectedAgentIds.has(agent.id)}
                       onChange={() => toggleAgent(agent.id)}
-                      className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-dark-bg"
+                      className="w-4 h-4 rounded border-dark-border bg-dark-bg"
                     />
-                    <span className="text-sm text-gray-200">{agent.name}</span>
-                    <span className="text-xs text-gray-500 ml-auto">{agent.engine}</span>
+                    <span className="text-sm text-dark-text">{agent.name}</span>
+                    <span className="text-xs text-dark-text-muted ml-auto">{agent.engine}</span>
                   </label>
                 ))}
               </div>
@@ -334,13 +334,13 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 选择模型（合并为一个下拉） */}
           <div>
-            <label className="block text-sm font-medium text-gray-300">选择模型 <span className="text-red-400">*</span></label>
+            <label className="block text-sm font-medium text-dark-text-secondary">选择模型 <span className="text-red-400">*</span></label>
             {loadingModels ? (
               <div className="mt-1 flex items-center justify-center py-8">
-                <Loader2 size={20} className="animate-spin text-blue-400" />
+                <Loader2 size={20} className="animate-spin text-indigo-400" />
               </div>
             ) : modelOptions.length === 0 ? (
-              <div className="mt-1 text-center py-8 text-gray-500 text-sm bg-[#0F172A] border border-gray-700/50 rounded-md">
+              <div className="mt-1 text-center py-8 text-dark-text-muted text-sm bg-dark-bg border border-dark-border rounded-md">
                 暂无可用模型，请在 我的模型页面创建
               </div>
             ) : (
@@ -349,49 +349,49 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                   type="button"
                   onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
                   className={`w-full px-3 py-2 border rounded-md text-left flex items-center justify-between transition-colors ${
-                    modelDropdownOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-600'
+                    modelDropdownOpen ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-dark-border'
                   }`}
                 >
                   {selectedModelKey ? (
                     <div className="flex items-center gap-2">
                       {(() => {
                         const opt = modelOptions.find(o => o.key === selectedModelKey);
-                        if (!opt) return <span className="text-gray-200">请选择模型</span>;
+                        if (!opt) return <span className="text-dark-text">请选择模型</span>;
                         return (
                           <>
                             <span className={`px-1.5 py-0.5 text-xs font-medium rounded border ${getProviderColor(opt.providerType)}`}>
                               {opt.providerType || 'unknown'}
                             </span>
-                            <span className="text-gray-200 truncate">{opt.label}</span>
+                            <span className="text-dark-text truncate">{opt.label}</span>
                           </>
                         );
                       })()}
                     </div>
                   ) : (
-                    <span className="text-gray-500">请选择模型</span>
+                    <span className="text-dark-text-muted">请选择模型</span>
                   )}
-                  <ChevronDown size={16} className={`text-gray-400 transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={16} className={`text-dark-text-muted transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {modelDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-[#0F172A] border border-gray-600 rounded-md shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-1 w-full bg-dark-bg border border-dark-border rounded-md shadow-xl max-h-60 overflow-y-auto">
                     {modelOptions.map((opt) => (
                       <button
                         key={opt.key}
                         type="button"
                         onClick={() => { setSelectedModelKey(opt.key); setModelDropdownOpen(false); }}
-                        className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-blue-900/30 transition-colors ${
-                          selectedModelKey === opt.key ? 'bg-blue-900/40' : ''
+                        className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-indigo-500/15 transition-colors ${
+                          selectedModelKey === opt.key ? 'bg-indigo-500/20' : ''
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           <span className={`px-1.5 py-0.5 text-xs font-medium rounded border ${getProviderColor(opt.providerType)}`}>
                             {opt.providerType || 'unknown'}
                           </span>
-                          <span className={`text-sm truncate ${selectedModelKey === opt.key ? 'text-blue-300' : 'text-gray-200'}`}>
+                          <span className={`text-sm truncate ${selectedModelKey === opt.key ? 'text-indigo-300' : 'text-dark-text'}`}>
                             {opt.label}
                           </span>
                         </div>
-                        {selectedModelKey === opt.key && <Check size={14} className="text-blue-400" />}
+                        {selectedModelKey === opt.key && <Check size={14} className="text-indigo-400" />}
                       </button>
                     ))}
                   </div>
@@ -402,31 +402,31 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 上传文件 */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">上传文件 <span className="text-red-400">*</span></label>
+            <label className="block text-sm font-medium text-dark-text-secondary mb-1.5">上传文件 <span className="text-red-400">*</span></label>
             {selectedFile ? (
-              <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
+              <div className="border border-dark-border rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
                 <div className="flex items-center gap-2">
                   <File size={16} className="text-primary-400" />
-                  <span className="text-sm text-gray-200 truncate max-w-[280px]">{selectedFile.name}</span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-sm text-dark-text truncate max-w-[280px]">{selectedFile.name}</span>
+                  <span className="text-xs text-dark-text-muted">
                     {selectedFile.size > 1024 * 1024
                       ? `${(selectedFile.size / 1024 / 1024).toFixed(1)} MB`
                       : `${(selectedFile.size / 1024).toFixed(1)} KB`}
                   </span>
                 </div>
-                <button onClick={handleRemoveFile} className="h-7 px-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/15">
+                <button onClick={handleRemoveFile} className="h-7 px-2 rounded-md text-dark-text-muted hover:text-red-400 hover:bg-red-500/15">
                   <X size={14} />
                 </button>
               </div>
             ) : (
               <div
-                className="border border-gray-700/50 rounded-md p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
+                className="border border-dark-border rounded-md p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary-500', 'bg-primary-500/10'); }}
                 onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-primary-500', 'bg-primary-500/10'); }}
                 onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-primary-500', 'bg-primary-500/10'); if (e.dataTransfer.files.length > 0) handleFileDrop(e.dataTransfer.files); }}
               >
-                <div className="flex items-center justify-center gap-2 text-gray-500">
+                <div className="flex items-center justify-center gap-2 text-dark-text-muted">
                   <Upload size={16} />
                   <span className="text-sm">点击或拖拽上传文件</span>
                   <input
@@ -437,7 +437,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                     className="hidden"
                   />
                 </div>
-                <p className="text-xs text-gray-500 text-center mt-1">
+                <p className="text-xs text-dark-text-muted text-center mt-1">
                   支持 ZIP、JAR、PDF、DOC 等，最大 5GB
                 </p>
               </div>
@@ -445,14 +445,14 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
-          <button onClick={handleClose} disabled={isSubmitting} className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50">
+        <div className="px-6 py-4 border-t border-dark-border flex justify-end space-x-3">
+          <button onClick={handleClose} disabled={isSubmitting} className="px-4 py-2 border border-dark-border rounded-md text-dark-text-secondary hover:bg-dark-bg disabled:opacity-50">
             取消
           </button>
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || !name.trim() || selectedAgentIds.size === 0 || !selectedModelKey || !selectedFile}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
             {isSubmitting ? '创建中...' : selectedAgentIds.size > 1 ? `创建 ${selectedAgentIds.size} 个任务` : '创建任务'}

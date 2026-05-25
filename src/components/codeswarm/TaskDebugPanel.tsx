@@ -302,7 +302,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   };
 
   return (
-    <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
+    <div className="bg-dark-surface rounded-lg shadow border border-dark-border/40">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -313,27 +313,27 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             <Play className="w-5 h-5 text-blue-400" />
           </div>
           <div className="text-left">
-            <h2 className="text-lg font-semibold text-gray-100">手动任务调试</h2>
-            <p className="text-sm text-gray-400">创建任务并分发给 Worker 执行</p>
+            <h2 className="text-lg font-semibold text-dark-text">手动任务调试</h2>
+            <p className="text-sm text-dark-text-muted">创建任务并分发给 Worker 执行</p>
           </div>
         </div>
         {expanded ? (
-          <ChevronDown className="w-5 h-5 text-gray-400" />
+          <ChevronDown className="w-5 h-5 text-dark-text-muted" />
         ) : (
-          <ChevronRight className="w-5 h-5 text-gray-400" />
+          <ChevronRight className="w-5 h-5 text-dark-text-muted" />
         )}
       </button>
 
       {/* Form */}
       {expanded && (
-        <form onSubmit={handleSubmit} className="p-6 border-t border-gray-700/50 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 border-t border-dark-border/40 space-y-4">
           {/* Engine Selector */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               执行引擎
             </label>
             <div className="flex gap-3">
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-dark-border text-dark-text-muted hover:bg-dark-surface-hover hover:text-dark-text-secondary'}`}>
                 <input
                   type="radio"
                   name="engine"
@@ -345,7 +345,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 <span className="font-medium">OpenCode</span>
                 <span className="text-xs opacity-70">opencode acp</span>
               </label>
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'claudecode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'claudecode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-dark-border text-dark-text-muted hover:bg-dark-surface-hover hover:text-dark-text-secondary'}`}>
                 <input
                   type="radio"
                   name="engine"
@@ -362,7 +362,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
           {/* Instruction */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               执行指令 <span className="text-red-400">*</span>
             </label>
             <textarea
@@ -370,14 +370,14 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               onChange={(e) => setForm({ ...form, instruction: e.target.value })}
               placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
               rows={5}
-              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
             />
           </div>
 
           {/* Basic Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 项目路径
               </label>
               <input
@@ -385,11 +385,11 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.projectPath}
                 onChange={(e) => setForm({ ...form, projectPath: e.target.value })}
                 placeholder="/path/to/project"
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 工作区路径 (NFS)
               </label>
               <input
@@ -397,20 +397,20 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.workspacePath}
                 onChange={(e) => setForm({ ...form, workspacePath: e.target.value })}
                 placeholder="/shared/workspace/task-123"
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
               />
             </div>
           </div>
 
           {/* Worker Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               指定 Worker (空则自动分配)
             </label>
             <select
               value={form.preferredWorkerNodeId}
               onChange={(e) => setForm({ ...form, preferredWorkerNodeId: e.target.value })}
-              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text"
             >
               <option value="">自动分配</option>
               {workerOptions.filter(w => w.status === 'online').map((w) => (
@@ -424,13 +424,13 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           {/* Model & API Key */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 模型
               </label>
               <select
                 value={selectedModelKey}
                 onChange={(e) => handleModelChange(e.target.value)}
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text"
               >
                 <option value="">不指定（使用 Worker 端默认）</option>
                 {modelOptions.map((opt) => (
@@ -439,7 +439,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 API Key
               </label>
               <input
@@ -447,14 +447,14 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.apiKey}
                 onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
                 placeholder={form.engine === 'claudecode' ? '不传则使用 Worker 端默认' : 'sk-ant-... (可选，覆盖模型的默认Key)'}
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
               />
             </div>
           </div>
 
           {/* Timeout */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               超时 (秒)
             </label>
             <input
@@ -463,13 +463,13 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               onChange={(e) => setForm({ ...form, timeoutSec: parseInt(e.target.value) || 300 })}
               min={60}
               max={3600}
-              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text"
             />
           </div>
 
           {/* Agent Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               Agent 名称 {form.engine === 'opencode' && <span className="text-red-400">*</span>}
             </label>
             <input
@@ -477,14 +477,14 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               value={form.agent}
               onChange={(e) => setForm({ ...form, agent: e.target.value })}
               placeholder="如 nazhua-audit（command 模式下传入的 agent）"
-              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
             />
           </div>
 
           {/* Advanced Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 技能 (逗号分隔)
               </label>
               <input
@@ -492,11 +492,11 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.skills}
                 onChange={(e) => setForm({ ...form, skills: e.target.value })}
                 placeholder="security-audit, code-analysis"
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 MCP 配置 (JSON)
               </label>
               <input
@@ -504,7 +504,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.mcps}
                 onChange={(e) => setForm({ ...form, mcps: e.target.value })}
                 placeholder='[{"type":"local","command":["npx","-y","@modelcontextprotocol/server-filesystem"]}]'
-                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
+                className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted font-mono text-sm"
               />
             </div>
           </div>
@@ -514,7 +514,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             <button
               type="submit"
               disabled={loading || !form.instruction.trim() || (form.engine === 'opencode' && !form.agent.trim())}
-              className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -534,19 +534,19 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
       {/* Real-time Logs Panel */}
       {showLogs && (
-        <div className="border-t border-gray-700/50">
+        <div className="border-t border-dark-border/40">
           <div className="px-6 py-3 flex items-center justify-between bg-dark-surface-alt">
             <div className="flex items-center space-x-2">
               <Terminal className="w-4 h-4 text-green-400" />
-              <span className="text-sm font-medium text-gray-100">实时日志</span>
+              <span className="text-sm font-medium text-dark-text">实时日志</span>
               {currentTaskId && (
-                <span className="text-xs text-gray-500">({currentTaskId})</span>
+                <span className="text-xs text-dark-text-muted">({currentTaskId})</span>
               )}
             </div>
             <div className="flex items-center space-x-2">
               <button
                 onClick={clearLogs}
-                className="p-1 text-gray-400 hover:text-red-400 rounded"
+                className="p-1 text-dark-text-muted hover:text-red-400 rounded"
                 title="关闭日志"
               >
                 <Trash2 className="w-4 h-4" />
@@ -555,12 +555,12 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           </div>
           <div className="h-64 overflow-y-auto bg-dark-bg p-4 font-mono text-xs">
             {logs.length === 0 ? (
-              <div className="text-gray-500">等待任务开始...</div>
+              <div className="text-dark-text-muted">等待任务开始...</div>
             ) : (
               logs.map((log, idx) => {
                 // Log type color + badge style
-                let textColor = 'text-gray-300';
-                let badgeColor = 'bg-gray-700 text-gray-300';
+                let textColor = 'text-dark-text-secondary';
+                let badgeColor = 'bg-dark-surface-hover text-dark-text-secondary';
                 if (log.type === 'error') { textColor = 'text-red-400'; badgeColor = 'bg-red-900/50 text-red-400'; }
                 else if (log.type === 'task_complete') { textColor = 'text-green-400'; badgeColor = 'bg-green-900/50 text-green-400'; }
                 else if (log.type === 'skill_start') { textColor = 'text-purple-400'; badgeColor = 'bg-purple-900/50 text-purple-400'; }
@@ -575,9 +575,9 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 const cleanDetails = cleanLogText(log.details, 200);
                 return (
                 <div key={idx} className={`mb-1 ${textColor}`}>
-                  <span className="text-gray-600">{new Date(log.timestamp).toLocaleTimeString()}</span>{' '}
+                  <span className="text-dark-text-muted">{new Date(log.timestamp).toLocaleTimeString()}</span>{' '}
                   <span className={`px-1 rounded text-[10px] ${badgeColor}`}>{log.message}</span>
-                  {cleanDetails && <span className="text-gray-400 ml-2">{cleanDetails}</span>}
+                  {cleanDetails && <span className="text-dark-text-muted ml-2">{cleanDetails}</span>}
                 </div>
               )})
             )}

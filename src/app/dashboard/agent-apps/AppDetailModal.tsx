@@ -159,45 +159,45 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">应用详情</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border">
+          <h2 className="text-lg font-semibold text-dark-text">应用详情</h2>
           {!isSubmitting && (
-            <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-400 rounded-full">
+            <button onClick={handleClose} className="p-1 text-dark-text-muted hover:text-dark-text-muted rounded-full">
               <X className="h-5 w-5" />
             </button>
           )}
         </div>
 
         <div className="px-6 py-4 space-y-5 overflow-y-auto">
-          <div className="text-sm text-gray-500 space-y-1 mb-4">
+          <div className="text-sm text-dark-text-muted space-y-1 mb-4">
             <p>创建时间: {new Date(app.createdAt).toLocaleString('zh-CN')}</p>
             <p>更新时间: {new Date(app.updatedAt).toLocaleString('zh-CN')}</p>
             <p>应用ID: {app.id}</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              应用名称 <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
+              应用名称 <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              使用引擎 <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
+              使用引擎 <span className="text-red-400">*</span>
             </label>
             <select
               value={formData.engine}
               onChange={(e) => setFormData({ ...formData, engine: e.target.value as any })}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             >
               <option value="">请选择引擎</option>
@@ -209,13 +209,13 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
           {isIcsOrAdmin && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-dark-text-secondary mb-2">
                 租户
               </label>
               <select
                 value={formData.tenantId}
                 onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={isSubmitting}
               >
                 <option value="">请选择租户</option>
@@ -228,14 +228,14 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">AgentHarness 文件更新（可选）</label>
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">AgentHarness 文件更新（可选）</label>
             {!agentHarnessFile ? (
               <div>
                 <div
-                  className="border border-gray-700/50 rounded-md p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
+                  className="border border-dark-border rounded-lg p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <div className="flex items-center justify-center gap-2 text-gray-500">
+                  <div className="flex items-center justify-center gap-2 text-dark-text-muted">
                     <Upload size={16} />
                     <span className="text-sm">点击上传新的压缩包或文件夹</span>
                   </div>
@@ -265,14 +265,14 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                 </div>
               </div>
             ) : (
-              <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
+              <div className="border border-dark-border rounded-lg px-3 py-2 flex items-center justify-between bg-dark-bg">
                 <div className="flex items-center gap-2">
                   <File size={16} className="text-primary-400" />
                   <div>
-                    <span className="text-sm text-gray-200">
+                    <span className="text-sm text-dark-text">
                       {agentHarnessFile.type === 'folder' ? `📁 ${agentHarnessFile.name}` : agentHarnessFile.name}
                     </span>
-                    <span className="text-xs text-gray-500 ml-1.5">
+                    <span className="text-xs text-dark-text-muted ml-1.5">
                       {agentHarnessFile.type === 'folder'
                         ? `${agentHarnessFile.files?.length || 0} 个文件`
                         : `${((agentHarnessFile.size || 0) / 1024).toFixed(1)} KB`
@@ -283,7 +283,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                 <button
                   type="button"
                   onClick={() => setAgentHarnessFile(null)}
-                  className="h-7 px-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/15"
+                  className="h-7 px-2 rounded-lg text-dark-text-muted hover:text-red-400 hover:bg-red-500/15"
                   disabled={isSubmitting}
                 >
                   <X size={14} />
@@ -293,7 +293,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               默认智能体名称
             </label>
             <input
@@ -301,13 +301,13 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               value={formData.defaultAgentName}
               onChange={(e) => setFormData({ ...formData, defaultAgentName: e.target.value })}
               placeholder="例如: code-assistant"
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               启动命令
             </label>
             <input
@@ -315,13 +315,13 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               value={formData.startCommand}
               onChange={(e) => setFormData({ ...formData, startCommand: e.target.value })}
               placeholder="例如: opencode run skill.md"
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               文件结构要求
             </label>
             <textarea
@@ -329,19 +329,19 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               onChange={(e) => setFormData({ ...formData, inputRequirements: e.target.value })}
               placeholder="描述上传文件的内容结构要求，如：必须包含 pom.xml 和 src 目录，属于 Java/Maven 项目结构"
               rows={3}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
               disabled={isSubmitting}
             />
-            <p className="mt-1 text-xs text-gray-500">留空则不校验上传文件的目录结构</p>
+            <p className="mt-1 text-xs text-dark-text-muted">留空则不校验上传文件的目录结构</p>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-dark-bg">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-dark-border bg-dark-bg">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-dark-bg disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-dark-text-secondary bg-dark-surface border border-dark-border rounded-lg hover:bg-dark-bg disabled:opacity-50"
           >
             取消
           </button>
@@ -349,7 +349,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
           >
             {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {isSubmitting ? '更新中...' : '更新'}

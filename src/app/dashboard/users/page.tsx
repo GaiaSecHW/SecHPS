@@ -3,13 +3,11 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Users,
   Plus,
   Edit,
   Trash2,
   Shield,
   Search,
-  ChevronDown,
   UserPlus,
   ChevronLeft,
   ChevronRight,
@@ -149,27 +147,6 @@ function UsersPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-            <Users size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">用户管理</h1>
-            <p className="text-sm text-gray-400 mt-0.5">管理平台用户及其权限</p>
-          </div>
-        </div>
-        
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
-        >
-          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
-          创建用户
-        </button>
-      </div>
-
       {error && (
         <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
@@ -177,51 +154,58 @@ function UsersPageContent() {
       )}
 
       {/* Search + Table combined */}
-      <div className="bg-dark-surface shadow-sm rounded-lg overflow-hidden border border-gray-700/50">
-        {/* Filters section */}
-        <div className="px-5 py-4 border-b border-gray-700/50">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+      <div className="bg-dark-surface shadow-sm rounded-lg overflow-hidden border border-dark-border/40">
+        {/* Toolbar: search + actions */}
+        <div className="px-5 py-4 border-b border-dark-border/40 flex items-center justify-between gap-4">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-text-muted" size={18} />
             <input
               type="text"
               placeholder="按姓名、邮箱或用户名搜索..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-dark-border/40 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted text-sm"
             />
           </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-indigo-600 text-white hover:bg-indigo-500"
+          >
+            <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+            创建用户
+          </button>
         </div>
 
         {/* Table section */}
-        <table className="min-w-full divide-y divide-gray-700/50">
-          <thead className="bg-[#162032]">
+        <table className="min-w-full divide-y divide-dark-border/40">
+          <thead className="bg-dark-surface-hover/50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                 用户
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                 邮箱
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                 角色
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                 状态
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                 创建时间
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                 操作
               </th>
             </tr>
           </thead>
-          <tbody className="bg-dark-surface divide-y divide-gray-700/50">
+          <tbody className="bg-dark-surface divide-y divide-dark-border/40">
             {filteredUsers.length === 0 ? (
               <tr>
                 <td
                   colSpan={6}
-                  className="px-6 py-12 text-center text-sm text-gray-500"
+                  className="px-6 py-12 text-center text-sm text-dark-text-muted"
                 >
                   未找到用户
                 </td>
@@ -242,23 +226,23 @@ function UsersPageContent() {
         </table>
         {/* 分页 */}
         {totalCount > pageSize && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700/50">
-            <span className="text-sm text-gray-400">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-dark-border/40">
+            <span className="text-sm text-dark-text-muted">
               共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
             </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 border border-dark-border rounded-lg hover:bg-dark-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-sm text-gray-400">第 {page} 页</span>
+              <span className="text-sm text-dark-text-muted">第 {page} 页</span>
               <button
                 onClick={() => setPage(p => p + 1)}
                 disabled={page >= Math.ceil(totalCount / pageSize)}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 border border-dark-border rounded-lg hover:bg-dark-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronRight size={16} />
               </button>
@@ -356,7 +340,7 @@ function UserRow({
                 alt={user.name || user.username}
               />
             ) : (
-              <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center">
+              <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center">
                 <span className="text-white font-medium">
                   {(user.name || user.username).charAt(0).toUpperCase()}
                 </span>
@@ -364,14 +348,14 @@ function UserRow({
             )}
           </div>
           <div className="ml-4">
-            <div className="text-sm font-medium text-gray-100">
+            <div className="text-sm font-medium text-dark-text">
               {user.name || user.username}
             </div>
-            <div className="text-sm text-gray-500">@{user.username}</div>
+            <div className="text-sm text-dark-text-muted">@{user.username}</div>
           </div>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-dark-text-muted">
         {user.email}
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
@@ -387,7 +371,7 @@ function UserRow({
               </span>
             ))
           ) : (
-            <span className="text-sm text-gray-500">未分配角色</span>
+            <span className="text-sm text-dark-text-muted">未分配角色</span>
           )}
         </div>
       </td>
@@ -402,35 +386,35 @@ function UserRow({
           {user.isActive ? '激活' : '禁用'}
         </span>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-dark-text-muted">
         {new Date(user.createdAt).toLocaleDateString('zh-CN')}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex items-center justify-end space-x-2">
           <button
             onClick={onAssignRoles}
-            className="text-blue-400 hover:text-blue-900"
+            className="text-blue-400 hover:text-blue-300"
             title="分配角色"
           >
             <UserPlus size={16} />
           </button>
           <button
             onClick={onResetPassword}
-            className="text-orange-400 hover:text-orange-900"
+            className="text-orange-400 hover:text-orange-300"
             title="重置密码"
           >
             <Key size={16} />
           </button>
           <button
             onClick={onEdit}
-            className="text-gray-400 hover:text-gray-400"
+            className="text-dark-text-muted hover:text-dark-text"
             title="编辑用户"
           >
             <Edit size={16} />
           </button>
           <button
             onClick={onDelete}
-            className="text-red-400 hover:text-red-400"
+            className="text-red-400 hover:text-red-300"
             title="删除用户"
           >
             <Trash2 size={16} />
@@ -510,11 +494,11 @@ function CreateUserModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">创建用户</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400 text-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-2xl w-full mx-4">
+        <div className="px-6 py-4 border-b border-dark-border/40 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-dark-text">创建用户</h3>
+          <button onClick={onClose} className="text-dark-text-muted hover:text-dark-text text-2xl">
             ×
           </button>
         </div>
@@ -529,7 +513,7 @@ function CreateUserModal({
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               邮箱 <span className="text-red-400">*</span>
             </label>
@@ -539,7 +523,7 @@ function CreateUserModal({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="user@example.com"
             />
           </div>
@@ -547,7 +531,7 @@ function CreateUserModal({
           <div>
             <label
               htmlFor="username"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               用户名 <span className="text-red-400">*</span>
             </label>
@@ -557,7 +541,7 @@ function CreateUserModal({
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="请输入用户名"
             />
           </div>
@@ -565,7 +549,7 @@ function CreateUserModal({
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               姓名
             </label>
@@ -574,7 +558,7 @@ function CreateUserModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="请输入姓名"
             />
           </div>
@@ -582,7 +566,7 @@ function CreateUserModal({
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               密码 <span className="text-red-400">*</span>
             </label>
@@ -592,26 +576,26 @@ function CreateUserModal({
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="请输入密码"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               角色
             </label>
             <div className="grid grid-cols-2 gap-2">
               {roles.map((role: any) => (
                 <label
                   key={role.id}
-                  className="flex items-center space-x-2 px-3 py-2 border border-gray-600 rounded-md cursor-pointer hover:bg-dark-surface-hover"
+                  className="flex items-center space-x-2 px-3 py-2 border border-dark-border rounded-lg cursor-pointer hover:bg-dark-surface-hover"
                 >
                   <input
                     type="checkbox"
                     checked={selectedRoles.includes(role.id)}
                     onChange={() => toggleRole(role.id)}
-                    className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
+                    className="rounded border-dark-border text-indigo-500 focus:ring-indigo-500"
                   />
                   <span className="text-sm">{role.name}</span>
                 </label>
@@ -624,14 +608,14 @@ function CreateUserModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-dark-border rounded-lg text-dark-text-secondary hover:bg-dark-surface-hover disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={loading}
-className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
             >
               {loading ? '保存中...' : '保存'}
             </button>
@@ -698,13 +682,13 @@ function ResetPasswordModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-md w-full mx-4">
+        <div className="px-6 py-4 border-b border-dark-border/40 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-dark-text">
             重置密码 - {user.name || user.username}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400 text-2xl">
+          <button onClick={onClose} className="text-dark-text-muted hover:text-dark-text text-2xl">
             ×
           </button>
         </div>
@@ -721,17 +705,17 @@ function ResetPasswordModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               新密码 <span className="text-red-400">*</span>
             </label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="请输入新密码"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-dark-text-muted">
               密码要求：至少8个字符，包含大小写字母和数字
             </p>
           </div>
@@ -741,14 +725,14 @@ function ResetPasswordModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-dark-border rounded-lg text-dark-text-secondary hover:bg-dark-surface-hover disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50"
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-1 focus:ring-orange-500 disabled:opacity-50"
             >
               {loading ? '重置中...' : '确认重置'}
             </button>
@@ -811,11 +795,11 @@ function EditUserModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">编辑用户</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400 text-2xl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-md w-full mx-4">
+        <div className="px-6 py-4 border-b border-dark-border/40 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-dark-text">编辑用户</h3>
+          <button onClick={onClose} className="text-dark-text-muted hover:text-dark-text text-2xl">
             ×
           </button>
         </div>
@@ -830,7 +814,7 @@ function EditUserModal({
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               姓名
             </label>
@@ -839,7 +823,7 @@ function EditUserModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="请输入姓名"
             />
           </div>
@@ -847,7 +831,7 @@ function EditUserModal({
           <div>
             <label
               htmlFor="avatar"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               头像链接
             </label>
@@ -856,7 +840,7 @@ function EditUserModal({
               type="url"
               value={avatar}
               onChange={(e) => setAvatar(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder="https://example.com/avatar.png"
             />
           </div>
@@ -867,9 +851,9 @@ function EditUserModal({
                 type="checkbox"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
+                className="rounded border-dark-border text-indigo-500 focus:ring-indigo-500"
               />
-              <span className="text-sm font-medium text-gray-300">激活状态</span>
+              <span className="text-sm font-medium text-dark-text-secondary">激活状态</span>
             </label>
           </div>
 
@@ -878,14 +862,14 @@ function EditUserModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-dark-border rounded-lg text-dark-text-secondary hover:bg-dark-surface-hover disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
             >
               {loading ? '保存中...' : '保存'}
             </button>
@@ -954,13 +938,13 @@ function AssignRolesModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-md w-full mx-4">
+        <div className="px-6 py-4 border-b border-dark-border/40 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-dark-text">
             分配角色 - {user.name || user.username}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400 text-2xl">
+          <button onClick={onClose} className="text-dark-text-muted hover:text-dark-text text-2xl">
             ×
           </button>
         </div>
@@ -973,27 +957,27 @@ function AssignRolesModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-dark-text-secondary mb-2">
               选择角色
             </label>
             <div className="space-y-2">
               {roles.map((role: any) => (
                 <label
                   key={role.id}
-                  className="flex items-center space-x-2 px-3 py-2 border border-gray-600 rounded-md cursor-pointer hover:bg-dark-surface-hover"
+                  className="flex items-center space-x-2 px-3 py-2 border border-dark-border rounded-lg cursor-pointer hover:bg-dark-surface-hover"
                 >
                   <input
                     type="checkbox"
                     checked={selectedRoles.includes(role.id)}
                     onChange={() => toggleRole(role.id)}
-                    className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
+                    className="rounded border-dark-border text-indigo-500 focus:ring-indigo-500"
                   />
                   <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-100">
+                    <div className="text-sm font-medium text-dark-text">
                       {role.name}
                     </div>
                     {role.description && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-dark-text-muted">
                         {role.description}
                       </div>
                     )}
@@ -1008,14 +992,14 @@ function AssignRolesModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-dark-border rounded-lg text-dark-text-secondary hover:bg-dark-surface-hover disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
             >
               {loading ? '保存中...' : '保存'}
             </button>

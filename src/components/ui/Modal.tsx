@@ -87,16 +87,16 @@ export function Modal({
       <div
         ref={modalRef}
         className={cn(
-          'bg-dark-surface rounded-xl shadow-2xl w-full max-h-[90vh] flex flex-col border border-gray-700/50',
+          'bg-dark-surface rounded-xl shadow-2xl w-full max-h-[90vh] flex flex-col border border-dark-border',
           sizeMap[size],
           className
         )}
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border/40">
             {title && (
-              <h2 id="modal-title" className="text-lg font-semibold text-gray-100">
+              <h2 id="modal-title" className="text-lg font-semibold text-dark-text">
                 {title}
               </h2>
             )}
@@ -104,7 +104,7 @@ export function Modal({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-full transition-colors"
+                className="p-1 text-dark-text-muted hover:text-dark-text hover:bg-dark-surface-hover rounded-full transition-colors"
                 aria-label="关闭"
               >
                 <X className="h-5 w-5" />
@@ -120,7 +120,7 @@ export function Modal({
 
         {/* Footer */}
         {showFooter && footer && (
-<div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 rounded-b-xl">
+<div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-dark-border/40 rounded-b-xl">
             {footer}
           </div>
         )}
@@ -167,14 +167,14 @@ export function ConfirmDialog({
       showCloseButton={false}
     >
       <div className="px-6 py-4">
-        <p className="text-gray-300">{message}</p>
+        <p className="text-dark-text-secondary">{message}</p>
       </div>
-      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 rounded-b-xl">
+      <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-dark-border/40 rounded-b-xl">
         <button
           type="button"
           onClick={onClose}
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
+          className="px-4 py-2 text-sm font-medium text-dark-text-secondary bg-dark-surface border border-dark-border rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
         >
           {cancelText}
         </button>
@@ -216,7 +216,7 @@ export function CancelButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
+      className="px-4 py-2 text-sm font-medium text-dark-text-secondary bg-dark-surface border border-dark-border rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
     >
       {children}
     </button>

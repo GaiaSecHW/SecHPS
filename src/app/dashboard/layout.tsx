@@ -38,7 +38,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import type { ReactNode } from 'react';
 
 const PAGE_META: Record<string, { title: string; icon: ReactNode }> = {
-  '/dashboard': { title: '概览', icon: <LayoutDashboard size={20} /> },
+  '/dashboard': { title: '仪表盘', icon: <LayoutDashboard size={20} /> },
   '/dashboard/task-builder': { title: '我的任务', icon: <ClipboardList size={20} /> },
   '/dashboard/skills': { title: 'Skill 市场', icon: <Award size={20} /> },
   '/dashboard/skills/create': { title: '快速创建', icon: <Award size={20} /> },
@@ -46,6 +46,7 @@ const PAGE_META: Record<string, { title: string; icon: ReactNode }> = {
   '/dashboard/skills/import-create': { title: '导入创建', icon: <Award size={20} /> },
   '/dashboard/mcp-servers': { title: 'MCP 市场', icon: <Server size={20} /> },
   '/dashboard/agent-apps': { title: 'Agent 市场', icon: <Box size={20} /> },
+  '/dashboard/agent-apps/developer-guide': { title: '开发者指南', icon: <Box size={20} /> },
   '/dashboard/agentflow-pipelines': { title: '工作流编排', icon: <Layers size={20} /> },
   '/dashboard/evolution': { title: '智能体进化', icon: <TrendingUp size={20} /> },
   '/dashboard/knowledge-graph': { title: '知识图谱', icon: <Network size={20} /> },
@@ -67,10 +68,14 @@ const PAGE_META: Record<string, { title: string; icon: ReactNode }> = {
 
 function getPageMeta(pathname: string): { title: string; icon: ReactNode } | null {
   if (PAGE_META[pathname]) return PAGE_META[pathname];
+  return null;
+}
+
+function getParentMeta(pathname: string): { path: string; title: string; icon: ReactNode } | null {
   const match = Object.keys(PAGE_META)
-    .filter(k => pathname.startsWith(k + '/'))
+    .filter(k => k !== pathname && k !== '/dashboard' && pathname.startsWith(k + '/'))
     .sort((a, b) => b.length - a.length)[0];
-  return match ? PAGE_META[match] : null;
+  return match ? { path: match, ...PAGE_META[match] } : null;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -158,8 +163,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
   const sidebarWidth = sidebarCollapsed ? 64 : 240;
   const pageMeta = getPageMeta(pathname);
-  const pathSegments = pathname.split('/').filter(Boolean);
-  const isSubPage = pathSegments.length > 2;
+  const parentMeta = getParentMeta(pathname);
+  const isSubPage = parentMeta !== null;
 
   if (loading) {
     return (
@@ -250,7 +255,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 )}
                 {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
 
-                <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
+                <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname} badge="Beta">
                   智能体进化
                 </NavLink>
                 <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
@@ -259,7 +264,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   数据回流
                 </NavLink>
-                <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
+                <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname} badge="Beta">
                   测评基准
                 </NavLink>
               </>
@@ -364,13 +369,24 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           {/* Header */}
           <header className="h-14 bg-dark-surface/80 backdrop-blur-sm border-b border-dark-border flex-shrink-0 px-[3.5rem] md:px-[4rem]">
             <div className="h-full flex items-center gap-2.5 w-full max-w-screen-2xl mx-auto">
-              {isSubPage && (
-                <button onClick={() => router.back()} className="p-1 -ml-1 mr-1 text-dark-text-muted hover:text-dark-text rounded-md hover:bg-dark-surface-hover transition-colors">
-                  <ArrowLeft size={18} />
-                </button>
+              {isSubPage ? (
+                <>
+                  <button onClick={() => router.back()} className="p-1 -ml-1 mr-1 text-dark-text-muted hover:text-dark-text rounded-md hover:bg-dark-surface-hover transition-colors">
+                    <ArrowLeft size={18} />
+                  </button>
+                  <Link href={parentMeta!.path} className="flex items-center gap-2 text-dark-text-muted hover:text-dark-text-secondary transition-colors">
+                    <span className="text-dark-text-muted">{parentMeta!.icon}</span>
+                    <span className="text-sm">{parentMeta!.title}</span>
+                  </Link>
+                  <span className="text-dark-text-muted text-sm">/</span>
+                  <span className="text-sm font-medium text-dark-text">{pageMeta?.title || '详情'}</span>
+                </>
+              ) : (
+                <>
+                  {pageMeta && <span className="text-dark-text-secondary">{pageMeta.icon}</span>}
+                  <h1 className="text-lg font-semibold text-dark-text">{pageMeta?.title || ''}</h1>
+                </>
               )}
-              {pageMeta && <span className="text-dark-text-secondary">{pageMeta.icon}</span>}
-              <h1 className="text-lg font-semibold text-dark-text">{pageMeta?.title || ''}</h1>
             </div>
           </header>
 
@@ -429,6 +445,7 @@ function NavLink({
   collapsed,
   exact,
   pathname,
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
@@ -436,6 +453,7 @@ function NavLink({
   collapsed?: boolean;
   exact?: boolean;
   pathname: string;
+  badge?: string;
 }) {
   const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
 
@@ -450,7 +468,12 @@ function NavLink({
       title={collapsed ? String(children) : undefined}
     >
       <span className="flex-shrink-0 w-[18px] h-[18px]">{icon}</span>
-      {!collapsed && <span className="truncate min-w-0">{children}</span>}
+      {!collapsed && (
+        <>
+          <span className="truncate min-w-0">{children}</span>
+          {badge && <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-dark-surface-hover text-dark-text-muted">{badge}</span>}
+        </>
+      )}
     </Link>
   );
 }

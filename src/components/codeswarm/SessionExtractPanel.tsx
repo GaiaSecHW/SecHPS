@@ -253,22 +253,22 @@ export function SessionExtractPanel() {
   };
 
   const renderDirBrowser = () => showDirBrowser && (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
-        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-surface border border-dark-border rounded-xl w-[600px] max-h-[500px] flex flex-col">
+        <div className="p-4 border-b border-dark-border flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-dark-text flex items-center gap-2">
             <FolderSearch className="w-5 h-5" />
             浏览目录
           </h3>
-          <button onClick={() => setShowDirBrowser(false)} className="text-gray-400 hover:text-gray-200">✕</button>
+          <button onClick={() => setShowDirBrowser(false)} className="text-dark-text-muted hover:text-dark-text">✕</button>
         </div>
-        <div className="p-4 border-b border-gray-700 space-y-2">
+        <div className="p-4 border-b border-dark-border space-y-2">
           <div className="flex gap-2">
             {platform === 'windows' && (
               <select
                 value={isRootList ? 'root://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
                 onChange={(e) => { if (e.target.value === 'root://') browseDirectory('root://'); else if (e.target.value) browseDirectory(e.target.value); }}
-                className="px-3 py-2 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100"
+                className="px-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-dark-text"
               >
                 <option value="root://">我的电脑</option>
                 {rootEntries.map(e => <option key={e.path} value={e.path}>{e.name}</option>)}
@@ -278,13 +278,13 @@ export function SessionExtractPanel() {
               value={isRootList ? (platform === 'windows' ? '我的电脑' : '根目录') : currentBrowsePath}
               onChange={(e) => setCurrentBrowsePath(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') browseDirectory(currentBrowsePath); }}
-              className="flex-1 px-3 py-2 bg-dark-bg border border-gray-700 rounded text-sm text-gray-100"
+              className="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-dark-text"
               disabled={isRootList}
             />
             <button
               onClick={() => browseDirectory(currentBrowsePath)}
               disabled={loadingDirs || isRootList}
-              className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded text-sm text-white"
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-dark-surface-hover rounded text-sm text-white"
             >
               {loadingDirs ? <Loader2 className="w-4 h-4 animate-spin" /> : '跳转'}
             </button>
@@ -294,7 +294,7 @@ export function SessionExtractPanel() {
           {!isRootList && (
             <button
               onClick={goUpDir}
-              className="w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded text-sm text-blue-400 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm text-blue-400 flex items-center gap-2"
             >
               <ChevronRight className="w-4 h-4 rotate-180" />
               上级目录
@@ -302,30 +302,30 @@ export function SessionExtractPanel() {
           )}
           {loadingDirs ? (
             <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-dark-text-muted" />
             </div>
           ) : dirEntries.map(entry => (
             <button
               key={entry.path}
               onClick={() => { if (entry.isDirectory) browseDirectory(entry.path); else toast.error('请选择目录'); }}
-              className={`w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded text-sm flex items-center gap-2 ${entry.isDirectory ? 'text-gray-300' : 'text-gray-600'}`}
+              className={`w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm flex items-center gap-2 ${entry.isDirectory ? 'text-dark-text-secondary' : 'text-dark-text-muted'}`}
             >
-              {entry.isDirectory ? <FolderSearch className="w-4 h-4 text-yellow-500" /> : <span className="w-4 text-center text-gray-500 text-xs">📄</span>}
+              {entry.isDirectory ? <FolderSearch className="w-4 h-4 text-yellow-500" /> : <span className="w-4 text-center text-dark-text-muted text-xs">📄</span>}
               <span className="flex-1">{entry.name}</span>
-              {entry.isDirectory && <ChevronRight className="w-4 h-4 text-gray-500" />}
+              {entry.isDirectory && <ChevronRight className="w-4 h-4 text-dark-text-muted" />}
             </button>
           ))}
         </div>
-        <div className="p-4 border-t border-gray-700 flex justify-end gap-2">
+        <div className="p-4 border-t border-dark-border flex justify-end gap-2">
           <button
             onClick={() => setShowDirBrowser(false)}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300"
+            className="px-4 py-2 bg-dark-surface-hover hover:bg-dark-border rounded text-sm text-dark-text-secondary"
           >
             取消
           </button>
           <button
             onClick={() => { setWorkspacePath(currentBrowsePath); setShowDirBrowser(false); toast.success(`已选择: ${currentBrowsePath}`); }}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded text-sm text-white"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm text-white"
           >
             选择当前目录
           </button>
@@ -335,16 +335,16 @@ export function SessionExtractPanel() {
   );
 
   const renderHistoryPanel = () => (
-    <div className="w-64 bg-dark-surface rounded-lg border border-gray-700/50 flex flex-col shrink-0">
-      <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
-        <h4 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+    <div className="w-64 bg-dark-surface rounded-lg border border-dark-border/40 flex flex-col shrink-0">
+      <div className="p-3 border-b border-dark-border/40 flex items-center justify-between">
+        <h4 className="text-sm font-medium text-dark-text flex items-center gap-2">
           <History className="w-4 h-4" />
           解析历史 ({history.length})
         </h4>
         <button
           onClick={loadHistory}
           disabled={loadingHistory}
-          className="p-1 text-gray-400 hover:text-gray-200"
+          className="p-1 text-dark-text-muted hover:text-dark-text"
         >
           <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
         </button>
@@ -352,42 +352,42 @@ export function SessionExtractPanel() {
       <div className="flex-1 overflow-y-auto" style={{ minHeight: '100px', maxHeight: '400px' }}>
         {loadingHistory ? (
           <div className="flex items-center justify-center h-32">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            <Loader2 className="w-5 h-5 animate-spin text-dark-text-muted" />
           </div>
         ) : history.length === 0 ? (
-          <div className="p-4 text-center text-sm text-gray-500">
+          <div className="p-4 text-center text-sm text-dark-text-muted">
             暂无历史记录
           </div>
         ) : history.map(item => (
           <div
             key={item.id}
-            className={`p-3 border-b border-gray-700/30 cursor-pointer hover:bg-gray-700/30 ${selectedHistoryId === item.id ? 'bg-cyan-900/20 border-l-2 border-l-cyan-500' : ''}`}
+            className={`p-3 border-b border-dark-border/30 cursor-pointer hover:bg-dark-surface-hover ${selectedHistoryId === item.id ? 'bg-cyan-900/20 border-l-2 border-l-cyan-500' : ''}`}
             onClick={() => loadHistoryDetail(item.id)}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-gray-400 flex items-center gap-1">
+              <span className="text-xs text-dark-text-muted flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {new Date(item.extractedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </span>
               <button
                 onClick={(e) => { e.stopPropagation(); deleteHistoryItem(item.id); }}
-                className="p-1 text-gray-500 hover:text-red-400"
+                className="p-1 text-dark-text-muted hover:text-red-400"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
             </div>
-            <p className="text-sm text-gray-200 truncate mb-1">{item.summary || item.sessionId}</p>
-            <p className="text-xs text-gray-500 truncate">{truncatePath(item.workspacePath)}</p>
+            <p className="text-sm text-dark-text truncate mb-1">{item.summary || item.sessionId}</p>
+            <p className="text-xs text-dark-text-muted truncate">{truncatePath(item.workspacePath)}</p>
             <div className="flex gap-2 mt-1 text-xs">
               <span className="text-cyan-400">{item.skillsCount}s</span>
               <span className="text-purple-400">{item.toolsCount}t</span>
-              <span className="text-gray-500">{item.messageCount}m</span>
+              <span className="text-dark-text-muted">{item.messageCount}m</span>
             </div>
           </div>
         ))}
       </div>
       {history.length > 0 && (
-        <div className="p-3 border-t border-gray-700/50 shrink-0">
+        <div className="p-3 border-t border-dark-border/40 shrink-0">
           <button
             onClick={clearAllHistory}
             className="w-full px-3 py-2 bg-red-900/30 hover:bg-red-900/50 rounded text-sm text-red-400 flex items-center justify-center gap-2"
@@ -403,8 +403,8 @@ export function SessionExtractPanel() {
   const renderResultPanel = () => (
     <div className="flex-1 min-w-0 space-y-4">
       {!extractResult ? (
-        <div className="bg-dark-surface rounded-lg p-8 border border-gray-700/50 text-center">
-          <p className="text-gray-500">选择历史记录或执行新解析查看结果</p>
+        <div className="bg-dark-surface rounded-lg p-8 border border-dark-border/40 text-center">
+          <p className="text-dark-text-muted">选择历史记录或执行新解析查看结果</p>
         </div>
       ) : (
         <>
@@ -421,24 +421,24 @@ export function SessionExtractPanel() {
               <p className="text-purple-300 text-xs">Tools</p>
               <p className="text-white font-bold">{extractResult.tools?.length || 0}</p>
             </div>
-            <div className="bg-gray-700/20 rounded p-3 border border-gray-600/30">
-              <p className="text-gray-300 text-xs">Messages</p>
+            <div className="bg-dark-surface-hover/20 rounded p-3 border border-dark-border/30">
+              <p className="text-dark-text-secondary text-xs">Messages</p>
               <p className="text-white font-bold">{extractResult.messageCount}</p>
             </div>
           </div>
 
-          <div className="bg-dark-surface rounded-lg p-3 border border-gray-700/50">
-            <p className="text-xs text-gray-400">Summary</p>
-            <p className="text-sm text-gray-200">{extractResult.summary || '无'}</p>
+          <div className="bg-dark-surface rounded-lg p-3 border border-dark-border/40">
+            <p className="text-xs text-dark-text-muted">Summary</p>
+            <p className="text-sm text-dark-text">{extractResult.summary || '无'}</p>
           </div>
 
           {extractResult.skills?.length > 0 && (
             <div className="bg-dark-surface rounded-lg border border-cyan-700/30">
-              <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
+              <div className="p-3 border-b border-dark-border/40 flex items-center justify-between">
                 <h4 className="text-sm font-medium text-cyan-400">Skills 调用 ({extractResult.skills.length})</h4>
-                <p className="text-xs text-gray-500">连续加载的 skills 共享 reasoning/output</p>
+                <p className="text-xs text-dark-text-muted">连续加载的 skills 共享 reasoning/output</p>
               </div>
-              <div className="divide-y divide-gray-700/30 max-h-[300px] overflow-y-auto">
+              <div className="divide-y divide-dark-border/30 max-h-[300px] overflow-y-auto">
                 {extractResult.skills.map((skill, i) => {
                   const hasSharedOutput = skill.reasoning?.length > 0 || skill.textOutputs?.length > 0;
                   const sameOutputSkills = extractResult.skills.filter(s => 
@@ -455,10 +455,10 @@ export function SessionExtractPanel() {
                           {expandedSkill === i ? (
                             <ChevronDown className="w-4 h-4 text-cyan-400" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                            <ChevronRight className="w-4 h-4 text-dark-text-muted" />
                           )}
                           <span className="text-sm font-medium text-cyan-300">{skill.toolName}</span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-dark-text-muted">
                             {new Date(skill.startTime).toLocaleTimeString()}
                           </span>
                           {sameOutputSkills.length > 1 && (
@@ -469,7 +469,7 @@ export function SessionExtractPanel() {
                         </button>
                         <button
                           onClick={() => copyToClipboard(formatJson(skill))}
-                          className="p-1 text-gray-400 hover:text-cyan-400"
+                          className="p-1 text-dark-text-muted hover:text-cyan-400"
                         >
                           <Copy className="w-3 h-3" />
                         </button>
@@ -477,13 +477,13 @@ export function SessionExtractPanel() {
                       {expandedSkill === i && (
                         <div className="mt-3 space-y-3 min-w-0">
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Input (skill 名称)</p>
-                            <pre className="text-xs text-gray-300 bg-dark-bg p-2 rounded overflow-x-auto max-w-full">
+                            <p className="text-xs text-dark-text-muted mb-1">Input (skill 名称)</p>
+                            <pre className="text-xs text-dark-text-secondary bg-dark-bg p-2 rounded overflow-x-auto max-w-full">
                               {truncateJson(skill.input, 300)}
                             </pre>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Skill 定义内容</p>
+                            <p className="text-xs text-dark-text-muted mb-1">Skill 定义内容</p>
                             <pre className="text-xs text-cyan-300 bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '150px' }}>
                               {skill.result ? truncateJson(skill.result, 500) : '无'}
                             </pre>
@@ -525,7 +525,7 @@ export function SessionExtractPanel() {
                               </div>
                             </div>
                           )}
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-dark-text-muted">
                             耗时: {new Date(skill.endTime).getTime() - new Date(skill.startTime).getTime()}ms
                           </div>
                         </div>
@@ -539,10 +539,10 @@ export function SessionExtractPanel() {
 
           {extractResult.tools?.length > 0 && (
             <div className="bg-dark-surface rounded-lg border border-purple-700/30">
-              <div className="p-3 border-b border-gray-700/50">
+              <div className="p-3 border-b border-dark-border/40">
                 <h4 className="text-sm font-medium text-purple-400">Tools 调用 ({extractResult.tools.length})</h4>
               </div>
-              <div className="divide-y divide-gray-700/30 max-h-[300px] overflow-y-auto">
+              <div className="divide-y divide-dark-border/30 max-h-[300px] overflow-y-auto">
                 {extractResult.tools.map((tool, i) => (
                   <div key={i} className="p-3">
                     <div className="w-full flex items-center justify-between min-w-0">
@@ -553,16 +553,16 @@ export function SessionExtractPanel() {
                         {expandedTool === i ? (
                           <ChevronDown className="w-4 h-4 text-purple-400" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                          <ChevronRight className="w-4 h-4 text-dark-text-muted" />
                         )}
                         <span className="text-sm font-medium text-purple-300">{tool.toolName}</span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-dark-text-muted">
                           {new Date(tool.startTime).toLocaleTimeString()}
                         </span>
                       </button>
                       <button
                         onClick={() => copyToClipboard(formatJson(tool))}
-                        className="p-1 text-gray-400 hover:text-purple-400"
+                        className="p-1 text-dark-text-muted hover:text-purple-400"
                       >
                         <Copy className="w-3 h-3" />
                       </button>
@@ -570,18 +570,18 @@ export function SessionExtractPanel() {
                     {expandedTool === i && (
                       <div className="mt-3 space-y-2 min-w-0">
                         <div>
-                          <p className="text-xs text-gray-500 mb-1">Input</p>
-                          <pre className="text-xs text-gray-300 bg-dark-bg p-2 rounded overflow-x-auto max-w-full">
+                          <p className="text-xs text-dark-text-muted mb-1">Input</p>
+                          <pre className="text-xs text-dark-text-secondary bg-dark-bg p-2 rounded overflow-x-auto max-w-full">
                             {truncateJson(tool.input, 500)}
                           </pre>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500 mb-1">Result</p>
+                          <p className="text-xs text-dark-text-muted mb-1">Result</p>
                           <pre className="text-xs text-green-300 bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
                             {tool.result ? truncateJson(tool.result, 1000) : '无结果'}
                           </pre>
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-dark-text-muted">
                           耗时: {new Date(tool.endTime).getTime() - new Date(tool.startTime).getTime()}ms
                         </div>
                       </div>
@@ -594,7 +594,7 @@ export function SessionExtractPanel() {
 
           {extractResult.reasoning?.length > 0 && (
             <div className="bg-dark-surface rounded-lg border border-yellow-700/30">
-              <div className="p-3 border-b border-gray-700/50">
+              <div className="p-3 border-b border-dark-border/40">
                 <h4 className="text-sm font-medium text-yellow-400 flex items-center gap-2">
                   <Brain className="w-4 h-4" />
                   全局 Reasoning ({extractResult.reasoning.length})
@@ -603,7 +603,7 @@ export function SessionExtractPanel() {
               <div className="p-3 max-h-[200px] overflow-y-auto">
                 {extractResult.reasoning.map((r, i) => (
                   <div key={i} className="mb-2 last:mb-0">
-                    <p className="text-xs text-gray-500 mb-1">
+                    <p className="text-xs text-dark-text-muted mb-1">
                       {new Date(r.startTime).toLocaleTimeString()}
                     </p>
                     <p className="text-xs text-yellow-200 whitespace-pre-wrap bg-dark-bg p-2 rounded">
@@ -617,7 +617,7 @@ export function SessionExtractPanel() {
 
           {extractResult.textOutputs?.length > 0 && (
             <div className="bg-dark-surface rounded-lg border border-green-700/30">
-              <div className="p-3 border-b border-gray-700/50">
+              <div className="p-3 border-b border-dark-border/40">
                 <h4 className="text-sm font-medium text-green-400 flex items-center gap-2">
                   <MessageSquare className="w-4 h-4" />
                   全局 Output ({extractResult.textOutputs.length})
@@ -626,7 +626,7 @@ export function SessionExtractPanel() {
               <div className="p-3 max-h-[200px] overflow-y-auto">
                 {extractResult.textOutputs.map((t, i) => (
                   <div key={i} className="mb-2 last:mb-0">
-                    <p className="text-xs text-gray-500 mb-1">
+                    <p className="text-xs text-dark-text-muted mb-1">
                       {new Date(t.startTime).toLocaleTimeString()}
                     </p>
                     <p className="text-xs text-green-200 whitespace-pre-wrap bg-dark-bg p-2 rounded">
@@ -638,18 +638,18 @@ export function SessionExtractPanel() {
             </div>
           )}
 
-          <div className="bg-gray-800 rounded-lg p-3">
+          <div className="bg-dark-surface-hover/50 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-medium text-gray-400">完整 JSON</h4>
+              <h4 className="text-xs font-medium text-dark-text-muted">完整 JSON</h4>
               <button
                 onClick={() => copyToClipboard(formatJson(extractResult))}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-cyan-400"
+                className="flex items-center gap-1 px-2 py-1 text-xs text-dark-text-muted hover:text-cyan-400"
               >
                 <Copy className="w-3 h-3" />
                 复制
               </button>
             </div>
-            <pre className="text-xs text-gray-300 bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
+            <pre className="text-xs text-dark-text-secondary bg-dark-bg p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
               {truncateJson(extractResult, 5000)}
             </pre>
           </div>
@@ -667,14 +667,14 @@ export function SessionExtractPanel() {
           <div className="flex gap-2">
             <button
               onClick={() => setActiveTab('history')}
-              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 ${activeTab === 'history' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 ${activeTab === 'history' ? 'bg-cyan-600 text-white' : 'bg-dark-surface-hover text-dark-text-secondary hover:bg-dark-border'}`}
             >
               <History className="w-4 h-4" />
               查看历史
             </button>
             <button
               onClick={() => setActiveTab('new')}
-              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 ${activeTab === 'new' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 ${activeTab === 'new' ? 'bg-cyan-600 text-white' : 'bg-dark-surface-hover text-dark-text-secondary hover:bg-dark-border'}`}
             >
               <Play className="w-4 h-4" />
               新解析
@@ -682,15 +682,15 @@ export function SessionExtractPanel() {
           </div>
 
           {activeTab === 'new' && (
-            <div className="bg-dark-surface rounded-lg p-4 border border-gray-700/50">
-              <h3 className="text-sm font-semibold text-gray-100 mb-3">执行新解析</h3>
+            <div className="bg-dark-surface rounded-lg p-4 border border-dark-border/40">
+              <h3 className="text-sm font-semibold text-dark-text mb-3">执行新解析</h3>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={workspacePath}
                   onChange={(e) => setWorkspacePath(e.target.value)}
                   placeholder={platform === 'windows' ? 'E:/work/202605/project' : '/home/user/project'}
-                  className="flex-1 px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm text-gray-100"
+                  className="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm text-dark-text"
                 />
                 <button
                   onClick={() => {
@@ -701,7 +701,7 @@ export function SessionExtractPanel() {
                     }
                     setShowDirBrowser(true);
                   }}
-                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm text-gray-300 flex items-center gap-1"
+                  className="px-3 py-2 bg-dark-surface-hover hover:bg-dark-border rounded-lg text-sm text-dark-text-secondary flex items-center gap-1"
                 >
                   {platform === 'windows' ? <HardDrive className="w-4 h-4" /> : <FolderSearch className="w-4 h-4" />}
                   {platform === 'windows' ? '磁盘' : '目录'}

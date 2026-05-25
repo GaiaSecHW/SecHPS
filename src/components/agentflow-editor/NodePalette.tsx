@@ -77,18 +77,18 @@ export default function NodePalette({ onAddNode }: NodePaletteProps) {
   };
 
   return (
-    <div className="h-full bg-dark-surface border-r border-gray-700/50 overflow-y-auto">
-      <div className="p-4 border-b border-gray-700/50">
-        <h2 className="text-lg font-semibold text-gray-100">节点面板</h2>
-        <p className="text-sm text-gray-600 mt-1">拖拽节点到画布</p>
+    <div className="h-full bg-dark-surface border-r border-dark-border overflow-y-auto">
+      <div className="p-4 border-b border-dark-border">
+        <h2 className="text-lg font-semibold text-dark-text">节点面板</h2>
+        <p className="text-sm text-dark-text-muted mt-1">拖拽节点到画布</p>
       </div>
 
       <div className="p-4 space-y-6">
         {CATEGORIES.map(({ key, label, icon: CategoryIcon, nodes }) => (
           <div key={key}>
             <div className="flex items-center space-x-2 mb-3">
-              <CategoryIcon size={16} className="text-gray-400" />
-              <h3 className="text-sm font-medium text-gray-100 uppercase">{label}</h3>
+              <CategoryIcon size={16} className="text-dark-text-muted" />
+              <h3 className="text-sm font-medium text-dark-text uppercase">{label}</h3>
             </div>
 
             <div className="space-y-2">
@@ -100,7 +100,7 @@ export default function NodePalette({ onAddNode }: NodePaletteProps) {
                     draggable
                     onDragStart={(e) => handleDragStart(e, type)}
                     onClick={() => onAddNode(type)}
-                    className="flex items-center space-x-3 p-3 bg-[#0F172A] rounded-lg border border-gray-700/50 cursor-grab hover:bg-dark-surface-hover hover:border-gray-600 transition-all active:cursor-grabbing"
+                    className="flex items-center space-x-3 p-3 bg-dark-bg rounded-lg border border-dark-border cursor-grab hover:bg-dark-surface-hover hover:border-dark-surface-hover transition-all active:cursor-grabbing"
                     style={{ borderLeftColor: color, borderLeftWidth: '4px' }}
                   >
                     <div
@@ -113,8 +113,8 @@ export default function NodePalette({ onAddNode }: NodePaletteProps) {
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-100">{nodeLabel}</p>
-                      <p className="text-xs text-gray-500 truncate">{description}</p>
+                      <p className="text-sm font-medium text-dark-text">{nodeLabel}</p>
+                      <p className="text-xs text-dark-text-muted truncate">{description}</p>
                     </div>
                   </div>
                 );

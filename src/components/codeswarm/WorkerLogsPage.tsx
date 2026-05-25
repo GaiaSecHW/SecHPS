@@ -91,7 +91,7 @@ const statusConfig: Record<string, { bg: string; text: string }> = {
   completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
   failed: { bg: 'bg-red-500/10', text: 'text-red-400' },
   running: { bg: 'bg-blue-500/10', text: 'text-blue-400' },
-  queued: { bg: 'bg-gray-500/10', text: 'text-gray-400' },
+  queued: { bg: 'bg-dark-surface-hover/50', text: 'text-dark-text-muted' },
   dispatched: { bg: 'bg-purple-500/10', text: 'text-purple-400' },
   building: { bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
 };
@@ -162,7 +162,10 @@ export function WorkerLogsPage() {
   }, [autoRefresh, selectedTaskId, refetchLogs]);
 
   useEffect(() => {
-    if (logs.length > 0) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (logs.length > 0 && logsEndRef.current) {
+      const container = logsEndRef.current.closest('.overflow-y-auto');
+      if (container) container.scrollTop = container.scrollHeight;
+    }
   }, [logs.length]);
 
   const toggleExpand = (logId: string) => {
@@ -280,13 +283,13 @@ export function WorkerLogsPage() {
   return (
     <div className="flex h-[calc(100vh-180px)] bg-dark-bg">
       {/* Left Panel */}
-      <div className="w-[280px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0">
-        <div className="flex-shrink-0 p-4 border-b border-gray-700/50">
+      <div className="w-[280px] border-r border-dark-border/40 flex flex-col bg-dark-surface min-h-0">
+        <div className="flex-shrink-0 p-4 border-b border-dark-border/40">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Layers size={16} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-100">任务列表</span>
-<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-6 min-w-[120px] px-2 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-300">
+              <Layers size={16} className="text-dark-text-muted" />
+              <span className="text-sm font-medium text-dark-text">任务列表</span>
+<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-6 min-w-[120px] px-2 text-xs bg-dark-bg border border-dark-border/40 rounded text-dark-text-secondary">
                   <option value="all">全部状态 ({tasks.length})</option>
                   <option value="completed">completed ({statusCounts.completed || 0})</option>
                   <option value="running">running ({statusCounts.running || 0})</option>
@@ -296,27 +299,27 @@ export function WorkerLogsPage() {
                   <option value="building">building ({statusCounts.building || 0})</option>
                 </select>
             </div>
-            <button onClick={() => { refetchTasks(); refetchLogs(); }} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded"><RefreshCw size={14} /></button>
+            <button onClick={() => { refetchTasks(); refetchLogs(); }} className="p-1.5 text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-surface-hover rounded"><RefreshCw size={14} /></button>
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
-            <input type="text" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-8 pl-9 pr-3 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-primary-500 focus:outline-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-dark-text-muted" />
+            <input type="text" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-8 pl-9 pr-3 text-xs bg-dark-bg border border-dark-border/40 rounded text-dark-text placeholder:text-dark-text-muted focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
           </div>
         </div>
         <div className="flex-1 overflow-auto min-h-0">
           {tasksLoading ? <div className="flex items-center justify-center h-32"><LoadingSpinner size="sm" /></div>
-          : filteredTasks.length === 0 ? <div className="p-4 text-center text-sm text-gray-500">{searchQuery ? '未找到匹配任务' : '暂无任务'}</div>
+          : filteredTasks.length === 0 ? <div className="p-4 text-center text-sm text-dark-text-muted">{searchQuery ? '未找到匹配任务' : '暂无任务'}</div>
           : <div className="p-2 space-y-1">{filteredTasks.map(task => {
             const config = statusConfig[task.state] || statusConfig.queued;
             const isSelected = selectedTaskId === task.taskId;
             return (
-              <button key={task.taskId} onClick={() => setSelectedTaskId(task.taskId)} className={`w-full p-3 rounded-lg border text-left transition-all ${isSelected ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700/50 bg-gray-800/50 hover:bg-gray-700/30'}`}>
+              <button key={task.taskId} onClick={() => setSelectedTaskId(task.taskId)} className={`w-full p-3 rounded-lg border text-left transition-all ${isSelected ? 'border-primary-500 bg-primary-500/10' : 'border-dark-border/40 bg-dark-surface-hover/50 hover:bg-dark-surface-hover'}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs font-medium truncate ${isSelected ? 'text-primary-300' : 'text-gray-300'}`}>{task.taskId ? task.taskId.slice(0, 16) + '...' : 'N/A'}</span>
+                  <span className={`text-xs font-medium truncate ${isSelected ? 'text-primary-300' : 'text-dark-text-secondary'}`}>{task.taskId ? task.taskId.slice(0, 16) + '...' : 'N/A'}</span>
                   <span className={`px-1.5 py-0.5 text-xs rounded ${config.bg} ${config.text}`}>{task.state}</span>
                 </div>
-                <p className="text-xs text-gray-500 truncate">{task.instruction ? (task.instruction.length > 30 ? task.instruction.slice(0, 30) + '...' : task.instruction) : '无指令'}</p>
-                <div className="flex items-center gap-1 mt-1 text-xs text-gray-500"><Clock size={10} /><span>{new Date(task.createdAt).toLocaleDateString('zh-CN')}</span></div>
+                <p className="text-xs text-dark-text-muted truncate">{task.instruction ? (task.instruction.length > 30 ? task.instruction.slice(0, 30) + '...' : task.instruction) : '无指令'}</p>
+                <div className="flex items-center gap-1 mt-1 text-xs text-dark-text-muted"><Clock size={10} /><span>{new Date(task.createdAt).toLocaleDateString('zh-CN')}</span></div>
               </button>
             );
           })}</div>}
@@ -327,59 +330,58 @@ export function WorkerLogsPage() {
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {selectedTaskId ? (
           <>
-            <div className="flex-shrink-0 px-5 py-3 border-b border-gray-700/50 bg-dark-surface flex items-center justify-between">
+            <div className="flex-shrink-0 px-5 py-3 border-b border-dark-border/40 bg-dark-surface flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Terminal size={18} className="text-gray-400" />
-                <span className="font-medium text-gray-100">任务执行详情</span>
-                <span className="text-xs text-gray-500 font-mono">{selectedTaskId}</span>
+                <Terminal size={18} className="text-dark-text-muted" />
+                <span className="font-medium text-dark-text">任务执行详情</span>
+                <span className="text-xs text-dark-text-muted font-mono">{selectedTaskId}</span>
               </div>
               <div className="flex items-center gap-3">
-                <Filter size={14} className="text-gray-400" />
-                <select value={levelFilter} onChange={e => setLevelFilter(e.target.value as any)} className="h-7 min-w-[90px] px-2 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-300"><option value="all">全部层级</option><option value="worker">Worker</option><option value="agent">Agent</option></select>
-                <select value={streamFilter} onChange={e => setStreamFilter(e.target.value as any)} className="h-7 min-w-[90px] px-2 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-300"><option value="all">全部流</option><option value="stdout">stdout</option><option value="stderr">stderr</option></select>
-                <label className="flex items-center gap-1.5 text-xs text-gray-400"><input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} className="w-3 h-3 rounded" />自动刷新</label>
+                <Filter size={14} className="text-dark-text-muted" />
+                <select value={levelFilter} onChange={e => setLevelFilter(e.target.value as any)} className="h-7 min-w-[90px] px-2 text-xs bg-dark-bg border border-dark-border/40 rounded text-dark-text-secondary"><option value="all">全部层级</option><option value="worker">Worker</option><option value="agent">Agent</option></select>
+                <select value={streamFilter} onChange={e => setStreamFilter(e.target.value as any)} className="h-7 min-w-[90px] px-2 text-xs bg-dark-bg border border-dark-border/40 rounded text-dark-text-secondary"><option value="all">全部流</option><option value="stdout">stdout</option><option value="stderr">stderr</option></select>
+                <label className="flex items-center gap-1.5 text-xs text-dark-text-muted"><input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} className="w-3 h-3 rounded" />自动刷新</label>
               </div>
             </div>
 
             <div className="flex-1 overflow-auto p-5 space-y-4 min-h-0 flex flex-col">
               {taskDetail && (
                 <>
-                  <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-4">
-                    <h3 className="text-xs font-medium text-gray-500 uppercase mb-3">执行时间线</h3>
-                    <div className="flex items-stretch">
+                  <div className="flex-shrink-0 bg-dark-surface border border-dark-border/40 rounded-lg p-4">
+                    <h3 className="text-xs font-medium text-dark-text-muted uppercase mb-3">执行时间线</h3>
+                    <div className="flex items-center">
                       {timeline.map((group, gi) => {
                         if (group.type === 'sequential') {
                           return group.phases.map((phase, pi) => (
-                            <div key={phase.id} className="flex items-center flex-1">
-                              <div className="flex flex-col items-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>{phase.icon}</div>
-                                <span className={`text-xs mt-1.5 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
-                                {phase.status === 'skipped' && <span className="text-[10px] text-gray-500">(跳过)</span>}
+                            <div key={phase.id} className="flex items-center flex-1 min-w-0">
+                              <div className="flex flex-col items-center shrink-0">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-indigo-600 border-indigo-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-dark-surface-hover border-dark-border text-dark-text-secondary' : 'bg-dark-surface-hover border-dark-border text-dark-text-muted'}`}>{phase.icon}</div>
+                                <span className={`text-[11px] mt-1.5 text-center whitespace-nowrap ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-dark-text-muted' : 'text-dark-text-secondary'}`}>{phase.name}</span>
+                                {phase.status === 'skipped' && <span className="text-[10px] text-dark-text-muted">(跳过)</span>}
                               </div>
-                              {!(gi === timeline.length - 1 && pi === group.phases.length - 1) && <div className={`flex-1 h-0.5 mx-1 ${phase.status === 'completed' ? 'bg-emerald-600' : 'bg-gray-600'}`} />}
+                              {!(gi === timeline.length - 1 && pi === group.phases.length - 1) && <div className={`flex-1 h-0.5 mx-2 min-w-[12px] ${phase.status === 'completed' ? 'bg-emerald-500' : 'bg-dark-border'}`} />}
                             </div>
                           ));
                         }
-                        // Parallel group: fork-merge display
                         return (
-                          <div key={`parallel-${gi}`} className="flex-1 flex flex-col">
-                            <div className="flex-1 flex items-center justify-center h-4">
-                              <div className="w-full border-t-2 border-l-2 border-r-2 border-b-0 border-gray-600 rounded-t-sm h-full" />
+                          <div key={`parallel-${gi}`} className="flex-1 flex flex-col min-w-0">
+                            <div className="flex items-end justify-center h-3">
+                              <div className="w-full border-t-2 border-l-2 border-r-2 border-dark-text-muted/30 rounded-t-lg h-full" />
                             </div>
-                            <div className="flex gap-2 py-1">
+                            <div className="flex gap-3 py-1.5 justify-center">
                               {group.phases.map(phase => (
-                                <div key={phase.id} className="flex-1 flex flex-col items-center">
-                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>
+                                <div key={phase.id} className="flex flex-col items-center">
+                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-indigo-600 border-indigo-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-dark-surface-hover border-dark-border text-dark-text-secondary' : 'bg-dark-surface-hover border-dark-border text-dark-text-muted'}`}>
                                     <span className="scale-75">{phase.icon}</span>
                                   </div>
-                                  <span className={`text-[11px] mt-1 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
-                                  {phase.status === 'skipped' && <span className="text-[10px] text-gray-500">(跳过)</span>}
-                                  {phase.status === 'running' && <span className="text-[10px] text-blue-400 animate-pulse">并行中</span>}
+                                  <span className={`text-[10px] mt-1 text-center whitespace-nowrap ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-dark-text-muted' : 'text-dark-text-secondary'}`}>{phase.name}</span>
+                                  {phase.status === 'skipped' && <span className="text-[10px] text-dark-text-muted">(跳过)</span>}
+                                  {phase.status === 'running' && <span className="text-[10px] text-indigo-400 animate-pulse">并行中</span>}
                                 </div>
                               ))}
                             </div>
-                            <div className="flex-1 flex items-center justify-center h-4">
-                              <div className="w-full border-b-2 border-l-2 border-r-2 border-t-0 border-gray-600 rounded-b-sm h-full" />
+                            <div className="flex items-start justify-center h-3">
+                              <div className="w-full border-b-2 border-l-2 border-r-2 border-dark-text-muted/30 rounded-b-lg h-full" />
                             </div>
                           </div>
                         );
@@ -387,29 +389,29 @@ export function WorkerLogsPage() {
                     </div>
                   </div>
 
-                  <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+                  <div className="flex-shrink-0 bg-dark-surface border border-dark-border/40 rounded-lg p-4">
                     <div className="grid grid-cols-4 gap-4 text-sm">
-                      <div><span className="text-gray-500 text-xs">状态</span><div className="mt-1"><span className={`font-medium ${taskDetail.state === 'completed' ? 'text-emerald-400' : taskDetail.state === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>{taskDetail.state}</span></div></div>
-                      <div><span className="text-gray-500 text-xs">Agent</span><div className="mt-1 text-gray-200 truncate">{taskDetail.agent || '未指定'}</div></div>
-                      <div><span className="text-gray-500 text-xs">创建时间</span><div className="mt-1 text-gray-200">{new Date(taskDetail.createdAt).toLocaleString('zh-CN')}</div></div>
-                      <div><span className="text-gray-500 text-xs">完成时间</span><div className="mt-1 text-gray-200">{taskDetail.completedAt ? new Date(taskDetail.completedAt).toLocaleString('zh-CN') : '-'}</div></div>
+                      <div><span className="text-dark-text-muted text-xs">状态</span><div className="mt-1"><span className={`font-medium ${taskDetail.state === 'completed' ? 'text-emerald-400' : taskDetail.state === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>{taskDetail.state}</span></div></div>
+                      <div><span className="text-dark-text-muted text-xs">Agent</span><div className="mt-1 text-dark-text truncate">{taskDetail.agent || '未指定'}</div></div>
+                      <div><span className="text-dark-text-muted text-xs">创建时间</span><div className="mt-1 text-dark-text">{new Date(taskDetail.createdAt).toLocaleString('zh-CN')}</div></div>
+                      <div><span className="text-dark-text-muted text-xs">完成时间</span><div className="mt-1 text-dark-text">{taskDetail.completedAt ? new Date(taskDetail.completedAt).toLocaleString('zh-CN') : '-'}</div></div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-gray-700/50"><span className="text-gray-500 text-xs">执行指令</span><div className="mt-1 text-gray-300 text-xs">{taskDetail.instruction || '无指令'}</div></div>
+                    <div className="mt-3 pt-3 border-t border-dark-border/40"><span className="text-dark-text-muted text-xs">执行指令</span><div className="mt-1 text-dark-text-secondary text-xs">{taskDetail.instruction || '无指令'}</div></div>
                   </div>
                 </>
               )}
 
-              <div className="flex-1 min-h-0 bg-dark-surface border border-gray-700/50 rounded-lg flex flex-col">
-                <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
+              <div className="flex-1 min-h-0 bg-dark-surface border border-dark-border/40 rounded-lg flex flex-col">
+                <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-dark-border/40">
                   <div className="flex items-center gap-2">
                     <Play size={14} className="text-blue-400" />
-                    <span className="text-sm font-medium text-gray-200">执行过程日志</span>
-                    <span className="text-xs text-gray-500">({processLogs.length} 条)</span>
+                    <span className="text-sm font-medium text-dark-text">执行过程日志</span>
+                    <span className="text-xs text-dark-text-muted">({processLogs.length} 条)</span>
                   </div>
                   {logsLoading && <LoadingSpinner size="sm" />}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 font-mono text-sm min-h-0">
-                  {processLogs.length === 0 ? <div className="text-center py-8 text-gray-500">暂无执行日志</div>
+                  {processLogs.length === 0 ? <div className="text-center py-8 text-dark-text-muted">暂无执行日志</div>
                   : <div className="space-y-2">{groupConsecutiveLogs(processLogs).map((group, gi) => {
                     const content = getGroupContent(group);
                     const first = group[0];
@@ -422,12 +424,12 @@ export function WorkerLogsPage() {
                     const toolInfo = getToolCallInfo(first);
                     return (
                       <div key={`g-${gi}`} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-lg px-3 py-2 ${isError ? 'bg-red-900/20 border border-red-500/30 text-red-200' : isCodedmap ? 'bg-indigo-900/20 border border-indigo-500/30 text-indigo-100' : isTool ? 'bg-amber-900/20 border border-amber-500/30 text-amber-100' : isAgent ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100' : 'bg-gray-700/50 border border-gray-600/30 text-gray-200'}`}>
+                        <div className={`max-w-[85%] rounded-lg px-3 py-2 ${isError ? 'bg-red-900/20 border border-red-500/30 text-red-200' : isCodedmap ? 'bg-indigo-900/20 border border-indigo-500/30 text-indigo-100' : isTool ? 'bg-amber-900/20 border border-amber-500/30 text-amber-100' : isAgent ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100' : 'bg-dark-surface-hover/50 border border-dark-border/30 text-dark-text'}`}>
                           <div className="flex items-center justify-between gap-2 mb-1 text-xs opacity-60">
                             <div className="flex items-center gap-1.5">{isCodedmap ? <Brain size={12} /> : isTool ? <Wrench size={12} /> : isAgent ? <MessageSquare size={12} /> : <Cpu size={12} />}<span>{isCodedmap ? 'Codedmap' : isTool ? 'Tool' : isAgent ? 'Agent' : 'Worker'}</span><span className="font-mono">{formatTime(first.createdAt)}</span></div>
-                            <button onClick={() => copyToClipboard(content)} className="text-gray-400 hover:text-gray-200"><Copy size={12} /></button>
+                            <button onClick={() => copyToClipboard(content)} className="text-dark-text-muted hover:text-dark-text"><Copy size={12} /></button>
                           </div>
-                          {isTool && toolInfo && <div className="mb-2 bg-gray-900/50 rounded p-2 border border-amber-600/30"><div className="flex items-center gap-1.5 text-amber-300 font-medium mb-1"><Wrench size={12} /><span className="font-mono text-xs">{toolInfo.name}</span></div><pre className="text-xs text-gray-300 overflow-x-auto max-h-32">{JSON.stringify(toolInfo.args, null, 2)}</pre></div>}
+                          {isTool && toolInfo && <div className="mb-2 bg-dark-bg/50 rounded p-2 border border-amber-600/30"><div className="flex items-center gap-1.5 text-amber-300 font-medium mb-1"><Wrench size={12} /><span className="font-mono text-xs">{toolInfo.name}</span></div><pre className="text-xs text-dark-text-secondary overflow-x-auto max-h-32">{JSON.stringify(toolInfo.args, null, 2)}</pre></div>}
                           {isMultiLine || content.length > 200 ? <div><pre className={`text-xs whitespace-pre-wrap break-all font-mono ${!isExpanded ? 'max-h-20 overflow-hidden' : ''}`}>{content}</pre><button onClick={() => toggleExpand(`g-${gi}`)} className="mt-1 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">{isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}{isExpanded ? '收起' : '展开'}</button></div> : <div className="text-xs">{content}</div>}
                         </div>
                       </div>
@@ -436,23 +438,23 @@ export function WorkerLogsPage() {
                 </div>
               </div>
 
-              <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-700/50"><Award size={14} className="text-amber-400" /><span className="text-sm font-medium text-gray-200">执行结果</span></div>
+              <div className="flex-shrink-0 bg-dark-surface border border-dark-border/40 rounded-lg">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-dark-border/40"><Award size={14} className="text-amber-400" /><span className="text-sm font-medium text-dark-text">执行结果</span></div>
                 <div className="p-4 max-h-[200px] overflow-y-auto">
-                  {taskDetail?.result && <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3"><div className="text-emerald-400 text-xs uppercase mb-1">执行结果</div><pre className="text-gray-200 whitespace-pre-wrap break-all text-xs">{taskDetail.result}</pre></div>}
+                  {taskDetail?.result && <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3"><div className="text-emerald-400 text-xs uppercase mb-1">执行结果</div><pre className="text-dark-text whitespace-pre-wrap break-all text-xs">{taskDetail.result}</pre></div>}
                   {taskDetail?.error && <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mt-2"><div className="text-red-400 text-xs uppercase mb-1">错误信息</div><pre className="text-red-300 whitespace-pre-wrap break-all text-xs">{taskDetail.error}</pre></div>}
-                  {!taskDetail?.result && !taskDetail?.error && <div className="text-center py-4 text-gray-500 text-sm">暂无执行结果</div>}
+                  {!taskDetail?.result && !taskDetail?.error && <div className="text-center py-4 text-dark-text-muted text-sm">暂无执行结果</div>}
                 </div>
               </div>
 
-              {!taskDetail && <div className="text-center py-8 text-gray-500 text-sm">暂无任务详情</div>}
+              {!taskDetail && <div className="text-center py-8 text-dark-text-muted text-sm">暂无任务详情</div>}
             </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <Terminal className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-              <p className="text-gray-400">请从左侧选择一个任务查看执行详情</p>
+              <Terminal className="w-12 h-12 text-dark-text-muted mx-auto mb-4" />
+              <p className="text-dark-text-muted">请从左侧选择一个任务查看执行详情</p>
             </div>
           </div>
         )}

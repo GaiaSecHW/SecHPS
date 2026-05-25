@@ -81,8 +81,8 @@ function statusBadge(status: string, csState: string | null) {
   if (s === 'completed') return <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/15 text-green-400">完成</span>;
   if (s === 'failed') return <span className="px-2 py-0.5 text-xs rounded-full bg-red-500/15 text-red-400">失败</span>;
   if (['running', 'dispatched', 'building', 'queued'].includes(s))
-    return <span className="px-2 py-0.5 text-xs rounded-full bg-blue-500/15 text-blue-400">{s}</span>;
-  return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-400">{s}</span>;
+    return <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-500/15 text-indigo-400">{s}</span>;
+  return <span className="px-2 py-0.5 text-xs rounded-full bg-dark-surface-hover text-dark-text-muted">{s}</span>;
 }
 
 // ─── Event Stream Tab ─────────────────────────────────────────────────────────
@@ -98,25 +98,25 @@ function EventsTab({ events }: { events: any[] }) {
     if (t === 'tool_call_update') return { badge: 'Result', text: (ev.output || '').slice(0, 120), color: 'bg-blue-900/50 text-blue-300' };
     if (t === 'error') return { badge: 'Error', text: ev.message || '', color: 'bg-red-900/50 text-red-400' };
     if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', text: ev.phase || ev.message || '', color: 'bg-cyan-900/50 text-cyan-300' };
-    if (CHUNK_TYPES.has(t)) return { badge: 'Log', text: (ev.content || '').slice(0, 200), color: 'bg-gray-800 text-gray-400' };
-    return { badge: t, text: ev.content || ev.message || '', color: 'bg-gray-700 text-gray-300' };
+    if (CHUNK_TYPES.has(t)) return { badge: 'Log', text: (ev.content || '').slice(0, 200), color: 'bg-dark-surface-hover text-dark-text-muted' };
+    return { badge: t, text: ev.content || ev.message || '', color: 'bg-dark-surface-hover text-dark-text-secondary' };
   };
 
   if (merged.length === 0) return <Empty text="暂无事件记录" />;
 
   return (
-    <div className="bg-gray-900 rounded-lg p-3 overflow-y-auto max-h-[calc(100vh-320px)]">
+    <div className="bg-dark-bg rounded-lg p-3 overflow-y-auto max-h-[calc(100vh-320px)]">
       <div className="space-y-0.5 font-mono text-xs">
         {merged.map((ev, i) => {
           const { badge, text, color } = getDisplay(ev);
           const ts = ev._createdAt || ev.timestamp;
           return (
             <div key={i} className="flex items-start gap-2 py-0.5">
-              <span className="text-gray-600 shrink-0 w-20 text-right">
+              <span className="text-dark-text-muted shrink-0 w-20 text-right">
                 {ts ? new Date(ts).toLocaleTimeString('zh-CN') : ''}
               </span>
               <span className={`px-1.5 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
-              {text && <span className="text-gray-300 break-all">{text}</span>}
+              {text && <span className="text-dark-text-secondary break-all">{text}</span>}
             </div>
           );
         })}
@@ -134,24 +134,24 @@ function SkillsTab({ skills, events }: { skills: any[]; events: any[] }) {
   return (
     <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)]">
       {items.map((sk, i) => (
-        <div key={i} className="border border-gray-700/50 rounded-lg overflow-hidden">
+        <div key={i} className="border border-dark-border/40 rounded-lg overflow-hidden">
           <button
             className="w-full flex items-center gap-2 px-3 py-2 bg-dark-surface hover:bg-dark-surface-hover text-left"
             onClick={() => setOpen(open === i ? null : i)}
           >
-            {open === i ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" /> : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />}
+            {open === i ? <ChevronDown className="w-3 h-3 text-dark-text-muted shrink-0" /> : <ChevronRight className="w-3 h-3 text-dark-text-muted shrink-0" />}
             <span className="text-xs font-medium text-purple-300">{sk.toolName}</span>
-            <span className="text-xs text-gray-500 ml-auto">{fmtTime(sk.startTime)}</span>
+            <span className="text-xs text-dark-text-muted ml-auto">{fmtTime(sk.startTime)}</span>
           </button>
           {open === i && (
-            <div className="px-3 py-2 bg-gray-900 space-y-2 text-xs font-mono">
+            <div className="px-3 py-2 bg-dark-bg space-y-2 text-xs font-mono">
               <div>
-                <span className="text-gray-500">Input:</span>
+                <span className="text-dark-text-muted">Input:</span>
                 <pre className="mt-1 text-cyan-400 whitespace-pre-wrap break-all">{JSON.stringify(sk.input, null, 2)}</pre>
               </div>
               {sk.result !== undefined && (
                 <div>
-                  <span className="text-gray-500">Result:</span>
+                  <span className="text-dark-text-muted">Result:</span>
                   <pre className="mt-1 text-green-400 whitespace-pre-wrap break-all">
                     {typeof sk.result === 'string' ? sk.result.slice(0, 1000) : JSON.stringify(sk.result, null, 2).slice(0, 1000)}
                   </pre>
@@ -159,7 +159,7 @@ function SkillsTab({ skills, events }: { skills: any[]; events: any[] }) {
               )}
               {sk.reasoning?.length > 0 && (
                 <div>
-                  <span className="text-gray-500">Reasoning:</span>
+                  <span className="text-dark-text-muted">Reasoning:</span>
                   <div className="mt-1 text-yellow-300 space-y-1">
                     {sk.reasoning.map((r: string, j: number) => <p key={j}>{r.slice(0, 300)}</p>)}
                   </div>
@@ -221,24 +221,24 @@ function ToolsTab({ tools, events }: { tools: any[]; events: any[] }) {
   return (
     <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)]">
       {items.map((t, i) => (
-        <div key={i} className="border border-gray-700/50 rounded-lg overflow-hidden">
+        <div key={i} className="border border-dark-border/40 rounded-lg overflow-hidden">
           <button
             className="w-full flex items-center gap-2 px-3 py-2 bg-dark-surface hover:bg-dark-surface-hover text-left"
             onClick={() => setOpen(open === i ? null : i)}
           >
-            {open === i ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" /> : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />}
+            {open === i ? <ChevronDown className="w-3 h-3 text-dark-text-muted shrink-0" /> : <ChevronRight className="w-3 h-3 text-dark-text-muted shrink-0" />}
             <span className="text-xs font-medium text-yellow-300">{t.toolName}</span>
-            <span className="text-xs text-gray-500 ml-auto">{fmtTime(t.startTime)}</span>
+            <span className="text-xs text-dark-text-muted ml-auto">{fmtTime(t.startTime)}</span>
           </button>
           {open === i && (
-            <div className="px-3 py-2 bg-gray-900 space-y-2 text-xs font-mono">
+            <div className="px-3 py-2 bg-dark-bg space-y-2 text-xs font-mono">
               <div>
-                <span className="text-gray-500">Input:</span>
+                <span className="text-dark-text-muted">Input:</span>
                 <pre className="mt-1 text-cyan-400 whitespace-pre-wrap break-all">{JSON.stringify(t.input, null, 2).slice(0, 1000)}</pre>
               </div>
               {t.result !== undefined && (
                 <div>
-                  <span className="text-gray-500">Result:</span>
+                  <span className="text-dark-text-muted">Result:</span>
                   <pre className="mt-1 text-green-400 whitespace-pre-wrap break-all">
                     {typeof t.result === 'string' ? t.result.slice(0, 1000) : JSON.stringify(t.result, null, 2).slice(0, 1000)}
                   </pre>
@@ -260,7 +260,7 @@ function ReasoningTab({ reasoning }: { reasoning: any[] }) {
     <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-320px)]">
       {reasoning.map((r, i) => (
         <div key={i} className="border border-yellow-900/30 rounded-lg p-3 bg-yellow-900/5">
-          <div className="text-xs text-gray-500 mb-1">{fmtTime(r.startTime)}</div>
+          <div className="text-xs text-dark-text-muted mb-1">{fmtTime(r.startTime)}</div>
           <p className="text-sm text-yellow-200 whitespace-pre-wrap">{r.content}</p>
         </div>
       ))}
@@ -275,15 +275,15 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
     <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-320px)]">
       {csTask?.result && (
         <div>
-          <h4 className="text-xs font-medium text-gray-400 mb-1">执行结果</h4>
-          <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
+          <h4 className="text-xs font-medium text-dark-text-muted mb-1">执行结果</h4>
+          <pre className="bg-dark-bg text-green-400 p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
             {csTask.result}
           </pre>
         </div>
       )}
       {csTask?.reportContent && (
         <div>
-          <h4 className="text-xs font-medium text-gray-400 mb-1">安全报告</h4>
+          <h4 className="text-xs font-medium text-dark-text-muted mb-1">安全报告</h4>
           <pre className="bg-dark-surface-hover p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
             {csTask.reportContent}
           </pre>
@@ -299,13 +299,13 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
       )}
       {execLogs?.length > 0 && (
         <div>
-          <h4 className="text-xs font-medium text-gray-400 mb-1">执行日志 ({execLogs.length})</h4>
-          <div className="bg-gray-900 rounded-lg p-3 space-y-0.5 font-mono text-xs">
+          <h4 className="text-xs font-medium text-dark-text-muted mb-1">执行日志 ({execLogs.length})</h4>
+          <div className="bg-dark-bg rounded-lg p-3 space-y-0.5 font-mono text-xs">
             {execLogs.map((log, i) => (
               <div key={i} className="flex gap-2">
-                <span className="text-gray-600 shrink-0">{new Date(log.timestamp).toLocaleTimeString('zh-CN')}</span>
-                <span className={`shrink-0 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-gray-400'}`}>[{log.level}]</span>
-                <span className="text-gray-300 break-all">{log.message}</span>
+                <span className="text-dark-text-muted shrink-0">{new Date(log.timestamp).toLocaleTimeString('zh-CN')}</span>
+                <span className={`shrink-0 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-dark-text-muted'}`}>[{log.level}]</span>
+                <span className="text-dark-text-secondary break-all">{log.message}</span>
               </div>
             ))}
           </div>
@@ -322,7 +322,7 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
 
 function Empty({ text }: { text: string }) {
   return (
-    <div className="flex items-center justify-center h-32 text-sm text-gray-500">{text}</div>
+    <div className="flex items-center justify-center h-32 text-sm text-dark-text-muted">{text}</div>
   );
 }
 
@@ -345,7 +345,7 @@ function TracePanel({ taskId }: { taskId: string }) {
 
   if (loading) return (
     <div className="flex items-center justify-center h-48">
-      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      <Loader2 className="w-6 h-6 animate-spin text-dark-text-muted" />
     </div>
   );
   if (!trace) return null;
@@ -373,25 +373,25 @@ function TracePanel({ taskId }: { taskId: string }) {
     <div className="space-y-4">
       {/* Meta */}
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
-        <div><span className="text-gray-500">任务名称：</span><span className="text-gray-200">{instance.name}</span></div>
-        <div><span className="text-gray-500">Agent：</span><span className="text-gray-200">{instance.agentName}</span></div>
-        <div><span className="text-gray-500">模型：</span><span className="text-gray-200">{instance.modelName || csTask?.model || '-'}</span></div>
-        <div><span className="text-gray-500">引擎：</span><span className="text-gray-200">{csTask?.engine || '-'}</span></div>
-        <div><span className="text-gray-500">目标产品：</span><span className="text-gray-200">{instance.targetProduct || '-'}</span></div>
-        <div><span className="text-gray-500">耗时：</span><span className="text-gray-200">{fmtDuration(instance.startedAt, instance.completedAt)}</span></div>
+        <div><span className="text-dark-text-muted">任务名称：</span><span className="text-dark-text">{instance.name}</span></div>
+        <div><span className="text-dark-text-muted">Agent：</span><span className="text-dark-text">{instance.agentName}</span></div>
+        <div><span className="text-dark-text-muted">模型：</span><span className="text-dark-text">{instance.modelName || csTask?.model || '-'}</span></div>
+        <div><span className="text-dark-text-muted">引擎：</span><span className="text-dark-text">{csTask?.engine || '-'}</span></div>
+        <div><span className="text-dark-text-muted">目标产品：</span><span className="text-dark-text">{instance.targetProduct || '-'}</span></div>
+        <div><span className="text-dark-text-muted">耗时：</span><span className="text-dark-text">{fmtDuration(instance.startedAt, instance.completedAt)}</span></div>
         {csTask?.workspacePath && (
-          <div className="col-span-2"><span className="text-gray-500">工作目录：</span><code className="text-gray-300">{csTask.workspacePath}</code></div>
+          <div className="col-span-2"><span className="text-dark-text-muted">工作目录：</span><code className="text-dark-text-secondary">{csTask.workspacePath}</code></div>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-700/50">
+      <div className="flex gap-1 border-b border-dark-border/40">
         {tabs.map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-3 py-1.5 text-xs rounded-t transition-colors ${
-              tab === t.key ? 'bg-dark-surface-hover text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'
+              tab === t.key ? 'bg-dark-surface-hover text-white border-b-2 border-indigo-500' : 'text-dark-text-muted hover:text-dark-text'
             }`}
           >
             {t.label}{t.count !== undefined ? ` (${t.count})` : ''}
@@ -426,39 +426,28 @@ export default function DataFeedbackPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
-            <GitBranch size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">数据回流</h1>
-            <p className="text-sm text-gray-400 mt-0.5">任务执行 Trace 记录</p>
-          </div>
-        </div>
-        <button
-          onClick={() => refetch()}
-          className="flex items-center gap-2 px-3 py-2 bg-dark-surface-hover hover:bg-gray-700 rounded-lg text-sm transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          刷新
-        </button>
-      </div>
-
       {/* Body: two-column layout */}
       <div className="flex gap-4 items-start">
         {/* Left: task list */}
-        <div className="w-80 shrink-0 bg-dark-surface border border-gray-700/50 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700/50 text-sm font-medium text-gray-300">
-            任务列表 {total > 0 && <span className="text-gray-500 font-normal">({total})</span>}
+        <div className="w-80 shrink-0 bg-dark-surface border border-dark-border/40 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-dark-border/40 flex items-center justify-between">
+            <span className="text-sm font-medium text-dark-text-secondary">
+              任务列表 {total > 0 && <span className="text-dark-text-muted font-normal">({total})</span>}
+            </span>
+            <button
+              onClick={() => refetch()}
+              className="p-1.5 text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-surface-hover rounded-lg transition-colors"
+              title="刷新"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
           {loading && tasks.length === 0 ? (
             <div className="flex items-center justify-center h-32">
-              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              <Loader2 className="w-5 h-5 animate-spin text-dark-text-muted" />
             </div>
           ) : tasks.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-500">暂无任务</div>
+            <div className="flex items-center justify-center h-32 text-sm text-dark-text-muted">暂无任务</div>
           ) : (
             <div className="divide-y divide-gray-700/30">
               {tasks.map(t => (
@@ -466,7 +455,7 @@ export default function DataFeedbackPage() {
                   key={t.id}
                   onClick={() => handleSelect(t.id)}
                   className={`w-full text-left px-4 py-3 hover:bg-dark-surface-hover transition-colors ${
-                    selectedId === t.id ? 'bg-blue-900/20 border-l-2 border-blue-500' : ''
+                    selectedId === t.id ? 'bg-indigo-500/10 border-l-2 border-indigo-500' : ''
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -474,34 +463,34 @@ export default function DataFeedbackPage() {
                       ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
                       : t.csState === 'failed' || t.status === 'failed'
                       ? <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                      : <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
-                    <span className="text-xs font-medium text-gray-200 truncate">{t.name}</span>
+                      : <Clock className="w-3.5 h-3.5 text-dark-text-muted shrink-0" />}
+                    <span className="text-xs font-medium text-dark-text truncate">{t.name}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                  <div className="flex items-center gap-2 text-[11px] text-dark-text-muted">
                     <span className="truncate">{t.agentName}</span>
                     {t.targetProduct && <span className="shrink-0 text-teal-500">{t.targetProduct}</span>}
                   </div>
-                  <div className="text-[11px] text-gray-600 mt-0.5">{fmtTime(t.createdAt)}</div>
+                  <div className="text-[11px] text-dark-text-muted mt-0.5">{fmtTime(t.createdAt)}</div>
                 </button>
               ))}
             </div>
           )}
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-2 border-t border-gray-700/50 text-xs text-gray-400">
-              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="disabled:opacity-40 hover:text-gray-200">上一页</button>
+            <div className="flex items-center justify-between px-4 py-2 border-t border-dark-border/40 text-xs text-dark-text-muted">
+              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="disabled:opacity-40 hover:text-dark-text">上一页</button>
               <span>{page} / {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="disabled:opacity-40 hover:text-gray-200">下一页</button>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="disabled:opacity-40 hover:text-dark-text">下一页</button>
             </div>
           )}
         </div>
 
         {/* Right: trace detail */}
-        <div className="flex-1 min-w-0 bg-dark-surface border border-gray-700/50 rounded-xl p-5">
+        <div className="flex-1 min-w-0 bg-dark-surface border border-dark-border/40 rounded-xl p-5">
           {selectedId ? (
             <TracePanel key={selectedId} taskId={selectedId} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+            <div className="flex flex-col items-center justify-center h-64 text-dark-text-muted">
               <GitBranch className="w-12 h-12 opacity-30 mb-3" />
               <p className="text-sm">选择左侧任务查看执行 Trace</p>
             </div>

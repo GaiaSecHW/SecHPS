@@ -76,7 +76,7 @@ function SeverityProgressBar({ stats }: { stats: VulnStats }) {
           <div key={severity} className="flex items-center gap-3">
             <div className="flex items-center gap-2 w-16">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-sm text-gray-400">{label}</span>
+              <span className="text-sm text-dark-text-muted">{label}</span>
             </div>
             <div className="flex-1 h-8 bg-dark-bg rounded-lg overflow-hidden">
               <div
@@ -90,7 +90,7 @@ function SeverityProgressBar({ stats }: { stats: VulnStats }) {
                 <span className="text-sm font-semibold text-white">{count}</span>
               </div>
             </div>
-            <span className="text-sm text-gray-500 w-12 text-right">{percent}%</span>
+            <span className="text-sm text-dark-text-muted w-12 text-right">{percent}%</span>
           </div>
         );
       })}
@@ -108,7 +108,7 @@ function StatusProgressBar({ stats }: { stats: VulnStats }) {
     verified: '#10B981',
     'false-positive': '#6B7280',
   };
-  
+
   return (
     <div className="space-y-3">
       {statusOrder.map(status => {
@@ -116,12 +116,12 @@ function StatusProgressBar({ stats }: { stats: VulnStats }) {
         const percent = Math.round((count / total) * 100);
         const color = statusColors[status];
         const label = statusLabels[status];
-        
+
         return (
           <div key={status} className="flex items-center gap-3">
             <div className="flex items-center gap-2 w-16">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-sm text-gray-400">{label}</span>
+              <span className="text-sm text-dark-text-muted">{label}</span>
             </div>
             <div className="flex-1 h-8 bg-dark-bg rounded-lg overflow-hidden">
               <div
@@ -135,7 +135,7 @@ function StatusProgressBar({ stats }: { stats: VulnStats }) {
                 <span className="text-sm font-semibold text-white">{count}</span>
               </div>
             </div>
-            <span className="text-sm text-gray-500 w-12 text-right">{percent}%</span>
+            <span className="text-sm text-dark-text-muted w-12 text-right">{percent}%</span>
           </div>
         );
       })}
@@ -242,11 +242,11 @@ function VulnerabilitiesContent() {
       {/* ========== 第一行：4个指标卡片 ========== */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-blue-500/50 transition-colors">
+          <div className="bg-dark-surface rounded-xl border border-dark-border/40 p-5 hover:border-blue-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">漏洞总数</p>
-                <p className="text-3xl font-bold text-white mt-1">{stats.total}</p>
+                <p className="text-sm text-dark-text-muted">漏洞总数</p>
+                <p className="text-3xl font-bold text-dark-text mt-1">{stats.total}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center">
                 <Shield className="text-blue-400" size={24} />
@@ -257,7 +257,7 @@ function VulnerabilitiesContent() {
           <div className="bg-dark-surface rounded-xl border border-red-500/30 p-5 hover:border-red-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">高危威胁</p>
+                <p className="text-sm text-dark-text-muted">高危威胁</p>
                 <p className="text-3xl font-bold text-red-400 mt-1">{criticalHigh}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-red-500/20 flex items-center justify-center">
@@ -265,7 +265,7 @@ function VulnerabilitiesContent() {
               </div>
             </div>
             {stats.total > 0 && (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-dark-text-muted mt-2">
                 占比 {Math.round((criticalHigh / stats.total) * 100)}%
               </p>
             )}
@@ -274,7 +274,7 @@ function VulnerabilitiesContent() {
           <div className="bg-dark-surface rounded-xl border border-yellow-500/30 p-5 hover:border-yellow-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">待处理</p>
+                <p className="text-sm text-dark-text-muted">待处理</p>
                 <p className="text-3xl font-bold text-yellow-400 mt-1">{pending}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center">
@@ -282,7 +282,7 @@ function VulnerabilitiesContent() {
               </div>
             </div>
             {stats.total > 0 && (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-dark-text-muted mt-2">
                 占比 {Math.round((pending / stats.total) * 100)}%
               </p>
             )}
@@ -291,7 +291,7 @@ function VulnerabilitiesContent() {
           <div className="bg-dark-surface rounded-xl border border-green-500/30 p-5 hover:border-green-500/50 transition-colors">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-400">已解决</p>
+                <p className="text-sm text-dark-text-muted">已解决</p>
                 <p className="text-3xl font-bold text-green-400 mt-1">{resolved}</p>
               </div>
               <div className="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center">
@@ -299,7 +299,7 @@ function VulnerabilitiesContent() {
               </div>
             </div>
             {stats.total > 0 && (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-dark-text-muted mt-2">
                 占比 {Math.round((resolved / stats.total) * 100)}%
               </p>
             )}
@@ -310,16 +310,16 @@ function VulnerabilitiesContent() {
       {/* ========== 第二行：两个进度条图表 ========== */}
       {stats && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <div className="bg-dark-surface rounded-xl border border-dark-border/40 p-5">
+            <h3 className="text-lg font-semibold text-dark-text mb-4 flex items-center gap-2">
               <AlertTriangle size={18} className="text-red-400" />
               严重程度分布
             </h3>
             <SeverityProgressBar stats={stats} />
           </div>
 
-          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <div className="bg-dark-surface rounded-xl border border-dark-border/40 p-5">
+            <h3 className="text-lg font-semibold text-dark-text mb-4 flex items-center gap-2">
               <CheckCircle size={18} className="text-purple-400" />
               状态分布
             </h3>
@@ -329,25 +329,25 @@ function VulnerabilitiesContent() {
       )}
 
       {/* ========== 漏洞列表卡片（含搜索筛选） ========== */}
-      <div className="bg-dark-surface rounded-xl border border-gray-700/50">
+      <div className="bg-dark-surface rounded-xl border border-dark-border/40">
         {/* 搜索筛选栏 */}
-        <div className="px-5 py-4 border-b border-gray-700/50">
+        <div className="px-5 py-4 border-b border-dark-border/40">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-text-muted" size={18} />
               <input
                 type="text"
                 placeholder="搜索漏洞..."
                 value={search}
                 onChange={(e) => updateUrl({ search: e.target.value, page: 1 })}
-                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500 text-sm"
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-dark-border/40 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted text-sm"
               />
             </div>
 
             <select
               value={severity}
               onChange={(e) => updateUrl({ severity: e.target.value, page: 1 })}
-              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-dark-border/40 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text text-sm"
             >
               <option value="">所有级别</option>
               <option value="critical">严重</option>
@@ -360,7 +360,7 @@ function VulnerabilitiesContent() {
             <select
               value={status}
               onChange={(e) => updateUrl({ status: e.target.value, page: 1 })}
-              className="w-[130px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+              className="w-[130px] px-3 py-2.5 bg-dark-bg border border-dark-border/40 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text text-sm"
             >
               <option value="">所有状态</option>
               <option value="new">新建</option>
@@ -374,7 +374,7 @@ function VulnerabilitiesContent() {
               <select
                 value={taskFilter}
                 onChange={(e) => updateUrl({ task: e.target.value, page: 1 })}
-                className="w-[180px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+                className="w-[180px] px-3 py-2.5 bg-dark-bg border border-dark-border/40 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text text-sm"
               >
                 <option value="">所有任务</option>
                 {tasks.map(t => (
@@ -383,8 +383,8 @@ function VulnerabilitiesContent() {
               </select>
             )}
 
-            <div className="text-sm text-gray-500 flex items-center ml-auto">
-              共 <span className="text-white font-medium ml-1">{totalCount}</span> 条
+            <div className="text-sm text-dark-text-muted flex items-center ml-auto">
+              共 <span className="text-dark-text font-medium ml-1">{totalCount}</span> 条
             </div>
           </div>
         </div>
@@ -396,9 +396,9 @@ function VulnerabilitiesContent() {
           </div>
         ) : vulnerabilities.length === 0 ? (
           <div className="p-12 text-center">
-            <AlertCircle className="mx-auto h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-white">暂无漏洞</h3>
-            <p className="mt-2 text-sm text-gray-400">
+            <AlertCircle className="mx-auto h-16 w-16 text-dark-text-muted" />
+            <h3 className="mt-4 text-lg font-medium text-dark-text">暂无漏洞</h3>
+            <p className="mt-2 text-sm text-dark-text-muted">
               {search || severity || status
                 ? '没有找到匹配的漏洞'
                 : '系统运行良好，暂未发现安全漏洞'}
@@ -408,20 +408,20 @@ function VulnerabilitiesContent() {
           <div className="overflow-x-auto">
             <table className="w-full table-fixed">
               <thead>
-                <tr className="border-b border-gray-700/50 bg-dark-bg/50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px] whitespace-nowrap">严重程度</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider overflow-hidden">标题</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider overflow-hidden min-w-[200px] w-[200px]">类型</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px]">状态</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[120px] w-[120px]">任务</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px]">发现时间</th>
+                <tr className="border-b border-dark-border/40 bg-dark-surface-hover/50">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[100px] w-[100px] whitespace-nowrap">严重程度</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-dark-text-muted uppercase tracking-wider overflow-hidden">标题</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-dark-text-muted uppercase tracking-wider overflow-hidden min-w-[200px] w-[200px]">类型</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[100px] w-[100px]">状态</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[120px] w-[120px]">任务</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[100px] w-[100px]">发现时间</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700/50">
+              <tbody className="divide-y divide-dark-border/40">
                 {vulnerabilities.map((vuln) => (
                   <tr
                     key={vuln.id}
-                    className="hover:bg-dark-bg/50 cursor-pointer transition-colors"
+                    className="hover:bg-dark-surface-hover cursor-pointer transition-colors"
                     onClick={() => handleRowClick(vuln.id)}
                   >
                     <td className="px-4 py-3">
@@ -437,11 +437,11 @@ function VulnerabilitiesContent() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="overflow-hidden">
-                        <p className="text-white font-medium truncate">{vuln.title}</p>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{vuln.location || '无位置信息'}</p>
+                        <p className="text-dark-text font-medium truncate">{vuln.title}</p>
+                        <p className="text-xs text-dark-text-muted truncate mt-0.5">{vuln.location || '无位置信息'}</p>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-400">{vuln.type}</td>
+                    <td className="px-4 py-3 text-sm text-dark-text-muted">{vuln.type}</td>
                     <td className="px-4 py-3">
                       <span
                         className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium"
@@ -466,16 +466,16 @@ function VulnerabilitiesContent() {
                         <a
                           href={`/dashboard/task-builder/${vuln.TaskInstance.id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-xs text-blue-400 hover:text-blue-300 hover:underline truncate block max-w-[120px]"
+                          className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline truncate block max-w-[120px]"
                           title={vuln.TaskInstance.name}
                         >
                           {vuln.TaskInstance.name}
                         </a>
                       ) : (
-                        <span className="text-xs text-gray-500">-</span>
+                        <span className="text-xs text-dark-text-muted">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-400">
+                    <td className="px-4 py-3 text-sm text-dark-text-muted">
                       {new Date(vuln.createdAt).toLocaleDateString('zh-CN')}
                     </td>
                   </tr>
@@ -487,22 +487,22 @@ function VulnerabilitiesContent() {
 
         {/* 分页 */}
         {totalCount > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700/50">
-            <div className="text-sm text-gray-400">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-dark-border/40">
+            <div className="text-sm text-dark-text-muted">
               第 {page}/{Math.ceil(totalCount / pageSize)} 页
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => updateUrl({ page: page - 1 })}
                 disabled={page === 1}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors"
+                className="p-2 border border-dark-border rounded-lg hover:bg-dark-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-dark-text-muted hover:text-dark-text transition-colors"
               >
                 <ChevronLeft size={16} />
               </button>
               <button
                 onClick={() => updateUrl({ page: page + 1 })}
                 disabled={page >= Math.ceil(totalCount / pageSize)}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 hover:text-white transition-colors"
+                className="p-2 border border-dark-border rounded-lg hover:bg-dark-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-dark-text-muted hover:text-dark-text transition-colors"
               >
                 <ChevronRight size={16} />
               </button>

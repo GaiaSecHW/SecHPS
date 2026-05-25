@@ -15,11 +15,8 @@ import {
   Save,
   X,
   Play,
-  Eye,
-  EyeOff,
   User,
   Key,
-  Brain,
 } from 'lucide-react';
 
 // ModelConfig 数据结构
@@ -446,118 +443,106 @@ export default function ModelsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-            <Brain size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">我的模型</h1>
-            <p className="text-sm text-gray-400 mt-0.5">管理大模型配置，公开后其他用户也可使用</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchModels}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <RefreshCw size={16} />
-            刷新
-          </button>
-          <button
-            onClick={handleOpenAddModal}
-            className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
-          >
-            <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
-            添加模型
-          </button>
-        </div>
-      </div>
-
       {/* Success/Error Messages */}
       {success && (
-        <div className="bg-green-900/20 border border-green-800/40 text-green-300 px-4 py-3 rounded-md flex items-start gap-2">
+        <div className="bg-green-900/20 border border-green-800/40 text-green-300 px-4 py-3 rounded-lg flex items-start gap-2">
           <Check className="h-5 w-5 flex-shrink-0 mt-0.5" />
           <pre className="whitespace-pre-wrap text-sm font-mono overflow-auto max-h-60">{success}</pre>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-md flex items-start gap-2">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-lg flex items-start gap-2">
           <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
           <pre className="whitespace-pre-wrap text-sm font-mono">{error}</pre>
         </div>
       )}
 
       {/* 模型列表 */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-100">
-            {isIcsOrAdmin ? '所有模型配置' : '我的模型配置'}
-          </h2>
-          <div className="flex items-center gap-3">
-            {/* 过滤器 */}
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="w-[100px] px-3 py-2 border border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+      <div className="bg-dark-surface rounded-xl border border-dark-border/40">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-dark-border/40">
+          <div className="flex items-center gap-1 bg-dark-bg border border-dark-border rounded-lg p-0.5">
+            {(['all', 'active', 'inactive', 'public'] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  filterStatus === status
+                    ? 'bg-dark-surface-hover text-dark-text'
+                    : 'text-dark-text-muted hover:text-dark-text-secondary'
+                }`}
+              >
+                {{ all: '全部', active: '启用', inactive: '禁用', public: '公开' }[status]}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchModels}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border transition-colors"
             >
-              <option value="all">全部</option>
-              <option value="active">启用</option>
-              <option value="inactive">禁用</option>
-              <option value="public">公开</option>
-            </select>
+              <RefreshCw size={14} />
+              刷新
+            </button>
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+            >
+              <Plus size={14} />
+              添加模型
+            </button>
           </div>
         </div>
 
         {/* 表格 */}
+        <div className="p-5">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-700/50">
-            <thead className="bg-[#162032]">
+          <table className="min-w-full divide-y divide-dark-border/40">
+            <thead className="bg-dark-surface-hover/50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                   名称
                 </th>
                 {isIcsOrAdmin && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] w-[120px]">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[120px] w-[120px]">
                     创建者
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] w-[120px]">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[120px] w-[120px]">
                   代理类型
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                   API 地址
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[200px]">
                   模型列表
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[100px] w-[100px]">
                   状态
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[100px] w-[100px]">
                   公开
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider min-w-[100px] w-[100px]">
                   连接状态
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                   操作
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-dark-surface divide-y divide-gray-700/50">
+            <tbody className="bg-dark-surface divide-y divide-dark-border/40">
               {filteredModels.length === 0 ? (
                 <tr>
-                  <td colSpan={isIcsOrAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isIcsOrAdmin ? 9 : 8} className="px-4 py-8 text-center text-dark-text-muted">
                     暨无模型配置，点击"添加模型"创建您的第一个模型
                   </td>
                 </tr>
@@ -566,29 +551,29 @@ export default function ModelsPage() {
                   const modelList = parseModels(model.models);
                   const isOwner = model.userId === user?.id || model.userId === null;
                   return (
-                    <tr key={model.id} className="hover:bg-[#0F172A]">
+                    <tr key={model.id} className="hover:bg-dark-surface-hover">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <Cpu size={16} className="text-gray-400 shrink-0" />
-                          <span className="font-medium text-gray-100 truncate" title={model.name}>{model.name}</span>
+                          <Cpu size={16} className="text-dark-text-muted shrink-0" />
+                          <span className="font-medium text-dark-text truncate" title={model.name}>{model.name}</span>
                           {model.isDefault && (
                             <span className="px-1.5 py-0.5 text-xs font-medium bg-orange-500/15 text-orange-400 rounded shrink-0">
                               默认
                             </span>
                           )}
                           {model.userId === null && (
-                            <span className="text-xs text-gray-500 shrink-0">(系统)</span>
+                            <span className="text-xs text-dark-text-muted shrink-0">(系统)</span>
                           )}
                         </div>
                       </td>
                       {isIcsOrAdmin && (
                         <td className="px-4 py-4 min-w-[120px] w-[120px]">
                           <div className="flex items-center gap-2">
-                            <User size={16} className="text-gray-400" />
+                            <User size={16} className="text-dark-text-muted" />
                             {model.userId === null ? (
-                              <span className="text-sm text-gray-400">系统模型</span>
+                              <span className="text-sm text-dark-text-muted">系统模型</span>
                             ) : (
-                              <span className="text-sm text-gray-400 truncate">
+                              <span className="text-sm text-dark-text-muted truncate">
                                 {model.userName || model.userUsername || '未知用户'}
                               </span>
                             )}
@@ -606,8 +591,8 @@ export default function ModelsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <Globe size={16} className="text-gray-400" />
-                          <span className="text-sm text-gray-400 font-mono max-w-xs truncate">
+                          <Globe size={16} className="text-dark-text-muted" />
+                          <span className="text-sm text-dark-text-muted font-mono max-w-xs truncate">
                             {model.apiBaseUrl}
                           </span>
                         </div>
@@ -617,13 +602,13 @@ export default function ModelsPage() {
                           {modelList.slice(0, 3).map((m, i) => (
                             <span
                               key={i}
-                              className="px-2 py-0.5 bg-dark-surface-hover text-gray-300 text-xs rounded"
+                              className="px-2 py-0.5 bg-dark-surface-hover text-dark-text-secondary text-xs rounded"
                             >
                               {m}
                             </span>
                           ))}
                           {modelList.length > 3 && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-dark-text-muted">
                               +{modelList.length - 3}
                             </span>
                           )}
@@ -634,12 +619,12 @@ export default function ModelsPage() {
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isActive
                               ? 'bg-green-500/15 text-green-400'
-                              : 'bg-dark-surface-hover text-gray-200'
+                              : 'bg-dark-surface-hover text-dark-text-secondary'
                           }`}
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
-                              model.isActive ? 'bg-green-600' : 'bg-[#0F172A]0'
+                              model.isActive ? 'bg-green-600' : 'bg-dark-text-muted'
                             }`}
                           />
                           {model.isActive ? '启用' : '禁用'}
@@ -650,7 +635,7 @@ export default function ModelsPage() {
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isPublic
                               ? 'bg-blue-500/15 text-blue-400'
-                              : 'bg-dark-surface-hover text-gray-400'
+                              : 'bg-dark-surface-hover text-dark-text-muted'
                           }`}
                         >
                           {model.isPublic ? <Globe size={12} /> : <Lock size={12} />}
@@ -674,15 +659,15 @@ export default function ModelsPage() {
                               )}
                               {testResults[model.id].success ? '正常' : '异常'}
                               {testResults[model.id].duration && (
-                                <span className="ml-1 text-gray-500">({testResults[model.id].duration}ms)</span>
+                                <span className="ml-1 text-dark-text-muted">({testResults[model.id].duration}ms)</span>
                               )}
                             </span>
                             {testResults[model.id].response && (
-                              <div className="mt-1 p-2 bg-[#0F172A] rounded text-xs text-gray-300 max-w-xs overflow-hidden">
-                                <div className="font-medium text-gray-500 mb-1">模型响应:</div>
+                              <div className="mt-1 p-2 bg-dark-bg rounded text-xs text-dark-text-secondary max-w-xs overflow-hidden">
+                                <div className="font-medium text-dark-text-muted mb-1">模型响应:</div>
                                 <div className="break-words">{testResults[model.id].response}</div>
                                 {testResults[model.id].usage && (
-                                  <div className="mt-1 text-gray-400">
+                                  <div className="mt-1 text-dark-text-muted">
                                     Token: {testResults[model.id].usage!.inputTokens} + {testResults[model.id].usage!.outputTokens}
                                   </div>
                                 )}
@@ -690,7 +675,7 @@ export default function ModelsPage() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-gray-400">未测试</span>
+                          <span className="text-xs text-dark-text-muted">未测试</span>
                         )}
                       </td>
                       <td className="px-4 py-4">
@@ -700,8 +685,8 @@ export default function ModelsPage() {
                             disabled={testingModelId === model.id}
                             className={`p-1.5 rounded-md transition-colors ${
                               testingModelId === model.id
-                                ? 'text-blue-400 bg-blue-600/10 cursor-wait'
-                                : 'text-gray-400 hover:text-green-400 hover:bg-green-600/100/10'
+                                ? 'text-indigo-400 bg-indigo-600/10 cursor-wait'
+                                : 'text-dark-text-muted hover:text-green-400 hover:bg-green-600/10'
                             }`}
                             title="测试连接"
                           >
@@ -714,7 +699,7 @@ export default function ModelsPage() {
                           {canEditModel(model) && (
                             <button
                               onClick={() => handleOpenEditModal(model)}
-                              className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-600/100/100/10 rounded-md transition-colors"
+                              className="p-1.5 text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-600/10 rounded-md transition-colors"
                               title="编辑"
                             >
                               <Edit2 size={16} />
@@ -723,7 +708,7 @@ export default function ModelsPage() {
                           {canEditModel(model) && (
                             <button
                               onClick={() => handleDeleteClick(model)}
-                              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-600/100/100/10 rounded-md transition-colors"
+                              className="p-1.5 text-dark-text-muted hover:text-red-400 hover:bg-red-600/10 rounded-md transition-colors"
                               title="删除"
                             >
                               <Trash2 size={16} />
@@ -738,19 +723,20 @@ export default function ModelsPage() {
             </tbody>
           </table>
         </div>
+        </div>
       </div>
 
       {/* 添加/编辑模型模态框 */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
-              <h3 className="text-lg font-semibold text-gray-100">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-dark-border/40">
+              <h3 className="text-lg font-semibold text-dark-text">
                 {editingModel ? '编辑模型' : '添加模型'}
               </h3>
               <button
                 onClick={handleCloseModal}
-                className="p-1 text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover rounded-md transition-colors"
+                className="p-1 text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-surface-hover rounded-md transition-colors"
               >
                 <X size={20} />
               </button>
@@ -759,22 +745,22 @@ export default function ModelsPage() {
             <div className="p-6 space-y-4">
               {/* 名称 */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  名称 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
+                  名称 <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="例如：内部大模型 或 Claude"
                 />
               </div>
 
               {/* API类型 */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  API类型 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
+                  API类型 <span className="text-red-400">*</span>
                 </label>
                 <select
                   value={formData.providerType}
@@ -785,12 +771,12 @@ export default function ModelsPage() {
                       : formData.apiBaseUrl;
                     setFormData({ ...formData, providerType, apiBaseUrl: formData.apiBaseUrl || defaultBaseUrl });
                   }}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="openai">OpenAI</option>
                   <option value="claude">Claude</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-dark-text-muted mt-1">
                   {formData.providerType === 'claude'
                     ? '直接调用 Anthropic Claude API，无需格式转换'
                     : '调用内部大模型，需要 Anthropic ↔ OpenAI 格式转换'}
@@ -799,14 +785,14 @@ export default function ModelsPage() {
 
               {/* API 地址 */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  API 地址 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
+                  API 地址 <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.apiBaseUrl}
                   onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                  className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
                   placeholder={formData.providerType === 'claude'
                     ? '请输入 Claude API 地址（如 https://api.anthropic.com/v1/messages）'
                     : 'http://192.168.1.100:8000/v1/chat/completions'}
@@ -818,14 +804,14 @@ export default function ModelsPage() {
                 {/* 新建时直接显示输入框 */}
                 {!editingModel ? (
                   <>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      API Key <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-dark-text-secondary mb-1">
+                      API Key <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="password"
                       value={formData.apiKey}
                       onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                      className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
                       placeholder="输入 API Key"
                     />
                   </>
@@ -834,8 +820,8 @@ export default function ModelsPage() {
                     {/* 编辑时需要确认才能修改 */}
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <Key size={16} className="text-gray-400" />
-                        <span className="text-sm text-gray-300">
+                        <Key size={16} className="text-dark-text-muted" />
+                        <span className="text-sm text-dark-text-secondary">
                           API Key: {editingModel.hasApiKey ? (
                             <span className="text-green-400 font-medium">已设置</span>
                           ) : (
@@ -848,7 +834,7 @@ export default function ModelsPage() {
                           type="checkbox"
                           checked={formData.changeApiKey}
                           onChange={(e) => setFormData({ ...formData, changeApiKey: e.target.checked })}
-                          className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
+                          className="w-4 h-4 text-orange-600 border-dark-border rounded focus:ring-orange-500"
                         />
                         <span className="text-sm text-orange-400 font-medium">修改</span>
                       </label>
@@ -860,7 +846,7 @@ export default function ModelsPage() {
                           type="password"
                           value={formData.apiKey}
                           onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                          className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-sm"
+                          className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 font-mono text-sm"
                           placeholder="输入新的 API Key"
                         />
                         <p className="text-xs text-orange-400 mt-1">
@@ -874,17 +860,17 @@ export default function ModelsPage() {
 
               {/* 模型名称 */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  模型名称 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-dark-text-secondary mb-1">
+                  模型名称 <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.models}
                   onChange={(e) => setFormData({ ...formData, models: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="例如：gpt-4、claude-3-opus-20240229"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-dark-text-muted mt-1">
                   输入单个模型名称
                 </p>
               </div>
@@ -893,38 +879,38 @@ export default function ModelsPage() {
               <div className="grid grid-cols-2 gap-4">
                 {/* 最大输出 Token */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-dark-text-secondary mb-1">
                     最大输出 Token
                   </label>
                   <input
                     type="number"
                     value={formData.maxTokens}
                     onChange={(e) => setFormData({ ...formData, maxTokens: parseInt(e.target.value) || 32000 })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     min={256}
                     max={192000}
                     step={256}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-dark-text-muted mt-1">
                     默认 32000，建议 4096-32000
                   </p>
                 </div>
 
                 {/* 温度参数 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-dark-text-secondary mb-1">
                     温度 (Temperature)
                   </label>
                   <input
                     type="number"
                     value={formData.temperature}
                     onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) || 0.7 })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-3 py-2 border border-dark-border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     min={0}
                     max={2}
                     step={0.1}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-dark-text-muted mt-1">
                     默认 0.3，越高越随机
                   </p>
                 </div>
@@ -932,11 +918,11 @@ export default function ModelsPage() {
 
               {/* Context Window - 只读显示（仅编辑模式） */}
               {editingModel && (
-                <div className="bg-dark-bg border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between">
+                <div className="bg-dark-bg border border-dark-border/40 rounded-lg px-3 py-2 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium text-gray-300">Context Window</span>
-                    <span className="text-sm text-gray-100">{editingModel?.contextWindow ?? 0} tokens</span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-sm font-medium text-dark-text-secondary">Context Window</span>
+                    <span className="text-sm text-dark-text">{editingModel?.contextWindow ?? 0} tokens</span>
+                    <span className="text-xs text-dark-text-muted">
                       {editingModel?.contextWindow > 0 ? '已学习' : '未设置，调用超限时自动学习'}
                     </span>
                   </div>
@@ -960,9 +946,9 @@ export default function ModelsPage() {
                       type="checkbox"
                       checked={formData.isActive}
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+                      className="w-4 h-4 text-blue-400 border-dark-border rounded focus:ring-indigo-500"
                     />
-                    <span className="text-sm text-gray-300">启用</span>
+                    <span className="text-sm text-dark-text-secondary">启用</span>
                   </label>
 
                   {isIcsOrAdmin && (
@@ -971,22 +957,22 @@ export default function ModelsPage() {
                         type="checkbox"
                         checked={formData.isPublic}
                         onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
-                        className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+                        className="w-4 h-4 text-blue-400 border-dark-border rounded focus:ring-indigo-500"
                       />
-                      <span className="text-sm text-gray-300">公开（跨租户共享）</span>
+                      <span className="text-sm text-dark-text-secondary">公开（跨租户共享）</span>
                     </label>
                   )}
                 </div>
 
                 {/* 管理员专属选项 */}
                 {isIcsOrAdmin && (
-                  <div className="flex items-center gap-6 pt-2 border-t border-gray-700/50">
+                  <div className="flex items-center gap-6 pt-2 border-t border-dark-border/40">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={formData.isSystemModel}
                         onChange={(e) => setFormData({ ...formData, isSystemModel: e.target.checked, isDefault: e.target.checked ? formData.isDefault : false })}
-                        className="w-4 h-4 text-purple-600 border-gray-600 rounded focus:ring-purple-500"
+                        className="w-4 h-4 text-purple-600 border-dark-border rounded focus:ring-purple-500"
                       />
                       <span className="text-sm text-purple-400 font-medium">系统模型（所有用户可见）</span>
                     </label>
@@ -997,7 +983,7 @@ export default function ModelsPage() {
                           type="checkbox"
                           checked={formData.isDefault}
                           onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                          className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
+                          className="w-4 h-4 text-orange-600 border-dark-border rounded focus:ring-orange-500"
                         />
                         <span className="text-sm text-orange-400 font-medium">默认模型</span>
                       </label>
@@ -1016,17 +1002,17 @@ export default function ModelsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700/50">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-dark-border/40">
               <button
                 onClick={handleCloseModal}
-                className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-surface-hover transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleSaveModel}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
                 {saving ? (
                   <>
@@ -1047,16 +1033,16 @@ export default function ModelsPage() {
 
       {/* 删除确认对话框 */}
       {showDeleteConfirm && deletingModel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <AlertCircle className="h-6 w-6 text-red-500" />
-                <h3 className="text-lg font-semibold text-gray-100">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+                <h3 className="text-lg font-semibold text-dark-text">
                   认删除
                 </h3>
               </div>
-              <p className="text-gray-400 mb-6">
+              <p className="text-dark-text-muted mb-6">
                 确定要删除模型 <span className="font-semibold">{deletingModel.name}</span> 吗？
                 此操作无法撤销。
               </p>
@@ -1066,14 +1052,14 @@ export default function ModelsPage() {
                     setShowDeleteConfirm(false);
                     setDeletingModel(null);
                   }}
-                  className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-700 transition-colors"
+                  className="px-4 py-2 text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-surface-hover transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleDeleteConfirm}
                   disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   {saving ? (
                     <>
