@@ -72,10 +72,11 @@ export async function POST(
       },
     });
 
+    const stopLogId = `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-stop`;
     await prisma.taskExecutionLog.upsert({
-      where: { id: `log-${Date.now()}-stop` },
+      where: { id: stopLogId },
       create: {
-        id: `log-${Date.now()}-stop`,
+        id: stopLogId,
         taskId: id,
         level: 'warning',
         message: '任务已停止',
