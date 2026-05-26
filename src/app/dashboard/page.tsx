@@ -1,356 +1,117 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import { extractErrorMessage } from '@/lib/api-client';
-import dynamic from 'next/dynamic';
+import {
+  Shield,
+  Zap,
+  Brain,
+  Layers,
+  Search,
+  GitBranch,
+  Network,
+  Cpu,
+  Play,
+} from 'lucide-react';
 
-const QueueMonitor = dynamic(
-  () => import('@/components/evaluation/QueueMonitor').then(m => ({ default: m.QueueMonitor })),
-  { ssr: false }
-);
-
-interface TaskInstance {
-  id: string;
-  name: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Stats {
-  total: number;
-  completed: number;
-  failed: number;
-  running: number;
-  pending: number;
-}
-
-interface VulnerabilityStats {
-  total: number;
-  pending: number;
-  confirmed: number;
-  fixed: number;
-  verified: number;
-  falsePositive: number;
-}
-
-interface TokenStats {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalTokens: number;
-  estimatedCost: number;
-  evaluationCount: number;
-  callCount: number;
-}
+const features = [
+  {
+    icon: <Brain size={22} />,
+    gradient: 'from-indigo-400 to-blue-500',
+    title: '人机协同',
+    desc: '融合人的知识沉淀与 AI 智能化能力，协同挖掘深层漏洞',
+  },
+  {
+    icon: <Network size={22} />,
+    gradient: 'from-purple-400 to-violet-500',
+    title: '知识图谱',
+    desc: '代码结构、数据流、调用关系的可视化分析与追踪',
+  },
+  {
+    icon: <GitBranch size={22} />,
+    gradient: 'from-emerald-400 to-green-500',
+    title: '闭环进化',
+    desc: 'Skill 精准率自适应优化，从失败中学习持续提升检测能力',
+  },
+  {
+    icon: <Cpu size={22} />,
+    gradient: 'from-amber-400 to-orange-500',
+    title: '分布式调度',
+    desc: '多 Agent 协同执行，CodeSwarm 集群调度大规模并发扫描',
+  },
+  {
+    icon: <Search size={22} />,
+    gradient: 'from-rose-400 to-red-500',
+    title: '污点分析',
+    desc: '基于 Joern 的代码安全分析引擎，精准定位注入与越权',
+  },
+  {
+    icon: <Layers size={22} />,
+    gradient: 'from-cyan-400 to-teal-500',
+    title: '工作流编排',
+    desc: 'DAG/FSM 双引擎可视化编排，灵活定制审计流程',
+  },
+];
 
 export default function DashboardPage() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [stats, setStats] = useState<Stats>({ total: 0, completed: 0, failed: 0, running: 0, pending: 0 });
-  const [vulnStats, setVulnStats] = useState<VulnerabilityStats>({ total: 0, pending: 0, confirmed: 0, fixed: 0, verified: 0, falsePositive: 0 });
-  const [tokenStats, setTokenStats] = useState<TokenStats>({ totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, estimatedCost: 0, evaluationCount: 0, callCount: 0 });
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [hasRunningTasks, setHasRunningTasks] = useState(false);
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      setIsAdmin(user.roles?.includes('admin') || false);
-    }
-    fetchData();
-    fetchVulnStats();
-    fetchTokenStats();
-  }, []);
-
-  useEffect(() => {
-    if (!hasRunningTasks) return;
-    const pollInterval = setInterval(fetchData, 5000);
-    return () => clearInterval(pollInterval);
-  }, [hasRunningTasks]);
-
-  const fetchData = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/task-builder/tasks?limit=1000', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        setError(extractErrorMessage(data, '获取任务失败'));
-        setLoading(false);
-        return;
-      }
-      const data = await response.json();
-      const taskList = data.tasks || [];
-      setHasRunningTasks(taskList.some((t: TaskInstance) => t.status === 'running' || t.status === 'pending'));
-
-      let completed = 0, failed = 0, running = 0, pending = 0;
-      for (const task of taskList) {
-        if (task.status === 'completed') completed++;
-        else if (task.status === 'failed') failed++;
-        else if (task.status === 'running') running++;
-        else if (task.status === 'pending') pending++;
-      }
-      setStats({ total: taskList.length, completed, failed, running, pending });
-      setLoading(false);
-    } catch {
-      setError('网络错误，请重试');
-      setLoading(false);
-    }
-  };
-
-  const fetchVulnStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/vulnerabilities/stats', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const s = data.stats;
-        setVulnStats({
-          total: s.total || 0,
-          pending: s.byStatus?.new || 0,
-          confirmed: s.byStatus?.confirmed || 0,
-          fixed: s.byStatus?.fixed || 0,
-          verified: s.byStatus?.verified || 0,
-          falsePositive: s.byStatus?.['false-positive'] || 0,
-        });
-      }
-    } catch {}
-  };
-
-  const fetchTokenStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/token-stats?period=year', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTokenStats({
-          totalInputTokens: data.summary?.totalInputTokens || 0,
-          totalOutputTokens: data.summary?.totalOutputTokens || 0,
-          totalTokens: data.summary?.totalTokens || 0,
-          estimatedCost: data.summary?.estimatedCost || 0,
-          evaluationCount: data.summary?.evaluationCount || 0,
-          callCount: data.summary?.callCount || 0,
-        });
-      }
-    } catch {}
-  };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500/20 border-t-indigo-500"></div>
-        <p className="text-sm text-dark-text-muted">加载中...</p>
-      </div>
-    );
-  }
-
-  const vulnProcessed = vulnStats.confirmed + vulnStats.fixed + vulnStats.verified + vulnStats.falsePositive;
-  const vulnProgress = vulnStats.total > 0 ? (vulnProcessed / vulnStats.total * 100) : 0;
-
   return (
-    <div className="space-y-8 w-full min-w-0">
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 rounded-lg text-sm">
-          {error}
+    <div className="flex flex-col items-center justify-center min-h-[70vh] gap-0">
+      <section className="relative overflow-hidden rounded-xl border border-dark-border bg-dark-surface w-full">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
         </div>
-      )}
 
-      {/* Hero: Task KPIs */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-medium text-dark-text">任务概览</h2>
-          <Link href="/dashboard/task-builder" className="text-sm text-dark-text-muted hover:text-dark-text transition-colors">
-            查看全部 →
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <KpiCard label="总任务" value={stats.total} />
-          <KpiCard label="运行中" value={stats.running} status="active" pulse={stats.running > 0} />
-          <KpiCard label="待执行" value={stats.pending} status="warning" />
-          <KpiCard label="已完成" value={stats.completed} status="success" />
-          <KpiCard label="失败" value={stats.failed} status="error" />
-        </div>
-      </section>
+        <div className="relative px-6 md:px-10 py-8 md:py-14 flex flex-col items-center text-center">
+          <div className="flex items-center gap-3 mb-4 md:mb-6">
+            <div className="w-10 md:w-12 h-10 md:h-12 bg-gradient-to-br from-indigo-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+              <Shield size={24} className="text-white" />
+            </div>
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight">
+              <span className="text-dark-text">SecICSL</span>
+              <span className="text-indigo-400">-JVS</span>
+            </h1>
+          </div>
 
-      {/* QueueMonitor (admin) */}
-      {isAdmin && (
-        <section className="rounded-xl overflow-hidden border border-dark-border/40">
-          <QueueMonitor autoRefresh refreshInterval={10000} pageSize={5} />
-        </section>
-      )}
+          <p className="text-base md:text-lg text-dark-text font-medium mb-2 md:mb-3">
+            人机协同 · 智能漏洞挖掘引擎
+          </p>
+          <p className="text-sm md:text-base text-dark-text-muted max-w-xl whitespace-nowrap text-center mb-6 md:mb-8">
+            将安全测试工程师的实战经验持续沉淀，驱动 AI 能力自我进化，构建越用越强的漏洞挖掘引擎
+          </p>
 
-      {/* Two-column: Vulnerabilities + Resources */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Vulnerability Analysis — wider */}
-        <section className="lg:col-span-3 bg-dark-surface/60 border border-dark-border/40 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-base font-medium text-dark-text">漏洞分析</h2>
-            <Link href="/dashboard/admin/vulnerabilities" className="text-sm text-dark-text-muted hover:text-dark-text transition-colors">
-              管理 →
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 w-full max-w-3xl">
+            {features.map((f) => (
+              <div
+                key={f.title}
+                className="bg-dark-surface-hover/60 border border-dark-border/50 rounded-lg p-4 md:p-5 hover:bg-dark-surface-hover/80 hover:border-dark-border transition-all group"
+              >
+                <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-2.5 shadow-sm`}>
+                  <span className="text-white">{f.icon}</span>
+                </div>
+                <p className="text-dark-text font-medium text-sm mb-1">{f.title}</p>
+                <p className="text-dark-text-muted text-xs leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 md:mt-8 flex items-center gap-3">
+            <Link
+              href="/dashboard/task-builder"
+              className="group flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-lg font-medium text-sm transition-all duration-200 bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:bg-indigo-400"
+            >
+              <Play size={16} className="transition-transform group-hover:rotate-90 duration-200" />
+              开始挖掘
+            </Link>
+            <Link
+              href="/dashboard/overview"
+              className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-lg font-medium text-sm transition-all duration-200 border border-dark-border text-dark-text-secondary hover:bg-dark-surface-hover hover:text-dark-text hover:border-dark-border/70"
+            >
+              <Zap size={16} />
+              数据看板
             </Link>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5">
-            <div>
-              <div className="text-2xl font-semibold text-dark-text tabular-nums">{vulnStats.total}</div>
-              <div className="text-sm text-dark-text-muted mt-0.5">总漏洞</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-amber-400 tabular-nums">{vulnStats.pending}</div>
-              <div className="text-sm text-dark-text-muted mt-0.5">待处理</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-indigo-400 tabular-nums">{vulnStats.confirmed}</div>
-              <div className="text-sm text-dark-text-muted mt-0.5">已确认</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-emerald-400 tabular-nums">{vulnStats.fixed}</div>
-              <div className="text-sm text-dark-text-muted mt-0.5">已修复</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-emerald-400 tabular-nums">{vulnStats.verified}</div>
-              <div className="text-sm text-dark-text-muted mt-0.5">已验证</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-dark-text-secondary tabular-nums">{vulnStats.falsePositive}</div>
-              <div className="text-sm text-dark-text-muted mt-0.5">误报</div>
-            </div>
-          </div>
-
-          {vulnStats.total > 0 && (
-            <div className="mt-6 pt-5 border-t border-dark-border/30">
-              <div className="flex items-center justify-between text-sm text-dark-text-muted mb-2.5">
-                <span>处理进度</span>
-                <span className="font-medium text-dark-text tabular-nums">{vulnProgress.toFixed(1)}%</span>
-              </div>
-              <div className="h-2 bg-dark-surface-hover rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 rounded-full transition-all duration-500"
-                  style={{ width: `${vulnProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Resource Consumption — narrower */}
-        <section className="lg:col-span-2 bg-dark-surface/60 border border-dark-border/40 rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-base font-medium text-dark-text">资源消耗</h2>
-            <Link href="/dashboard/token-stats" className="text-sm text-dark-text-muted hover:text-dark-text transition-colors">
-              详情 →
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm text-dark-text-muted">输入 Token</span>
-              <span className="text-sm font-medium text-dark-text tabular-nums">{formatNumber(tokenStats.totalInputTokens)}</span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm text-dark-text-muted">输出 Token</span>
-              <span className="text-sm font-medium text-dark-text tabular-nums">{formatNumber(tokenStats.totalOutputTokens)}</span>
-            </div>
-            <div className="border-t border-dark-border/30" />
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm font-medium text-dark-text">总 Token</span>
-              <span className="text-base font-semibold text-dark-text tabular-nums">{formatNumber(tokenStats.totalTokens)}</span>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-sm font-medium text-dark-text">预估费用</span>
-              <span className="text-base font-semibold text-dark-text tabular-nums">¥{tokenStats.estimatedCost.toFixed(2)}</span>
-            </div>
-            <div className="border-t border-dark-border/30" />
-            <div className="grid grid-cols-2 gap-4 pt-1">
-              <div>
-                <div className="text-xl font-semibold text-dark-text tabular-nums">{tokenStats.evaluationCount}</div>
-                <div className="text-sm text-dark-text-muted mt-0.5">评估次数</div>
-              </div>
-              <div>
-                <div className="text-xl font-semibold text-dark-text tabular-nums">{tokenStats.callCount}</div>
-                <div className="text-sm text-dark-text-muted mt-0.5">调用次数</div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {/* System Status — minimal footer bar */}
-      <section className="flex flex-wrap items-center gap-x-8 gap-y-3 px-1">
-        <StatusDot label="数据库" ok />
-        <StatusDot label="任务引擎" ok active={stats.running > 0} detail={stats.running > 0 ? '运行中' : '就绪'} />
-        <StatusDot label="队列" ok={stats.pending === 0} detail={stats.pending > 0 ? `${stats.pending} 待执行` : '空闲'} />
+        </div>
       </section>
-    </div>
-  );
-}
-
-// --- Components ---
-
-function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
-}
-
-function KpiCard({ label, value, status, pulse }: {
-  label: string;
-  value: number;
-  status?: 'active' | 'warning' | 'success' | 'error';
-  pulse?: boolean;
-}) {
-  const statusColors = {
-    active: 'text-indigo-400',
-    warning: 'text-amber-400',
-    success: 'text-emerald-400',
-    error: 'text-red-400',
-  };
-  const borderAccent = {
-    active: 'border-indigo-500/30',
-    warning: 'border-amber-500/20',
-    success: 'border-emerald-500/20',
-    error: 'border-red-500/20',
-  };
-
-  const valueColor = status && value > 0 ? statusColors[status] : 'text-dark-text';
-  const border = status && value > 0 ? borderAccent[status] : 'border-dark-border/40';
-
-  return (
-    <div className={`bg-dark-surface/60 border ${border} rounded-xl px-5 py-4 relative overflow-hidden`}>
-      {pulse && (
-        <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-      )}
-      <div className={`text-3xl font-semibold ${valueColor} tabular-nums leading-none`}>{value}</div>
-      <div className="text-sm text-dark-text-muted mt-2">{label}</div>
-    </div>
-  );
-}
-
-function StatusDot({ label, ok, active, detail }: {
-  label: string;
-  ok: boolean;
-  active?: boolean;
-  detail?: string;
-}) {
-  const dotClass = active
-    ? 'bg-indigo-400 animate-pulse'
-    : ok
-      ? 'bg-emerald-400'
-      : 'bg-amber-400';
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
-      <span className="text-sm text-dark-text-muted">{label}</span>
-      {detail && <span className="text-sm text-dark-text-secondary">{detail}</span>}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   Award,
   Bug,
   TrendingUp,
+  Brain,
   Zap,
   Activity,
   Terminal,
@@ -302,8 +303,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 )}
                 {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
 
-                <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname} badge="Beta">
-                  智能体进化
+                <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
+                  智能体进化<span className="text-[10px] text-indigo-400 ml-1">(对接中)</span>
                 </NavLink>
                 <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   知识图谱
@@ -311,8 +312,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   数据回流
                 </NavLink>
-                <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname} badge="Beta">
-                  测评基准
+                <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
+                  测评基准<span className="text-[10px] text-indigo-400 ml-1">(对接中)</span>
                 </NavLink>
               </>
             )}
@@ -360,14 +361,33 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className={`flex items-center w-full transition-colors hover:bg-dark-surface-hover ${sidebarCollapsed ? 'justify-center p-3' : 'gap-2.5 px-4 py-3'}`}
             >
-              <div className="w-8 h-8 rounded-full bg-indigo-600/80 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
-                {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
-              </div>
+              {user?.avatar ? (
+                <img src={user.avatar} alt={user.name || user.username} className="w-8 h-8 rounded-full ring-2 ring-indigo-500/30 flex-shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-indigo-600/80 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                  {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                </div>
+              )}
               {!sidebarCollapsed && (
                 <>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm text-dark-text truncate">{user?.name || user?.username}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-dark-text truncate">{user?.name || user?.username}</p>
+                      {user?.roles?.includes('admin') && !user?.tenantId && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20 whitespace-nowrap">
+                          平台管理员
+                        </span>
+                      )}
+                      {user?.isIcsTenant && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20 whitespace-nowrap">
+                          ICSL
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-dark-text-muted truncate">{user?.email}</p>
+                    {user?.tenantId && (
+                      <p className="text-[10px] text-indigo-400 truncate">租户: {user?.tenantName || user?.tenantId}</p>
+                    )}
                   </div>
                   <ChevronUp size={14} className={`text-dark-text-muted transition-transform ${showUserMenu ? '' : 'rotate-180'}`} />
                 </>
@@ -385,6 +405,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                   >
                     <User size={15} />
                     个人中心
+                  </Link>
+                  <Link
+                    href="/dashboard/models"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-dark-text-secondary hover:bg-dark-border hover:text-dark-text transition-colors"
+                  >
+                    <Brain size={15} />
+                    我的模型
                   </Link>
                   <Link
                     href="/dashboard/token-stats"
