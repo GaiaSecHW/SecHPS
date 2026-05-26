@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "minimax/MiniMax-M2.7",
+  "provider": {
+    "custom-minimax": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "minimax",
+      "models": {
+        "minimax/MiniMax-M2.7": {
+          "name": "minimax/MiniMax-M2.7"
+        }
+      },
+      "options": {
+        "apiKey": "sk-cp-2jZ4MAEvIcoJSSunhXcE-14zDJ38tXeGJghSZ4vQh5xuflOxg1D2FQv21wnmOatZFQbVsRZRih2BeobQMXSojmhSFLxyLX1OQflHlpqx9VIFQdcnE7hw6-8",
+        "baseURL": "https://api.minimaxi.com/v1"
+      }
+    }
+  }
+}
