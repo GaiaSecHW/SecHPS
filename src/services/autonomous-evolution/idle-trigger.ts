@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { getBeijingHourMinutes } from '@/lib/beijing-time';
 
 export interface IdleTriggerConfig {
   enabled: boolean;
@@ -78,8 +79,8 @@ function parseTime(hhmm: string): { h: number; m: number } {
 }
 
 function isInWindow(config: IdleTriggerConfig): boolean {
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  // 使用北京时间判断窗口，与服务器时区无关
+  const nowMinutes = getBeijingHourMinutes();
   const start = parseTime(config.windowStart);
   const end = parseTime(config.windowEnd);
   const startMinutes = start.h * 60 + start.m;
