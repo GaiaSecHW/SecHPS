@@ -243,8 +243,9 @@ async function createParseLog(
   details?: string
 ) {
   const id = `log-parse-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  await prisma.taskExecutionLog.create({
-    data: {
+  await prisma.taskExecutionLog.upsert({
+    where: { id },
+    create: {
       id,
       taskId: taskInstanceId,
       level,
@@ -252,6 +253,7 @@ async function createParseLog(
       details: details || null,
       timestamp: new Date(),
     },
+    update: {},
   });
   eventBus.emit(`task:${taskInstanceId}`, {
     type: level === 'error' ? 'error' : level === 'success' ? 'success' : 'info',
@@ -405,10 +407,10 @@ if (instructionPhase1) {
         const createdCount = vulnResult.summary.created || 0;
         const skippedCount = vulnResult.summary.skipped || 0;
 
+        // 仅更新 updatedAt，不再覆写 reportContent（原始安全报告需保留）
         await prisma.$executeRaw`
           UPDATE "CodeswarmTask"
-          SET "reportContent" = ${`漏洞提交成功: 创建 ${createdCount} 条, 跳过 ${skippedCount} 条`},
-              "updatedAt" = NOW()
+          SET "updatedAt" = NOW()
           WHERE "taskId" = ${taskId}
         `;
 
@@ -490,8 +492,9 @@ export async function POST(request: Request) {
     const taskInstance = txResult.taskInstance;
 
     if (taskInstance) {
-      await prisma.taskExecutionLog.create({
-        data: {
+      await prisma.taskExecutionLog.upsert({
+        where: { id: `log-${Date.now()}-complete` },
+        create: {
           id: `log-${Date.now()}-complete`,
           taskId: taskInstance.id,
           level: finalState === 'completed' ? 'success' : 'error',
@@ -499,6 +502,7 @@ export async function POST(request: Request) {
           details: error || '所有步骤已完成',
           timestamp: new Date(),
         },
+        update: {},
       });
 
       eventBus.emit(`task:${taskInstance.id}`, {

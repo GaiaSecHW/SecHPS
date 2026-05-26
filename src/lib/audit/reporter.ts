@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import type { SecurityAuditReport } from '@/types/audit';
+import { getBeijingHourMinutes } from '@/lib/beijing-time';
 
 export interface ReportOptions {
   startDate: Date;
@@ -216,8 +217,9 @@ function detectSuspiciousPatterns(logs: { action: string; userId: string | null;
   const sensitiveActions = ['user_delete', 'config_delete', 'role_assign_permission'];
   const sensitiveOps = logs.filter((log) => sensitiveActions.includes(log.action));
   const offHoursOps = sensitiveOps.filter((log) => {
-    const hour = log.createdAt.getHours();
-    return hour < 6 || hour > 22; // 非工作时间（22:00-6:00）
+    const hourMinutes = getBeijingHourMinutes(log.createdAt);
+    const hour = Math.floor(hourMinutes / 60);
+    return hour < 6 || hour > 22;
   });
 
   if (offHoursOps.length > 0) {

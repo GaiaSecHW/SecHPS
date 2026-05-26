@@ -22,8 +22,8 @@ model AgentApp {
   requireCodedmap   Boolean  @default(false)
   status            String   @default("active")
   isPublic          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime
+  createdAt         DateTime @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   Tenant            Tenant?  @relation(fields: [tenantId], references: [id])
   User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   ApiKeyAgents      ApiKeyAgent[]
@@ -50,8 +50,8 @@ model AgentDefinition {
   isActive        Boolean           @default(true)
   isBuiltin       Boolean           @default(false)
   isPublic        Boolean           @default(false)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime
+  createdAt       DateTime          @default(now()) @db.Timestamptz
+  updatedAt       DateTime @db.Timestamptz
   ModelConfig     ModelConfig?      @relation(fields: [modelConfigId], references: [id])
   User            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   Tenant          Tenant?           @relation(fields: [tenantId], references: [id])
@@ -70,11 +70,11 @@ model AgentMemberExecution {
   teamExecutionId    String
   memberId           String
   status             String             @default("pending")
-  startedAt          DateTime?
-  completedAt        DateTime?
+  startedAt          DateTime? @db.Timestamptz
+  completedAt        DateTime? @db.Timestamptz
   inputTokens        Int                @default(0)
   outputTokens       Int                @default(0)
-  createdAt          DateTime           @default(now())
+  createdAt          DateTime           @default(now()) @db.Timestamptz
   AgentTeamMember    AgentTeamMember    @relation(fields: [memberId], references: [id])
   AgentTeamExecution AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
 
@@ -94,8 +94,8 @@ model AgentTeam {
   maxTeammates       Int                  @default(5)
   status             String               @default("idle")
   ralphConfig        String?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime
+  createdAt          DateTime             @default(now()) @db.Timestamptz
+  updatedAt          DateTime @db.Timestamptz
   Tenant             Tenant?              @relation(fields: [tenantId], references: [id])
   AgentDefinition    AgentDefinition      @relation(fields: [leadAgentId], references: [id], onDelete: Cascade)
   User               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -114,11 +114,11 @@ model AgentTeamExecution {
   teamId               String
   evaluationId         String?
   status               String                 @default("pending")
-  startedAt            DateTime?
-  completedAt          DateTime?
+  startedAt            DateTime? @db.Timestamptz
+  completedAt          DateTime? @db.Timestamptz
   totalInputTokens     Int                    @default(0)
   totalOutputTokens    Int                    @default(0)
-  createdAt            DateTime               @default(now())
+  createdAt            DateTime               @default(now()) @db.Timestamptz
   AgentMemberExecution AgentMemberExecution[]
   EvaluationSession    EvaluationSession?     @relation(fields: [evaluationId], references: [id])
   AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -135,7 +135,7 @@ model AgentTeamMember {
   role                 String
   overrideModel        String?
   overrideTools        String?
-  createdAt            DateTime               @default(now())
+  createdAt            DateTime               @default(now()) @db.Timestamptz
   AgentMemberExecution AgentMemberExecution[]
   AgentDefinition      AgentDefinition        @relation(fields: [agentId], references: [id], onDelete: Cascade)
   AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -153,14 +153,14 @@ model AlertInstance {
   message          String
   value            Float
   threshold        Float
-  triggeredAt      DateTime  @default(now())
-  resolvedAt       DateTime?
-  acknowledgedAt   DateTime?
+  triggeredAt      DateTime  @default(now()) @db.Timestamptz
+  resolvedAt       DateTime? @db.Timestamptz
+  acknowledgedAt   DateTime? @db.Timestamptz
   acknowledgedBy   String?
   details          String?
   notifiedChannels String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  updatedAt        DateTime @db.Timestamptz
   AlertRule        AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@index([ruleId])
@@ -180,10 +180,10 @@ model AlertRule {
   cooldownPeriod       Int             @default(300)
   notificationChannels String
   tags                 String?
-  lastTriggeredAt      DateTime?
+  lastTriggeredAt      DateTime? @db.Timestamptz
   triggerCount         Int             @default(0)
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime
+  createdAt            DateTime        @default(now()) @db.Timestamptz
+  updatedAt            DateTime @db.Timestamptz
   AlertInstance        AlertInstance[]
 
   @@index([metricType])
@@ -217,10 +217,10 @@ model AnalysisReport {
   sessionManagement   String?
   securityConfig      String?
   authSummary         String?
-  analyzedAt          DateTime?
+  analyzedAt          DateTime? @db.Timestamptz
   rawContent          String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime
+  createdAt           DateTime          @default(now()) @db.Timestamptz
+  updatedAt           DateTime @db.Timestamptz
   EvaluationSession   EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   Project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -237,7 +237,7 @@ model AuditLog {
   details   String?
   ipAddress String?
   userAgent String?
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([userId])
   @@index([action])
@@ -257,11 +257,11 @@ model AutonomousEvolutionExperience {
   directSolution  String
   lesson          String
   isInjected      Boolean   @default(false)
-  injectedAt      DateTime?
+  injectedAt      DateTime? @db.Timestamptz
   hitCount        Int       @default(1)
   savedAttempts   Float     @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  updatedAt       DateTime @db.Timestamptz
 
   @@index([errorCategory])
   @@index([isInjected])
@@ -281,8 +281,8 @@ model AutonomousEvolutionRunLog {
   merged       Int       @default(0)
   status       String    @default("running")
   errorMessage String?
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
+  startedAt    DateTime  @default(now()) @db.Timestamptz
+  finishedAt   DateTime? @db.Timestamptz
 
   @@index([startedAt])
   @@index([trigger])
@@ -304,8 +304,8 @@ model CodeKnowledge {
   code       String?
   summary    String?
   riskScore  Float?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @db.Timestamptz
   Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -340,10 +340,10 @@ model CodeswarmTask {
   result            String?
   error             String?
   reportContent     String?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime
+  startedAt         DateTime? @db.Timestamptz
+  completedAt       DateTime? @db.Timestamptz
+  createdAt         DateTime         @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   CodeswarmWorker   CodeswarmWorker? @relation(fields: [workerId], references: [id])
 
   @@index([createdAt])
@@ -360,10 +360,10 @@ model CodeswarmWorker {
   status        String          @default("online")
   maxConcurrent Int             @default(5)
   currentTasks  Int             @default(0)
-  lastHeartbeat DateTime        @default(now())
+  lastHeartbeat DateTime        @default(now()) @db.Timestamptz
   token         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime
+  createdAt     DateTime        @default(now()) @db.Timestamptz
+  updatedAt     DateTime @db.Timestamptz
   CodeswarmTask CodeswarmTask[]
 }
 
@@ -374,7 +374,7 @@ model CodeswarmEvent {
   data      String
   level     String   @default("agent")   // 日志层级: "worker" | "agent"
   stream    String?                       // 输出流: "stdout" | "stderr" | null
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([taskId])
   @@index([taskId, createdAt])
@@ -391,7 +391,7 @@ model DataFlow {
   path        String
   isUserInput Boolean  @default(false)
   isSensitive Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.Timestamptz
   Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -404,8 +404,8 @@ model EvaluationIteration {
   evaluationSessionId  String
   iterationNumber      Int
   status               String            @default("pending")
-  startedAt            DateTime?
-  completedAt          DateTime?
+  startedAt            DateTime? @db.Timestamptz
+  completedAt          DateTime? @db.Timestamptz
   duration             Int?
   responseText         String?
   inputTokens          Int?
@@ -417,8 +417,8 @@ model EvaluationIteration {
   modelConfigId        String?
   modelName            String?
   roleId               String?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime
+  createdAt            DateTime          @default(now()) @db.Timestamptz
+  updatedAt            DateTime @db.Timestamptz
   EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
   ModelConfig          ModelConfig?      @relation(fields: [modelConfigId], references: [id])
 
@@ -440,7 +440,7 @@ model EvaluationResult {
   infoCount         Int               @default(0)
   skillsUsed        String?
   rawReport         String?
-  createdAt         DateTime          @default(now())
+  createdAt         DateTime          @default(now()) @db.Timestamptz
   EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 }
 
@@ -455,11 +455,11 @@ model EvaluationSession {
   title                     String?
   summary                   String?
   messageCount              Int                         @default(0)
-  lastActivity              DateTime?                   @default(now())
+  lastActivity              DateTime?                   @default(now()) @db.Timestamptz
   port                      Int?
   status                    String                      @default("running")
-  startedAt                 DateTime                    @default(now())
-  completedAt               DateTime?
+  startedAt                 DateTime                    @default(now()) @db.Timestamptz
+  completedAt               DateTime? @db.Timestamptz
   errorMessage              String?
   modelName                 String?
   providerType              String?
@@ -519,7 +519,7 @@ model EvolutionAttempt {
   remainingFalsePositive     String?
   isPassed                   Boolean            @default(false)
   status                     String             @default("pending")
-  createdAt                  DateTime           @default(now())
+  createdAt                  DateTime           @default(now()) @db.Timestamptz
   SkillEvolutionTask         SkillEvolutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([status])
@@ -538,8 +538,8 @@ model ExpectedOutputTemplate {
   isActive    Boolean  @default(true)
   isBuiltin   Boolean  @default(false)
   sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
 
   @@index([name])
   @@index([category])
@@ -552,7 +552,7 @@ model ExperienceUsageLog {
   evaluationId String
   projectId    String?
   source       String   @default("pre_injected")
-  usedAt       DateTime @default(now())
+  usedAt       DateTime @default(now()) @db.Timestamptz
 
   @@index([source])
   @@index([usedAt])
@@ -572,8 +572,8 @@ model FSMTemplate {
   version     String     @default("1.0.0")
   isActive    Boolean    @default(true)
   isBuiltin   Boolean    @default(false)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime   @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
   Workflow    Workflow[]
 
   @@index([name])
@@ -592,7 +592,7 @@ model IntegratedReport {
   findingsCount Int      @default(0)
   findings      String?
   rawContent    String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime @default(now()) @db.Timestamptz
   Report        Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
@@ -603,9 +603,9 @@ model LogFileRecord {
   id            String   @id
   filePath      String   @unique
   fileHash      String
-  processedAt   DateTime @default(now())
+  processedAt   DateTime @default(now()) @db.Timestamptz
   sequenceCount Int      @default(0)
-  updatedAt     DateTime
+  updatedAt     DateTime @db.Timestamptz
 
   @@index([filePath])
 }
@@ -625,9 +625,9 @@ model McpServerConfig {
   isEnabled    Boolean   @default(true)
   autoStart    Boolean   @default(false)
   isPublic     Boolean   @default(false)
-  lastTestedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime
+  lastTestedAt DateTime? @db.Timestamptz
+  createdAt    DateTime  @default(now()) @db.Timestamptz
+  updatedAt    DateTime @db.Timestamptz
   Tenant       Tenant?   @relation(fields: [tenantId], references: [id])
   User         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   Project      Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -655,8 +655,8 @@ model ModelConfig {
   isActive            Boolean               @default(true)
   isDefault           Boolean               @default(false)
   isPublic            Boolean               @default(false)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime
+  createdAt           DateTime              @default(now()) @db.Timestamptz
+  updatedAt           DateTime @db.Timestamptz
   AgentDefinition     AgentDefinition[]
   EvaluationIteration EvaluationIteration[]
   EvaluationSession   EvaluationSession[]
@@ -683,14 +683,14 @@ model NodeExecution {
   status              String            @default("pending")
   skipped             Boolean           @default(false)
   skipReason          String?
-  startedAt           DateTime?
-  completedAt         DateTime?
+  startedAt           DateTime? @db.Timestamptz
+  completedAt         DateTime? @db.Timestamptz
   order               Int               @default(0)
   modelConfigId       String?
   modelName           String?
   roleId              String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime
+  createdAt           DateTime          @default(now()) @db.Timestamptz
+  updatedAt           DateTime @db.Timestamptz
   opencodeSessionId   String?
   inputTokens         Int?
   outputTokens        Int?
@@ -713,8 +713,8 @@ model NotificationChannel {
   type      String
   config    String
   enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @db.Timestamptz
 
   @@index([type])
   @@index([enabled])
@@ -740,8 +740,8 @@ model OpencodeConfig {
   skillOutputTemplate      String?
   claudemdTemplate         String?
   maxConcurrentEvaluations Int       @default(3)
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime
+  createdAt                DateTime  @default(now()) @db.Timestamptz
+  updatedAt                DateTime @db.Timestamptz
   defaultToolPermissions   String?
   fileValidationModel      String?
   Project                  Project[]
@@ -757,8 +757,8 @@ model Permission {
   module      String
   action      String
   resource    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
   Role        Role[]
 
   @@unique([module, action])
@@ -776,11 +776,11 @@ model PhaseOutput {
   outputYaml        String
   outputPath        String
   status            String             @default("pending")
-  validatedAt       DateTime?
+  validatedAt       DateTime? @db.Timestamptz
   errorMessage      String?
   findingsCount     Int?               @default(0)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime
+  createdAt         DateTime           @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   EvaluationSession EvaluationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   WorkflowExecution WorkflowExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
@@ -806,8 +806,8 @@ model Plugin {
   icon        String?
   homepage    String?
   repository  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
 
   @@index([name])
   @@index([type])
@@ -832,8 +832,8 @@ model Project {
   adminPassword             String?
   normalUsername            String?
   normalPassword            String?
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime
+  createdAt                 DateTime                    @default(now()) @db.Timestamptz
+  updatedAt                 DateTime @db.Timestamptz
   techStack                 String?
   agentAppId                String?
   AnalysisReport            AnalysisReport[]
@@ -869,7 +869,7 @@ model ProjectFile {
   filePath   String
   fileSize   Float
   fileType   String
-  uploadedAt DateTime @default(now())
+  uploadedAt DateTime @default(now()) @db.Timestamptz
   Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -883,9 +883,9 @@ model ProjectStructure {
   codeCount     Int       @default(0)
   languageStats String
   status        String    @default("pending")
-  analyzedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime
+  analyzedAt    DateTime? @db.Timestamptz
+  createdAt     DateTime  @default(now()) @db.Timestamptz
+  updatedAt     DateTime @db.Timestamptz
   Project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -914,9 +914,9 @@ model Report {
   rawContent        String?
   skillsUsed        String?
   status            String             @default("generated")
-  generatedAt       DateTime           @default(now())
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime
+  generatedAt       DateTime           @default(now()) @db.Timestamptz
+  createdAt         DateTime           @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   IntegratedReport  IntegratedReport[]
   EvaluationSession EvaluationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -938,7 +938,7 @@ model ReportSection {
   contentPath String?
   content     String?
   metadata    String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.Timestamptz
   Report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@unique([reportId, sectionId])
@@ -951,8 +951,8 @@ model Role {
   name        String       @unique
   description String?
   isSystem    Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime     @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
   UserRole    UserRole[]
   Permission  Permission[]
 
@@ -966,7 +966,7 @@ model ScanReport {
   summary    String
   details    String
   format     String   @default("json")
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @db.Timestamptz
   ScanTask   ScanTask @relation(fields: [scanTaskId], references: [id], onDelete: Cascade)
 
   @@index([scanTaskId])
@@ -981,18 +981,18 @@ model ScanTask {
   description     String?
   skillIds        String
   schedule        String?
-  nextRunAt       DateTime?
+  nextRunAt       DateTime? @db.Timestamptz
   status          String           @default("pending")
-  startedAt       DateTime?
-  completedAt     DateTime?
+  startedAt       DateTime? @db.Timestamptz
+  completedAt     DateTime? @db.Timestamptz
   progress        Int              @default(0)
   currentSkill    String?
   totalSkills     Int              @default(0)
   completedSkills Int              @default(0)
   findingsCount   Int              @default(0)
   error           String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime
+  createdAt       DateTime         @default(now()) @db.Timestamptz
+  updatedAt       DateTime @db.Timestamptz
   ScanReport      ScanReport[]
   Project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   SkillExecution  SkillExecution[]
@@ -1011,7 +1011,7 @@ model SessionMessage {
   role                String
   content             String?
   messageRef          String?
-  createdAt           DateTime          @default(now())
+  createdAt           DateTime          @default(now()) @db.Timestamptz
   SkillExecution      SkillExecution?   @relation(fields: [skillExecutionId], references: [id], onDelete: Cascade)
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
@@ -1033,7 +1033,7 @@ model SessionMeta {
   runningCount   Int      @default(0)
   completedCount Int      @default(0)
   failedCount    Int      @default(0)
-  updatedAt      DateTime
+  updatedAt      DateTime @db.Timestamptz
   Project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
@@ -1061,8 +1061,8 @@ model Skill {
   referenceCount                                         Int                         @default(0)
   vulnerabilityCount                                     Int                         @default(0)
   successExecCount                                       Int                         @default(0)
-  createdAt                                              DateTime                    @default(now())
-  updatedAt                                              DateTime
+  createdAt                                              DateTime                    @default(now()) @db.Timestamptz
+  updatedAt                                              DateTime @db.Timestamptz
   categoryId                                             String                    @default("cat-vulnerability-mining")
   vulnerabilityTreeId                                    String?
   SkillCategory                                          SkillCategory               @relation(fields: [categoryId], references: [id])
@@ -1121,8 +1121,8 @@ model Skill2 {
   referenceCount                                         Int                         @default(0)
   vulnerabilityCount                                     Int                         @default(0)
   successExecCount                                       Int                         @default(0)
-  createdAt                                              DateTime                    @default(now())
-  updatedAt                                              DateTime
+  createdAt                                              DateTime                    @default(now()) @db.Timestamptz
+  updatedAt                                              DateTime @db.Timestamptz
   categoryId                                             String                    @default("cat-vulnerability-mining")
   vulnerabilityTreeId                                    String?
   SkillCategory                                          SkillCategory               @relation(fields: [categoryId], references: [id])
@@ -1165,8 +1165,8 @@ model SkillCategory {
   sortOrder       Int      @default(0)
   isActive        Boolean  @default(true)
   hasSubDimension Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @db.Timestamptz
   Skill           Skill[]
   Skill2          Skill2[]
 
@@ -1183,8 +1183,8 @@ model VulnerabilityTree {
   description String?
   sortOrder   Int               @default(0)
   isActive    Boolean           @default(true)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime          @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
   VulnerabilityTree VulnerabilityTree?  @relation("VulnerabilityTreeToTree", fields: [parentId], references: [id])
   other_VulnerabilityTree VulnerabilityTree[] @relation("VulnerabilityTreeToTree")
   Skill       Skill[]
@@ -1202,8 +1202,8 @@ model ProductTag {
   displayName String
   description String?
   isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
   SkillProductTag SkillProductTag[]
   SkillProductTag2 SkillProductTag2[]
 
@@ -1239,11 +1239,11 @@ model SkillAnalysis {
   inferredVulnPatternId String?
   reviewStatus          String    @default("pending")
   reviewedBy            String?
-  reviewedAt            DateTime?
+  reviewedAt            DateTime? @db.Timestamptz
   reviewNotes           String?
-  analyzedAt            DateTime  @default(now())
+  analyzedAt            DateTime  @default(now()) @db.Timestamptz
   analyzedBy            String    @default("system")
-  createdAt             DateTime  @default(now())
+  createdAt             DateTime  @default(now()) @db.Timestamptz
   entryPointComparison  String?
   Skill                 Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
@@ -1261,11 +1261,11 @@ model SkillDuplicateGroup {
   status                    String                      @default("pending_review")
   resolution                String?
   resolvedBy                String?
-  resolvedAt                DateTime?
+  resolvedAt                DateTime? @db.Timestamptz
   resolutionNotes           String?
   skillCount                Int                         @default(0)
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime
+  createdAt                 DateTime                    @default(now()) @db.Timestamptz
+  updatedAt                 DateTime @db.Timestamptz
   SkillDuplicateGroupMember SkillDuplicateGroupMember[]
 
   @@index([status])
@@ -1279,7 +1279,7 @@ model SkillDuplicateGroupMember {
   skillId             String
   role                String              @default("member")
   similarityScore     Float               @default(0)
-  joinedAt            DateTime            @default(now())
+  joinedAt            DateTime            @default(now()) @db.Timestamptz
   SkillDuplicateGroup SkillDuplicateGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   Skill               Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
@@ -1300,7 +1300,7 @@ model SkillEvolution {
   reason      String
   beforeRate  Float?
   afterRate   Float?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime @default(now()) @db.Timestamptz
   Skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@index([skillId])
@@ -1319,7 +1319,7 @@ model SkillEvolutionConfig {
   maxDescriptionLength Int      @default(200)
   codeSnippetLines     Int      @default(6)
   isActive             Boolean  @default(true)
-  updatedAt            DateTime
+  updatedAt            DateTime @db.Timestamptz
 }
 
 model SkillEvolutionPrompt {
@@ -1329,8 +1329,8 @@ model SkillEvolutionPrompt {
   description String?
   content     String
   isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
 
   @@index([isActive])
   @@index([promptKey])
@@ -1349,8 +1349,8 @@ model SkillEvolutionTask {
   newVersionId       String?
   precisionAfter     Float?
   recallAfter        Float?
-  createdAt          DateTime           @default(now())
-  completedAt        DateTime?
+  createdAt          DateTime           @default(now()) @db.Timestamptz
+  completedAt        DateTime? @db.Timestamptz
   EvolutionAttempt   EvolutionAttempt[]
   Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
   SkillImprovement   SkillImprovement?
@@ -1371,8 +1371,8 @@ model SkillExecution {
   input              String
   output             String?
   status             String             @default("pending")
-  startedAt          DateTime?
-  completedAt        DateTime?
+  startedAt          DateTime? @db.Timestamptz
+  completedAt        DateTime? @db.Timestamptz
   duration           Int?
   error              String?
   findingsCount      Int                @default(0)
@@ -1380,7 +1380,7 @@ model SkillExecution {
   falsePositiveCount Int                @default(0)
   inputTokens        Int?
   outputTokens       Int?
-  createdAt          DateTime           @default(now())
+  createdAt          DateTime           @default(now()) @db.Timestamptz
   SessionMessage     SessionMessage[]
   ScanTask           ScanTask?          @relation(fields: [scanTaskId], references: [id])
   Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1407,8 +1407,8 @@ model SkillGovernanceConfig {
   description    String?
   isActive       Boolean  @default(true)
   isBuiltin      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @db.Timestamptz
 
   @@index([isActive])
   @@index([configKey])
@@ -1424,7 +1424,7 @@ model SkillImprovement {
   suggestions        String?
   improvedContent    String?
   status             String              @default("pending")
-  createdAt          DateTime            @default(now())
+  createdAt          DateTime            @default(now()) @db.Timestamptz
   Skill              Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
   SkillEvolutionTask SkillEvolutionTask? @relation(fields: [taskId], references: [id])
 
@@ -1441,15 +1441,15 @@ model SkillMergeRecord {
   mergeDetails                                String?
   status                                      String    @default("pending")
   approvedBy                                  String?
-  approvedAt                                  DateTime?
-  completedAt                                 DateTime?
-  revertedAt                                  DateTime?
+  approvedAt                                  DateTime? @db.Timestamptz
+  completedAt                                 DateTime? @db.Timestamptz
+  revertedAt                                  DateTime? @db.Timestamptz
   sourceOwnerConsent                          Boolean   @default(false)
   targetOwnerConsent                          Boolean   @default(false)
   mergedBy                                    String?
-  mergedAt                                    DateTime?
-  createdAt                                   DateTime  @default(now())
-  updatedAt                                   DateTime
+  mergedAt                                    DateTime? @db.Timestamptz
+  createdAt                                   DateTime  @default(now()) @db.Timestamptz
+  updatedAt                                   DateTime @db.Timestamptz
   Skill_SkillMergeRecord_targetSkillIdToSkill Skill     @relation("SkillMergeRecord_targetSkillIdToSkill", fields: [targetSkillId], references: [id])
   Skill_SkillMergeRecord_sourceSkillIdToSkill Skill     @relation("SkillMergeRecord_sourceSkillIdToSkill", fields: [sourceSkillId], references: [id])
 
@@ -1469,11 +1469,11 @@ model SkillNewImpactAnalysis {
   recommendation       String?
   recommendationReason String?
   status               String    @default("pending")
-  analyzedAt           DateTime?
-  actionedAt           DateTime?
+  analyzedAt           DateTime? @db.Timestamptz
+  actionedAt           DateTime? @db.Timestamptz
   createdBy            String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime
+  createdAt            DateTime  @default(now()) @db.Timestamptz
+  updatedAt            DateTime @db.Timestamptz
   Skill                Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
@@ -1491,11 +1491,11 @@ model SkillObservationLog {
   issues         String?
   severity       String    @default("info")
   status         String    @default("pending")
-  resolvedAt     DateTime?
+  resolvedAt     DateTime? @db.Timestamptz
   resolvedBy     String?
   resolution     String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  updatedAt      DateTime @db.Timestamptz
   Skill          Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@index([skillId, createdAt])
@@ -1517,10 +1517,10 @@ model SkillObservationStats {
   warningRate       Float?
   avgResponseTime   Int?
   avgMatchScore     Float?
-  firstObservedAt   DateTime?
-  lastObservedAt    DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime
+  firstObservedAt   DateTime? @db.Timestamptz
+  lastObservedAt    DateTime? @db.Timestamptz
+  createdAt         DateTime  @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@index([matchRate])
@@ -1538,7 +1538,7 @@ model SkillPrediction {
   method            String
   workflowTechStack String?
   matchCount        Int      @default(0)
-  createdAt         DateTime @default(now())
+  createdAt         DateTime @default(now()) @db.Timestamptz
   User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
@@ -1560,11 +1560,11 @@ model SkillPredictionTask {
   matches           String?
   method            String?
   matchCount        Int?
-  startedAt         DateTime?
-  completedAt       DateTime?
+  startedAt         DateTime? @db.Timestamptz
+  completedAt       DateTime? @db.Timestamptz
   duration          Int?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime
+  createdAt         DateTime  @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   nodeId            String?
   governanceWarning String?
   User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1586,7 +1586,7 @@ model SkillVulnerabilityMapping {
   projectId         String
   skillNameReported String?
   matchType         String            @default("exact")
-  matchedAt         DateTime          @default(now())
+  matchedAt         DateTime          @default(now()) @db.Timestamptz
   Skill             Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
   Vulnerability     Vulnerability     @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
   EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
@@ -1605,8 +1605,8 @@ model SystemConfig {
   key         String   @unique
   value       String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
 
   @@index([key])
 }
@@ -1617,7 +1617,7 @@ model SystemMetric {
   type       String
   value      Float
   tags       String?
-  recordedAt DateTime @default(now())
+  recordedAt DateTime @default(now()) @db.Timestamptz
 
   @@index([type])
   @@index([name])
@@ -1627,11 +1627,11 @@ model SystemMetric {
 model TaskExecutionLog {
   id           String       @id
   taskId       String
-  timestamp    DateTime     @default(now())
+  timestamp    DateTime     @default(now()) @db.Timestamptz
   level        String
   message      String
   details      String?
-  createdAt    DateTime     @default(now())
+  createdAt    DateTime     @default(now()) @db.Timestamptz
   TaskInstance TaskInstance @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([timestamp])
@@ -1657,16 +1657,16 @@ model TaskInstance {
   targetProduct    String?
   status           String             @default("pending")
   isPublic         Boolean            @default(false)
-  startedAt        DateTime?
-  completedAt      DateTime?
+  startedAt        DateTime? @db.Timestamptz
+  completedAt      DateTime? @db.Timestamptz
   errorMessage     String?
   mergedSkills     String?
   mergedScripts    String?
   executionResult  String?
   reportPath       String?
   codeswarmTaskId  String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime
+  createdAt        DateTime           @default(now()) @db.Timestamptz
+  updatedAt        DateTime @db.Timestamptz
   TaskExecutionLog TaskExecutionLog[]
   Vulnerability    Vulnerability[]
   Tenant           Tenant?            @relation(fields: [tenantId], references: [id])
@@ -1689,8 +1689,8 @@ model TechStackOption {
   isActive    Boolean  @default(true)
   isBuiltin   Boolean  @default(false)
   sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
 
   @@index([name])
   @@index([category])
@@ -1702,8 +1702,8 @@ model Tenant {
   name            String
   slug            String            @unique
   isIcsTenant     Boolean           @default(false)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime
+  createdAt       DateTime          @default(now()) @db.Timestamptz
+  updatedAt       DateTime @db.Timestamptz
   AgentApp        AgentApp[]
   AgentDefinition AgentDefinition[]
   AgentTeam       AgentTeam[]
@@ -1732,13 +1732,13 @@ model TokenUsage {
   cachedTokens       Int?
   requestPreview     String?
   responsePreview    String?
-  requestStartedAt   DateTime           @default(now())
-  requestCompletedAt DateTime?
+  requestStartedAt   DateTime           @default(now()) @db.Timestamptz
+  requestCompletedAt DateTime? @db.Timestamptz
   durationMs         Int?
   estimatedCost      Float?
   status             String             @default("success")
   errorMessage       String?
-  createdAt          DateTime           @default(now())
+  createdAt          DateTime           @default(now()) @db.Timestamptz
   userId             String?
   username           String?
   EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
@@ -1767,8 +1767,8 @@ model Tool {
   timeout            Int      @default(600000)
   isActive           Boolean  @default(true)
   isBuiltin          Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime
+  createdAt          DateTime @default(now()) @db.Timestamptz
+  updatedAt          DateTime @db.Timestamptz
 
   @@index([category])
   @@index([isActive])
@@ -1780,8 +1780,8 @@ model ToolPermission {
   toolPattern String
   permission  String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @db.Timestamptz
   Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, toolPattern])
@@ -1798,8 +1798,8 @@ model User {
   tenantId                                     String?
   isActive                                     Boolean               @default(true)
   mustChangePassword                           Boolean               @default(false)
-  createdAt                                    DateTime              @default(now())
-  updatedAt                                    DateTime
+  createdAt                                    DateTime              @default(now()) @db.Timestamptz
+  updatedAt                                    DateTime @db.Timestamptz
   AgentApp                                     AgentApp[]
   AgentDefinition                              AgentDefinition[]
   AgentTeam                                    AgentTeam[]
@@ -1829,7 +1829,7 @@ model UserRole {
   id        String   @id
   userId    String
   roleId    String
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz
   User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   Role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
@@ -1859,14 +1859,14 @@ model Vulnerability {
   status                    String                      @default("new")
   falsePositiveReason       String?
   confirmedBy               String?
-  confirmedAt               DateTime?
+  confirmedAt               DateTime? @db.Timestamptz
   fixedBy                   String?
-  fixedAt                   DateTime?
+  fixedAt                   DateTime? @db.Timestamptz
   verifiedBy                String?
-  verifiedAt                DateTime?
+  verifiedAt                DateTime? @db.Timestamptz
   notes                     String?
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime
+  createdAt                 DateTime                    @default(now()) @db.Timestamptz
+  updatedAt                 DateTime @db.Timestamptz
   SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   TaskInstance              TaskInstance?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
   Project                   Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1894,8 +1894,8 @@ model VulnerabilityCategory {
   description          String?
   sortOrder            Int                    @default(0)
   isActive             Boolean                @default(true)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
+  createdAt            DateTime               @default(now()) @db.Timestamptz
+  updatedAt            DateTime @db.Timestamptz
   VulnerabilityPattern VulnerabilityPattern[]
 
   @@index([isActive])
@@ -1917,8 +1917,8 @@ model VulnerabilityPattern {
   fixGuidance           String?
   isActive              Boolean               @default(true)
   isBuiltin             Boolean               @default(true)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime
+  createdAt             DateTime              @default(now()) @db.Timestamptz
+  updatedAt             DateTime @db.Timestamptz
   VulnerabilityCategory VulnerabilityCategory @relation(fields: [categoryId], references: [id])
 
   @@index([isActive])
@@ -1939,8 +1939,8 @@ model Workflow {
   isPublic          Boolean             @default(false)
   workflowType      String              @default("dag")
   fsmTemplateId     String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime
+  createdAt         DateTime            @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   Tenant            Tenant?             @relation(fields: [tenantId], references: [id])
   FSMTemplate       FSMTemplate?        @relation(fields: [fsmTemplateId], references: [id])
   User              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1970,7 +1970,7 @@ model WorkflowEdge {
   targetHandle                                     String?
   label                                            String?
   data                                             String?
-  createdAt                                        DateTime     @default(now())
+  createdAt                                        DateTime     @default(now()) @db.Timestamptz
   WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
   WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
   Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -1987,12 +1987,12 @@ model WorkflowExecution {
   userId                String
   status                String                  @default("pending")
   roleModels            String?
-  startedAt             DateTime                @default(now())
-  completedAt           DateTime?
+  startedAt             DateTime                @default(now()) @db.Timestamptz
+  completedAt           DateTime? @db.Timestamptz
   error                 String?
   result                String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime
+  createdAt             DateTime                @default(now()) @db.Timestamptz
+  updatedAt             DateTime @db.Timestamptz
   PhaseOutput           PhaseOutput[]
   User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -2010,13 +2010,13 @@ model WorkflowExecutionStep {
   executionId       String
   nodeId            String
   status            String            @default("pending")
-  startedAt         DateTime?
-  completedAt       DateTime?
+  startedAt         DateTime? @db.Timestamptz
+  completedAt       DateTime? @db.Timestamptz
   input             String?
   output            String?
   error             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime
+  createdAt         DateTime          @default(now()) @db.Timestamptz
+  updatedAt         DateTime @db.Timestamptz
   WorkflowExecution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   @@index([status])
@@ -2034,8 +2034,8 @@ model WorkflowNode {
   data                                             String
   vulnerabilityCategories                          String?
   skills                                           String?
-  createdAt                                        DateTime       @default(now())
-  updatedAt                                        DateTime
+  createdAt                                        DateTime       @default(now()) @db.Timestamptz
+  updatedAt                                        DateTime @db.Timestamptz
   fsmFixed                                         Boolean?       @default(false)
   fsmOrder                                         Int?
   fsmPhase                                         Int?
@@ -2059,8 +2059,8 @@ model WorkflowRole {
   description  String?
   color        String?
   order        Int            @default(0)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime
+  createdAt    DateTime       @default(now()) @db.Timestamptz
+  updatedAt    DateTime @db.Timestamptz
   WorkflowNode WorkflowNode[]
   Workflow     Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
@@ -2073,8 +2073,8 @@ model WorkflowShare {
   sharedBy                            String
   sharedWith                          String
   permission                          String    @default("read")
-  expiresAt                           DateTime?
-  createdAt                           DateTime  @default(now())
+  expiresAt                           DateTime? @db.Timestamptz
+  createdAt                           DateTime  @default(now()) @db.Timestamptz
   User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
   User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
   Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -2093,9 +2093,9 @@ model ApiKey {
   tenantId          String?
   userId            String
   rateLimitInterval Int           @default(1)
-  lastUsedAt        DateTime?
-  revokedAt         DateTime?
-  createdAt         DateTime      @default(now())
+  lastUsedAt        DateTime? @db.Timestamptz
+  revokedAt         DateTime? @db.Timestamptz
+  createdAt         DateTime      @default(now()) @db.Timestamptz
 
   allowedAgents     ApiKeyAgent[]
   tenant            Tenant?       @relation(fields: [tenantId], references: [id])
@@ -2129,8 +2129,8 @@ model AgentFlowPipeline {
   tenantId   String?
   isPublic   Boolean   @default(false)
   userId     String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @db.Timestamptz
   AgentApp   AgentApp? @relation(fields: [agentAppId], references: [id])
   Tenant     Tenant?   @relation(fields: [tenantId], references: [id])
   User       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2148,12 +2148,12 @@ model LocalTestRecord {
   result              String?
   error               String?
   parsedVulnerabilities String?
-  startedAt           DateTime?
-  completedAt         DateTime?
+  startedAt           DateTime? @db.Timestamptz
+  completedAt         DateTime? @db.Timestamptz
   durationMs          Int?
   uploadedFilePath   String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime  @default(now()) @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @db.Timestamptz
 
   @@index([createdAt])
   @@index([status])
@@ -2167,8 +2167,8 @@ model SessionExtractHistory {
   skillsCount     Int      @default(0)
   toolsCount      Int      @default(0)
   messageCount    Int      @default(0)
-  lastActivity    DateTime
-  extractedAt     DateTime  @default(now())
+  lastActivity    DateTime @db.Timestamptz
+  extractedAt     DateTime  @default(now()) @db.Timestamptz
   rawData         String?   @db.Text
   
   @@index([sessionId])

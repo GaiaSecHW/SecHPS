@@ -240,14 +240,16 @@ export async function POST(
       }
     }
 
-    await prisma.taskExecutionLog.create({
-      data: {
+    await prisma.taskExecutionLog.upsert({
+      where: { id: `log-${Date.now()}` },
+      create: {
         id: `log-${Date.now()}`,
         taskId: id,
         level: 'info',
         message: 'CodeSwarm 任务已分发',
         details: `taskId: ${codeswarmTaskId}, redis: ${redisSubmitted}`,
       },
+      update: {},
     });
 
     eventBus.emit(`task:${id}`, {

@@ -614,14 +614,15 @@ export class WorkerDaemon {
 
   /** Read security report files from the workspace. */
   private collectReport(workspace: string): string | undefined {
-    const candidates = [
+    // Phase 1: 具名路径（原有逻辑）
+    const namedCandidates = [
       path.join(workspace, 'reports.jsonl'),
       path.join(workspace, 'code', 'reports.jsonl'),
       path.join(workspace, '.security', 'reports.jsonl'),
       path.join(workspace, 'code', '.security', 'reports.jsonl'),
       path.join(workspace, '.security', 'report.md'),
     ];
-    for (const candidate of candidates) {
+    for (const candidate of namedCandidates) {
       if (fs.existsSync(candidate)) {
         try {
           return fs.readFileSync(candidate, 'utf-8');
@@ -630,6 +631,27 @@ export class WorkerDaemon {
         }
       }
     }
+
+    // Phase 2: 扫描 Report/report 目录（与 Orchestrator 的 findReportFolder 逻辑对齐）
+    const reportDirs = [path.join(workspace, 'Report'), path.join(workspace, 'report')];
+    const reportFileExts = ['.md', '.json', '.jsonl', '.txt', '.html'];
+    for (const dir of reportDirs) {
+      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          const ext = path.extname(entry.name).toLowerCase();
+          if (!reportFileExts.includes(ext)) continue;
+          const filePath = path.join(dir, entry.name);
+          try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            if (content.trim().length > 0) return content;
+          } catch { continue; }
+        }
+      } catch { continue; }
+    }
+
     return undefined;
   }
 

@@ -170,7 +170,7 @@ export async function POST(request: Request) {
         }
 
         if (logsToCreate.length > 0) {
-          await prisma.taskExecutionLog.createMany({ data: logsToCreate }).catch((e: Error) =>
+          await prisma.taskExecutionLog.createMany({ data: logsToCreate, skipDuplicates: true }).catch((e: Error) =>
             logger.error(LOG_MODULES.CODESWARM, '创建执行日志失败', { details: { error: e instanceof Error ? e.message : String(e) } })
           );
         }
