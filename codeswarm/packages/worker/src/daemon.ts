@@ -644,7 +644,7 @@ export class WorkerDaemon {
   /** Read security report files from the workspace. */
   private collectReport(workspace: string): string | undefined {
     const reportDir = path.join(workspace, 'Report');
-    const reportFileExts = ['.md', '.json', '.jsonl', '.txt', '.html'];
+    const reportFileExts = [ '.json','.md', '.jsonl', '.txt', '.html'];
     
     if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) {
       return undefined;
