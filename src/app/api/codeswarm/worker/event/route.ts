@@ -120,6 +120,10 @@ export async function POST(request: Request) {
             message = '错误';
             details = eventData.message || eventData.error || '';
             level = 'error';
+          } else if (eventType === 'phase_error') {
+            message = '阶段错误';
+            details = eventData.message || eventData.error || '';
+            level = 'warn';
           } else if (eventType === 'progress') {
             message = '进度';
             details = content;

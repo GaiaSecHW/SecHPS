@@ -44,9 +44,9 @@ export type AgentEventType =
   | 'tool_call'
   | 'tool_call_update'
   | 'error'
+  | 'phase_error'        // 非致命阶段级错误（如标题生成失败）
   | 'phase_start'
   | 'phase_complete'
-  | 'phase_error'
   | 'log_chunk'
   | 'session_created'
   | 'skill_start'
@@ -360,14 +360,16 @@ export class ProcessManager {
           }
         },
         error: (message: string) => {
-          if (inactivityTimer) clearTimeout(inactivityTimer);
+if (inactivityTimer) clearTimeout(inactivityTimer);
           inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
-          console.log(`[ProcessMgr] EVENT error: ${message}`);
+          const classified = classifyAcpError(message);
+          console.log(`[ProcessMgr] EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
           stderr += message;
           if (onEvent) {
             onEvent({
-              type: 'error',
+              type: classified.isCritical ? 'error' : 'phase_error',
               message,
+              phase: classified.category,
               timestamp: new Date().toISOString(),
             });
           }
@@ -495,20 +497,33 @@ export class ProcessManager {
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      const classified = classifyAcpError(errorMsg);
       console.log(`[ProcessMgr] ========== RUN AGENT ERROR ==========`);
       console.log(`[ProcessMgr] Error: ${errorMsg}`);
+      console.log(`[ProcessMgr] Error category: ${classified.category}, isCritical: ${classified.isCritical}`);
+      console.log(`[ProcessMgr] stdout length: ${stdout.length}, hasSubstantialOutput: ${hasSubstantialOutput(stdout)}`);
       console.log(`[ProcessMgr] Error stack: ${error instanceof Error ? error.stack : 'no stack'}`);
 
-      if (!inactivityTimeoutTriggered) {
+if (!inactivityTimeoutTriggered) {
         stderr += errorMsg;
+      }
 
-        if (onEvent) {
-          onEvent({
-            type: 'error',
-            message: errorMsg,
-            timestamp: new Date().toISOString(),
-          });
-        }
+      if (onEvent) {
+        onEvent({
+          type: classified.isCritical ? 'error' : 'phase_error',
+          message: errorMsg,
+          phase: classified.category,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (hasSubstantialOutput(stdout) && !classified.isCritical) {
+        console.log(`[ProcessMgr] Non-critical error after substantial output — marking as partially successful`);
+        return {
+          exitCode: 0,
+          stdout,
+          stderr,
+        };
       }
 
       return {
@@ -660,4 +675,45 @@ function inferSkillNameFromContext(textBuffer: string[]): string | null {
   if (lastWord && lastWord.length > 0) return lastWord[lastWord.length - 1];
 
   return null;
+}
+
+// ============================================================================
+// Error Classification for Exception Isolation
+// ============================================================================
+
+export interface ClassifiedError {
+  isCritical: boolean;
+  category: 'title_generation' | 'rate_limit' | 'task_logic' | 'unknown';
+  rawMessage: string;
+}
+
+/**
+ * Classify ACP/LLM errors to distinguish critical task errors from non-critical
+ * post-task operations (e.g., title generation failures).
+ *
+ * Non-critical errors should NOT cascade to affect the main task status.
+ */
+export function classifyAcpError(message: string): ClassifiedError {
+  // Title generation related errors → non-critical
+  if (/title.*generat|generat.*title|session.*title|title.*generator/i.test(message)) {
+    return { isCritical: false, category: 'title_generation', rawMessage: message };
+  }
+
+  // AI Retry / Rate limit / FreeUsageLimitError → context-dependent
+  // If occurs after substantial output, treat as non-critical (likely post-task)
+  if (/AI_RetryError|RetryError|rate.*limit|429|FreeUsageLimitError/i.test(message)) {
+    return { isCritical: false, category: 'rate_limit', rawMessage: message };
+  }
+
+  // Default: treat unknown errors as critical (conservative)
+  return { isCritical: true, category: 'unknown', rawMessage: message };
+}
+
+/**
+ * Check if stdout contains substantial output (indicating main task completed).
+ * Used to determine if a post-task error should be tolerated.
+ */
+export function hasSubstantialOutput(stdout: string, minLength = 100): boolean {
+  const stripped = stdout.replace(/\s+/g, '').trim();
+  return stripped.length >= minLength;
 }
