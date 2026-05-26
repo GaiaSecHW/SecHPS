@@ -14,13 +14,36 @@ import fs from 'node:fs';
 
 /**
  * 获取 inner_skills 目录的绝对路径
- * 基于 process.cwd()（Next.js 项目根目录）定位
+ *
+ * 搜索策略：
+ * 1. 环境变量 INNER_SKILLS_DIR（生产环境可显式配置）
+ * 2. process.cwd()/inner_skills（开发模式或 standalone 已由 postbuild 复制）
+ * 3. process.cwd()/../../inner_skills（standalone 模式 .next/standalone/server.js 的常见嵌套深度）
+ *
+ * postbuild.js 会将 inner_skills/ 复制到 .next/standalone/inner_skills/，
+ * 但某些部署场景 process.cwd() 可能不在项目根或 standalone 根，
+ * 因此增加多路径回退确保找到 skill 文件。
  */
 export function getInnerSkillsDir(): string {
-  // Next.js standalone 模式：server.js 在 .next/standalone/ 下，需要往上找项目根
-  // 开发模式：process.cwd() 就是项目根
-  const projectRoot = process.cwd();
-  return path.join(projectRoot, 'inner_skills');
+  // 1. 环境变量显式指定（最可靠）
+  if (process.env.INNER_SKILLS_DIR) {
+    return process.env.INNER_SKILLS_DIR;
+  }
+
+  // 2. 常见路径候选：逐一检测，返回第一个存在的
+  const candidates = [
+    path.join(process.cwd(), 'inner_skills'),                        // 开发模式 / standalone 已复制
+    path.join(process.cwd(), '..', '..', 'inner_skills'),            // .next/standalone/ 嵌套
+  ];
+
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) {
+      return dir;
+    }
+  }
+
+  // 3. 所有候选都不存在时，返回默认路径（后续 getInnerSkillNames 会检测并 warn）
+  return path.join(process.cwd(), 'inner_skills');
 }
 
 /**
