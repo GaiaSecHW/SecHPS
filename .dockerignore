@@ -1,14 +1,12 @@
-# .dockerignore for SecHPS Server
-# Build context: project root (docker build -f Dockerfile.server .)
+# .dockerignore for SecHPS Worker image
+# Build: docker build -f Dockerfile.worker .
 #
-# Note: CodeSwarm Worker uses codeswarm/.dockerignore (separate context)
+# Worker needs codeswarm/ (worker source + codedmap plugin) in build context,
+# but does NOT need src/, prisma/, or other server-only code.
 
-# === Rebuilt in Docker (not needed in build context) ===
+# === Rebuilt in Docker ===
 .next
 node_modules
-
-# === Separate Docker image (worker has its own build) ===
-codeswarm/
 
 # === Version control ===
 .git
@@ -21,12 +19,12 @@ codeswarm/
 .claude/
 .omc/
 
-# === Secrets (must never be in image) ===
+# === Secrets ===
 .env
 .env.local
 .env.example
 
-# === Runtime data (mounted as volumes at deploy time) ===
+# === Runtime data ===
 data/
 uploads/
 skill_management/
@@ -39,9 +37,8 @@ test-skills-output/
 app.log
 worker.log
 
-# === Scripts (only postbuild.js needed for build, rest excluded) ===
-scripts/*
-!scripts/postbuild.js
+# === Scripts (not needed for worker) ===
+scripts/
 
 # === Dev/test artifacts ===
 docs/
@@ -54,6 +51,10 @@ test-project/
 test-results/
 test-outputs/
 
+# === SecHPS Server code (not needed for worker) ===
+src/
+prisma/
+
 # === Misc ===
 /*.md
 *.zip
@@ -65,3 +66,4 @@ prod_dev.db
 tsconfig.tsbuildinfo
 temp-*
 session-ses_*.md
+Dockerfile.server
