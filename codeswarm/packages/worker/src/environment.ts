@@ -276,11 +276,9 @@ export class EnvironmentFactory {
         progress(`Step 2: 跳过 opencode.json 检查 (claudecode engine)`);
       }
 
-      // Write .opencode/.npmrc (offline=true) — prevent opencode from installing npm packages
+      // Ensure .opencode directory exists (skills, session data etc.)
       const opencodeDir = path.join(actualWorkspacePath, '.opencode');
       fs.mkdirSync(opencodeDir, { recursive: true });
-      fs.writeFileSync(path.join(opencodeDir, '.npmrc'), 'offline=true\n');
-      progress(`写入 .opencode/.npmrc (offline=true)`);
 
       progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
       return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate, model: payload.model };
@@ -307,8 +305,8 @@ export class EnvironmentFactory {
       const skillsDir = path.join(workspacePath, '.opencode', 'skills');
       fs.mkdirSync(skillsDir, { recursive: true });
 
-      // Write .opencode/.npmrc (offline=true) — prevent opencode from installing npm packages
-      fs.writeFileSync(path.join(workspacePath, '.opencode', '.npmrc'), 'offline=true\n');
+      // (Removed .npmrc offline=true — it blocks opencode from loading cached npm
+      //  provider packages like @ai-sdk/openai-compatible, causing "Internal error")
 
       // Step 4: Copy skill files
       if (payload.skills && payload.skills.length > 0) {
