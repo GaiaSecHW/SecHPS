@@ -63,9 +63,11 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
   if (apiBaseUrl) {
     const customProviderId = `custom-${deriveProviderId(model)}`;
     const modelId = extractModelId(model);
-    // Use raw model name (e.g. "zai-org/GLM-5.1-180k-MAAS") for team permission matching
-    // Provider key uses "custom-" prefix to distinguish from built-in providers
-    config.model = model;
+    // Model reference format: "provider_id/model_key" where provider_id = customProviderId,
+    // model_key = raw model name (e.g. "MiniMax/MiniMax-M2.5").
+    // opencode resolves this as: provider "custom-MiniMax", model key "MiniMax/MiniMax-M2.5"
+    // This matches examples like "alibaba-cn/MiniMax/MiniMax-M2.7" from opencode models list.
+    config.model = `${customProviderId}/${model}`;
     if (apiKey) {
       config.provider = {
         ...(config.provider || {}),
@@ -84,9 +86,11 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
       };
     }
   } else {
-    config.model = model;
+    // For built-in providers, provider ID must match opencode's naming convention (lowercase)
+    const providerId = deriveProviderId(model).toLowerCase();
+    const modelId = extractModelId(model);
+    config.model = `${providerId}/${modelId}`;
     if (apiKey) {
-      const providerId = deriveProviderId(model);
       if (providerId) {
         config.provider = {
           ...(config.provider || {}),
