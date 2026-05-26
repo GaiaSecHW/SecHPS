@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 const STREAM_KEY = 'codeswarm:task:queue';
-const WAITING_KEY = 'codeswarm:task:waiting';
 const CONSUMER_GROUP = 'dispatcher';
 const CONSUMER_NAME = `dispatcher-${process.pid}`;
 
@@ -279,16 +278,6 @@ const taskPayload = JSON.stringify({
       },
       data: { currentTasks: { decrement: 1 } },
     }).catch(() => {});
-
-    // Worker 空出来了，从等待队列取下一个任务
-    const waitingTaskId = await this.redis?.lpop(WAITING_KEY);
-    if (waitingTaskId) {
-      const dispatched = await this.dispatchOne(waitingTaskId as string);
-      if (!dispatched) {
-        // 放回队尾，避免饿死后面的任务
-        await this.redis?.rpush(WAITING_KEY, waitingTaskId);
-      }
-    }
   }
 
   /** 同步 Worker 负载到内存（DB fallback 路径使用） */
@@ -380,8 +369,28 @@ const taskPayload = JSON.stringify({
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                logger.info(LOG_MODULES.CODESWARM, `无可用 Worker，任务 ${dbTaskId} 进入等待队列`);
-                await this.redis!.rpush(WAITING_KEY, dbTaskId);
+                // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
+                const isDbConnError = this.isDbConnectionError(dbTaskId);
+                if (isDbConnError) {
+                  logger.warn(LOG_MODULES.CODESWARM, 'DB 连接不足，延迟 10 秒后重入队');
+                  await this.sleep(10000);
+                }
+
+                const retries = (this.retryCounts.get(dbTaskId) || 0) + 1;
+                this.retryCounts.set(dbTaskId, retries);
+
+                if (retries >= CodeswarmDispatcher.MAX_REQUEUE_ATTEMPTS) {
+                  logger.error(LOG_MODULES.CODESWARM, `Task ${dbTaskId} failed after ${retries} dispatch attempts, marking as failed`);
+                  await prisma.codeswarmTask.updateMany({
+                    where: { id: dbTaskId, state: 'queued' },
+                    data: { state: 'failed', error: `No available worker after ${retries} attempts`, completedAt: new Date(), updatedAt: new Date() },
+                  }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+                  this.retryCounts.delete(dbTaskId);
+                } else {
+                  await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+                }
+              } else {
+                this.retryCounts.delete(dbTaskId);
               }
             })
           );
@@ -492,26 +501,58 @@ const taskPayload = JSON.stringify({
     } catch { /* non-critical */ }
   }
 
-  // 从 DB 恢复 Worker 拓扑
+  // 从 DB 恢复 Worker 拓扑（含启动时健康验证）
   private async recoverWorkersFromDB() {
     try {
       const workers = await prisma.codeswarmWorker.findMany({
         where: { status: 'online' },
         take: 200,
       });
+
+      const onlineCount = 0;
+      const offlineCount = 0;
+
       for (const w of workers) {
-        this.workers.set(w.nodeId, {
-          id: w.id,
-          nodeId: w.nodeId,
-          address: w.address,
-          maxConcurrent: w.maxConcurrent,
-          currentTasks: w.currentTasks,
-          lastHeartbeat: w.lastHeartbeat.getTime(),
-        });
+        const reachable = await this.pingWorker(w.address);
+        if (reachable) {
+          this.workers.set(w.nodeId, {
+            id: w.id,
+            nodeId: w.nodeId,
+            address: w.address,
+            maxConcurrent: w.maxConcurrent,
+            currentTasks: w.currentTasks,
+            lastHeartbeat: w.lastHeartbeat.getTime(),
+          });
+        } else {
+          logger.warn(LOG_MODULES.CODESWARM, `Worker ${w.nodeId} at ${w.address} 启动健康检查不可达，标记 offline`);
+          await prisma.codeswarmWorker.update({
+            where: { id: w.id },
+            data: { status: 'offline', currentTasks: 0 },
+          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记 Worker offline 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+          if (w.currentTasks > 0) {
+            this.rescheduleWorkerTasksById(w.id).catch(e =>
+              logger.error(LOG_MODULES.CODESWARM, 'rescheduleWorkerTasksById 失败', { details: { error: e instanceof Error ? e.message : String(e) } })
+            );
+          }
+        }
       }
-      logger.info(LOG_MODULES.CODESWARM, `从 DB 恢复 ${workers.length} 个 Worker`);
+
+      logger.info(LOG_MODULES.CODESWARM, `从 DB 恢复 Worker: ${this.workers.size} 个可达, ${workers.length - this.workers.size} 个不可达已标记 offline`);
     } catch (e) {
       logger.error(LOG_MODULES.CODESWARM, '恢复 Worker 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+    }
+  }
+
+  // 快速健康检查：向 Worker /health 端点发送 GET 请求
+  private async pingWorker(address: string): Promise<boolean> {
+    try {
+      const resp = await fetch(`http://${address}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+      });
+      return resp.ok;
+    } catch {
+      return false;
     }
   }
 
@@ -542,6 +583,8 @@ const taskPayload = JSON.stringify({
   }
 
   private lastDbErrorTaskId: string | null = null;
+  private readonly retryCounts = new Map<string, number>();
+  private static readonly MAX_REQUEUE_ATTEMPTS = 10;
 
   private isDbConnectionError(dbTaskId: string): boolean {
     if (this.lastDbErrorTaskId === dbTaskId) {
