@@ -90,12 +90,17 @@ build_worker() {
     cp "$WORKER_DOCKERIGNORE" "$SERVER_DOCKERIGNORE"
     echo "[build] Swapped .dockerignore for worker build (includes codeswarm/)"
 
+    # Ensure .dockerignore is restored even if docker build fails
+    trap restore_dockerignore EXIT
+
     docker build \
         -f Dockerfile.worker \
         -t "$WORKER_IMAGE:$VERSION_TAG" \
         -t "$WORKER_IMAGE:latest" \
         .
 
+    # Clear trap after successful build, restore explicitly
+    trap - EXIT
     restore_dockerignore
 
     echo ""
