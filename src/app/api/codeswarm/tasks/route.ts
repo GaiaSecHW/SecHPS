@@ -182,7 +182,7 @@ export async function POST(request: Request) {
     // 创建任务（始终 queued，由 dispatcher 异步分发）
     const task = await withRetry(() => prisma.codeswarmTask.create({
       data: {
-        id: `db-${Date.now()}`,
+        id: `db-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         taskId,
         state: 'queued',
         instruction,
