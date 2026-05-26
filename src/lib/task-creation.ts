@@ -161,21 +161,21 @@ export async function copyAgentHarnessFromLocal(repoName: string, destDir: strin
   const agentHarnessBase = process.env.AGENT_HARNESS_LOCAL_PATH || './AgentHarness';
   const sourceDir = join(process.cwd(), agentHarnessBase, repoName);
 
-  if (!existsSync(sourceDir)) {
-    serverLog.info(`[TaskCreation] 本地 AgentHarness 目录不存在: ${sourceDir}, 尝试从 Gitea 拉取`);
-    const { cloneOrPullOrgRepo, isConfigured } = await import('@/lib/gitea-org-repo');
-    if (isConfigured()) {
-      const syncResult = await cloneOrPullOrgRepo(repoName);
-      if (syncResult.success) {
-        serverLog.info(`[TaskCreation] 从 Gitea 拉取 AgentHarness 成功: ${repoName} (${syncResult.method})`);
-      } else {
-        serverLog.error(`[TaskCreation] 从 Gitea 拉取 AgentHarness 失败: ${syncResult.error}`);
-        return false;
-      }
+  // 始终先从 Gitea 拉取最新版本，确保本地缓存不陈旧
+  const { cloneOrPullOrgRepo, isConfigured } = await import('@/lib/gitea-org-repo');
+  if (isConfigured()) {
+    const syncResult = await cloneOrPullOrgRepo(repoName);
+    if (syncResult.success) {
+      serverLog.info(`[TaskCreation] AgentHarness 同步成功: ${repoName} (${syncResult.method})`);
+    } else if (existsSync(sourceDir)) {
+      serverLog.warn(`[TaskCreation] AgentHarness 拉取失败，降级使用本地缓存: ${syncResult.error}`);
     } else {
-      serverLog.info(`[TaskCreation] Gitea 未配置，无法拉取 AgentHarness`);
+      serverLog.error(`[TaskCreation] AgentHarness 拉取失败且无本地缓存: ${syncResult.error}`);
       return false;
     }
+  } else if (!existsSync(sourceDir)) {
+    serverLog.info(`[TaskCreation] Gitea 未配置，本地 AgentHarness 目录不存在`);
+    return false;
   }
 
   try {

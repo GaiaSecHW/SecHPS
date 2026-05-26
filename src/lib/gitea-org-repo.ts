@@ -59,6 +59,58 @@ export function sanitizeRepoName(fileName: string): string {
   return baseName.replace(/[^a-zA-Z0-9_.-]/g, '-').toLowerCase();
 }
 
+/** 查询当天已有版本分支数，生成下一个序号 */
+async function getNextBranchSeq(repoName: string, dateStr: string): Promise<string> {
+  try {
+    const url = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/branches`;
+    const response = await fetchWithTimeout(url, {
+      headers: { Authorization: `token ${GITEA_ORG_TOKEN}`, Accept: 'application/json' },
+    });
+    if (response.ok) {
+      const branches = await response.json() as Array<{ name: string }>;
+      const prefix = `update-${dateStr}-`;
+      const todayBranches = branches.filter(b => b.name.startsWith(prefix));
+      const seq = todayBranches.length + 1;
+      return String(seq).padStart(3, '0');
+    }
+  } catch {}
+  return '001';
+}
+
+/** 通过 Gitea API 将版本分支合入 main */
+async function mergeBranchToMain(repoName: string, headBranch: string, baseBranch: string): Promise<boolean> {
+  try {
+    // 创建 PR
+    const prUrl = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/pulls`;
+    const prResp = await fetchWithTimeout(prUrl, {
+      method: 'POST',
+      headers: { Authorization: `token ${GITEA_ORG_TOKEN}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        head: headBranch,
+        base: baseBranch,
+        title: `Merge ${headBranch} into ${baseBranch}`,
+      }),
+    });
+    if (!prResp.ok) {
+      logger.error(GITEA, `创建 PR 失败: ${prResp.status}`);
+      return false;
+    }
+    const pr = await prResp.json() as { number: number };
+
+    // 合并 PR
+    const mergeUrl = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/pulls/${pr.number}/merge`;
+    const mergeResp = await fetchWithTimeout(mergeUrl, {
+      method: 'POST',
+      headers: { Authorization: `token ${GITEA_ORG_TOKEN}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Do: 'merge' }),
+    });
+    return mergeResp.ok;
+  } catch (e) {
+    logger.error(GITEA, '合入 main 异常', { details: { error: e instanceof Error ? e.message : String(e) } });
+    return false;
+  }
+}
+
 export async function checkOrgRepoExists(repoName: string): Promise<boolean> {
   if (!isConfigured()) {
     logger.warn(GITEA, '配置不完整');
@@ -281,7 +333,7 @@ export async function pushToOrgRepoViaGit(
 
     await git.add('.');
     const status = await git.status();
-    
+
     logger.info(GITEA, `Git status: ${localPath}, files: ${status.files.length}, staged: ${status.staged.length}`);
 
     if (status.files.length === 0) {
@@ -290,15 +342,33 @@ export async function pushToOrgRepoViaGit(
     }
 
     await git.commit(`Add AgentHarness for ${repoName}`);
-    
+
+    // 生成版本分支名：update-{YYYYMMDD}-{当日序号}
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+    const seq = await getNextBranchSeq(repoName, dateStr);
+    const versionBranch = `update-${dateStr}-${seq}`;
+
+    // 创建版本分支并 push
+    await git.checkoutLocalBranch(versionBranch);
+
     try {
-      await git.push('origin', remoteBranch, { '--set-upstream': null });
+      await git.push('origin', versionBranch, { '--set-upstream': null });
     } catch (pushError) {
-      logger.warn(GITEA, `正常 push 失败，尝试 force push: ${pushError}`);
-      await git.push('origin', remoteBranch, { '--force': null, '--set-upstream': null });
+      logger.warn(GITEA, `版本分支 push 失败，尝试 force push: ${pushError}`);
+      await git.push('origin', versionBranch, { '--force': null, '--set-upstream': null });
     }
 
-    logger.info(GITEA, `Git push 成功: ${repoName} (${status.files.length} 个文件)`);
+    logger.info(GITEA, `版本分支 push 成功: ${repoName} -> ${versionBranch}`);
+
+    // 通过 Gitea API 合入 main
+    const mergeResult = await mergeBranchToMain(repoName, versionBranch, remoteBranch);
+    if (mergeResult) {
+      logger.info(GITEA, `版本分支 ${versionBranch} 已合入 ${remoteBranch}`);
+    } else {
+      logger.warn(GITEA, `版本分支 ${versionBranch} 合入 ${remoteBranch} 失败，分支已保留`);
+    }
+
     return { success: true, method: 'git' };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
