@@ -44,9 +44,9 @@ export type AgentEventType =
   | 'tool_call'
   | 'tool_call_update'
   | 'error'
+  | 'phase_error'        // 非致命阶段级错误（如标题生成失败）
   | 'phase_start'
   | 'phase_complete'
-  | 'phase_error'
   | 'log_chunk'
   | 'session_created'
   | 'skill_start'
@@ -144,6 +144,39 @@ export class ProcessManager {
     let stderr = '';
     let client: ACPClient | null = null;
     let currentSkill: string | null = null;
+    const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '600000'); // 10 min default
+    let inactivityTimer: NodeJS.Timeout | null = null;
+    let inactivityTimeoutReject: ((reason: Error) => void) | null = null;
+    let inactivityTimeoutTriggered = false;
+
+    const handleInactivityTimeout = () => {
+      // Guard: if race already resolved, do nothing
+      if (!inactivityTimeoutReject) return;
+
+      const timeoutSecs = INACTIVITY_TIMEOUT_MS / 1000;
+      console.log(`[ProcessMgr] Inactivity timeout detected (no events for ${timeoutSecs}s), terminating session`);
+      inactivityTimeoutTriggered = true;
+      if (onEvent) {
+        onEvent({
+          type: 'error',
+          message: `任务执行超时：Agent 无响应超过${timeoutSecs}秒，可能因 API 限流或网络错误`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      stderr += `\nInactivity timeout: Agent produced no output for ${timeoutSecs} seconds`;
+      if (client) {
+        client.destroy().catch(err => console.log(`[ProcessMgr] Error destroying client during inactivity timeout: ${err}`));
+        client = null;
+      }
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+      }
+      if (inactivityTimeoutReject) {
+        inactivityTimeoutReject(new Error(`Inactivity timeout: Agent produced no output for ${timeoutSecs} seconds`));
+        inactivityTimeoutReject = null;
+      }
+    };
 
     console.log(`[ProcessMgr] ========== RUN AGENT START ==========`);
     console.log(`[ProcessMgr] taskId: ${taskId}`);
@@ -213,6 +246,8 @@ export class ProcessManager {
       client.on({
         text: (content: string) => {
           console.log(`[ProcessMgr] EVENT text: "${content.substring(0, 50)}..."`);
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
           stdout += content;
           if (onEvent) {
             onEvent({
@@ -223,6 +258,8 @@ export class ProcessManager {
           }
         },
         toolCall: (tool: string, input: unknown, title?: string) => {
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
           const actualToolName = (title || tool).toLowerCase();
           console.log(`[ProcessMgr] EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
           console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
@@ -293,6 +330,8 @@ export class ProcessManager {
           }
         },
         toolCallUpdate: (output: string) => {
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
           console.log(`[ProcessMgr] EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
 
           // Secondary skill name extraction from tool output (e.g., "Launching skill: review")
@@ -321,12 +360,16 @@ export class ProcessManager {
           }
         },
         error: (message: string) => {
-          console.log(`[ProcessMgr] EVENT error: ${message}`);
+if (inactivityTimer) clearTimeout(inactivityTimer);
+          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          const classified = classifyAcpError(message);
+          console.log(`[ProcessMgr] EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
           stderr += message;
           if (onEvent) {
             onEvent({
-              type: 'error',
+              type: classified.isCritical ? 'error' : 'phase_error',
               message,
+              phase: classified.category,
               timestamp: new Date().toISOString(),
             });
           }
@@ -402,10 +445,20 @@ export class ProcessManager {
         setTimeout(() => reject(new Error(`Task timed out after ${effectiveTimeoutMs / 1000}s`)), effectiveTimeoutMs);
       });
 
+      inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+      const inactivityTimeoutPromise = new Promise<never>((_, reject) => {
+        inactivityTimeoutReject = reject;
+      });
+
       const stopReason = await Promise.race([
         client.sendPrompt(promptContent),
         timeoutPromise,
+        inactivityTimeoutPromise,
       ]);
+
+      if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
+      inactivityTimeoutReject = null;
+
       console.log(`[ProcessMgr] Step F DONE: stopReason = ${stopReason}`);
 
       let exitCode: number | null = null;
@@ -444,17 +497,33 @@ export class ProcessManager {
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      const classified = classifyAcpError(errorMsg);
       console.log(`[ProcessMgr] ========== RUN AGENT ERROR ==========`);
       console.log(`[ProcessMgr] Error: ${errorMsg}`);
+      console.log(`[ProcessMgr] Error category: ${classified.category}, isCritical: ${classified.isCritical}`);
+      console.log(`[ProcessMgr] stdout length: ${stdout.length}, hasSubstantialOutput: ${hasSubstantialOutput(stdout)}`);
       console.log(`[ProcessMgr] Error stack: ${error instanceof Error ? error.stack : 'no stack'}`);
-      stderr += errorMsg;
+
+if (!inactivityTimeoutTriggered) {
+        stderr += errorMsg;
+      }
 
       if (onEvent) {
         onEvent({
-          type: 'error',
+          type: classified.isCritical ? 'error' : 'phase_error',
           message: errorMsg,
+          phase: classified.category,
           timestamp: new Date().toISOString(),
         });
+      }
+
+      if (hasSubstantialOutput(stdout) && !classified.isCritical) {
+        console.log(`[ProcessMgr] Non-critical error after substantial output — marking as partially successful`);
+        return {
+          exitCode: 0,
+          stdout,
+          stderr,
+        };
       }
 
       return {
@@ -464,6 +533,7 @@ export class ProcessManager {
       };
     } finally {
       console.log(`[ProcessMgr] Finally: destroying client and cleaning up`);
+      if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
       if (client) {
         await client.destroy();
       }
@@ -605,4 +675,45 @@ function inferSkillNameFromContext(textBuffer: string[]): string | null {
   if (lastWord && lastWord.length > 0) return lastWord[lastWord.length - 1];
 
   return null;
+}
+
+// ============================================================================
+// Error Classification for Exception Isolation
+// ============================================================================
+
+export interface ClassifiedError {
+  isCritical: boolean;
+  category: 'title_generation' | 'rate_limit' | 'task_logic' | 'unknown';
+  rawMessage: string;
+}
+
+/**
+ * Classify ACP/LLM errors to distinguish critical task errors from non-critical
+ * post-task operations (e.g., title generation failures).
+ *
+ * Non-critical errors should NOT cascade to affect the main task status.
+ */
+export function classifyAcpError(message: string): ClassifiedError {
+  // Title generation related errors → non-critical
+  if (/title.*generat|generat.*title|session.*title|title.*generator/i.test(message)) {
+    return { isCritical: false, category: 'title_generation', rawMessage: message };
+  }
+
+  // AI Retry / Rate limit / FreeUsageLimitError → context-dependent
+  // If occurs after substantial output, treat as non-critical (likely post-task)
+  if (/AI_RetryError|RetryError|rate.*limit|429|FreeUsageLimitError/i.test(message)) {
+    return { isCritical: false, category: 'rate_limit', rawMessage: message };
+  }
+
+  // Default: treat unknown errors as critical (conservative)
+  return { isCritical: true, category: 'unknown', rawMessage: message };
+}
+
+/**
+ * Check if stdout contains substantial output (indicating main task completed).
+ * Used to determine if a post-task error should be tolerated.
+ */
+export function hasSubstantialOutput(stdout: string, minLength = 100): boolean {
+  const stripped = stdout.replace(/\s+/g, '').trim();
+  return stripped.length >= minLength;
 }

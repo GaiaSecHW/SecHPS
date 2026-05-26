@@ -94,6 +94,9 @@ COPY plugins/ ./plugins/
 # Copy skills data (postbuild will include in standalone output)
 COPY skills/ ./skills/
 
+# Copy inner_skills (platform infrastructure skills, postbuild copies to standalone)
+COPY inner_skills/ ./inner_skills/
+
 # Copy postbuild script (called by npm run build)
 COPY scripts/postbuild.js ./scripts/postbuild.js
 
@@ -243,10 +246,54 @@ RUN apt-get update && \
 # Uses npmmirror registry for faster download in China.
 # ---------------------------------------------------------------------------
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm i -g opencode-ai@latest && \
+    npm i -g opencode-ai@1.15.10 && \
     which opencode && \
     opencode --version && \
     echo "=== OpenCode CLI installed OK ==="
+
+# ---------------------------------------------------------------------------
+# Pre-install opencode runtime dependencies into cache directory
+# opencode Bun auto-installer looks in ~/.cache/opencode/node_modules/ at runtime.
+# In an isolated environment (no internet), these packages must be pre-installed
+# to prevent "cache mode 'only-if-cached'" failures.
+# Packages:
+#   - @opencode-ai/plugin: Skill system dependency (opencode loads skills via plugin)
+#   - @ai-sdk/openai-compatible: AI model provider adapter (used by opencode for LLM routing)
+# ---------------------------------------------------------------------------
+RUN mkdir -p /tmp/opencode-pkg && \
+    cd /tmp/opencode-pkg && \
+    npm config set registry https://registry.npmmirror.com && \
+    npm init -y && \
+    npm install @opencode-ai/plugin@latest @ai-sdk/openai-compatible@latest && \
+    mkdir -p /root/.cache/opencode/node_modules && \
+    cp -r node_modules/* /root/.cache/opencode/node_modules/ && \
+    rm -rf /tmp/opencode-pkg && \
+    echo "=== opencode runtime deps pre-installed OK ==="
+
+# ---------------------------------------------------------------------------
+# Configure OpenCode global config
+# The global config directory (~/.config/opencode/) is where OpenCode
+# discovers global skills and loads model/provider configurations
+# NOTE: npm i -g opencode-ai creates /root/.config/opencode/ with default config.
+# We must overwrite it with our custom config AND also set up for nextjs user,
+# because the container may run as either root or nextjs depending on deployment.
+# ---------------------------------------------------------------------------
+# Overwrite root user's default opencode config with our custom config
+# (npm i -g opencode-ai already created /root/.config/opencode/ with empty defaults)
+RUN mkdir -p /root/.config/opencode/skills
+COPY opencode-config/opencode.jsonc /root/.config/opencode/opencode.jsonc
+COPY inner_skills/ /root/.config/opencode/skills/
+COPY skills/ /root/.config/opencode/skills/
+
+# Also configure for nextjs user (if container runs as USER nextjs)
+RUN mkdir -p /home/nextjs/.config/opencode/skills && \
+    mkdir -p /home/nextjs/.cache/opencode && \
+    cp -r /root/.cache/opencode/node_modules /home/nextjs/.cache/opencode/node_modules && \
+    chown -R nextjs:nodejs /home/nextjs/.config/opencode /home/nextjs/.cache/opencode
+
+COPY --chown=nextjs:nodejs opencode-config/opencode.jsonc /home/nextjs/.config/opencode/opencode.jsonc
+COPY --chown=nextjs:nodejs inner_skills/ /home/nextjs/.config/opencode/skills/
+COPY --chown=nextjs:nodejs skills/ /home/nextjs/.config/opencode/skills/
 
 # Default locale
 ENV LANG=en_US.UTF-8
@@ -298,8 +345,9 @@ COPY --chown=nextjs:nodejs tailwind.config.ts package.json package-lock.json ./
 # Includes: schema.prisma, seed scripts, migrations
 COPY --from=builder --chown=nextjs:nodejs /app/prisma/ ./prisma/
 
-# -- Skills and Plugins (runtime data) --
+# -- Skills, Inner Skills and Plugins (runtime data) --
 COPY --from=builder --chown=nextjs:nodejs /app/skills/ ./skills/
+COPY --from=builder --chown=nextjs:nodejs /app/inner_skills/ ./inner_skills/
 COPY --from=builder --chown=nextjs:nodejs /app/plugins/ ./plugins/
 
 # -- Scripts (migrations, seed, postbuild) --
@@ -368,7 +416,47 @@ RUN echo "=== Verifying critical native binaries ===" && \
         && echo "   ✅ opencode CLI in PATH" \
         || (echo "   ❌ MISSING: opencode CLI binary" && exit 1) && \
     \
-    echo "=== All critical binaries verified OK ==="
+    # inner_skills directory (runtime path for inner-skills.ts evaluation pipeline)
+    echo "10. inner_skills directory..." && \
+    test -d /app/inner_skills/audit-report-parser \
+        && echo "   ✅ /app/inner_skills/audit-report-parser" \
+        || (echo "   ❌ MISSING: /app/inner_skills/audit-report-parser" && exit 1) && \
+    \
+    # OpenCode global config (model/provider + global skills)
+    # Verify both root and nextjs user config paths (container may run as either)
+    echo "11. OpenCode global config..." && \
+    test -f /root/.config/opencode/opencode.jsonc \
+        && echo "   ✅ /root/.config/opencode/opencode.jsonc" \
+        || (echo "   ❌ MISSING: /root/.config/opencode/opencode.jsonc" && exit 1) && \
+    test -d /root/.config/opencode/skills/audit-report-parser \
+        && echo "   ✅ /root skills/audit-report-parser" \
+        || (echo "   ❌ MISSING: /root skills/audit-report-parser" && exit 1) && \
+    test -f /home/nextjs/.config/opencode/opencode.jsonc \
+        && echo "   ✅ /home/nextjs/.config/opencode/opencode.jsonc" \
+        || (echo "   ❌ MISSING: /home/nextjs/.config/opencode/opencode.jsonc" && exit 1) && \
+    test -d /home/nextjs/.config/opencode/skills/audit-report-parser \
+        && echo "   ✅ /home/nextjs skills/audit-report-parser" \
+        || (echo "   ❌ MISSING: /home/nextjs skills/audit-report-parser" && exit 1) && \
+    test -d /home/nextjs/.config/opencode/skills/threat-modeling \
+        && echo "   ✅ /home/nextjs skills/threat-modeling" \
+        || (echo "   ❌ MISSING: /home/nextjs skills/threat-modeling" && exit 1) && \
+    \
+    # OpenCode runtime deps (pre-installed in cache for isolated env)
+    echo "12. OpenCode runtime deps..." && \
+    test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin \
+        && echo "   ✅ @opencode-ai/plugin (root cache)" \
+        || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
+    test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible \
+        && echo "   ✅ @ai-sdk/openai-compatible (root cache)" \
+        || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
+    test -d /home/nextjs/.cache/opencode/node_modules/@opencode-ai/plugin \
+        && echo "   ✅ @opencode-ai/plugin (nextjs cache)" \
+        || (echo "   ❌ MISSING: @opencode-ai/plugin (nextjs)" && exit 1) && \
+    test -d /home/nextjs/.cache/opencode/node_modules/@ai-sdk/openai-compatible \
+        && echo "   ✅ @ai-sdk/openai-compatible (nextjs cache)" \
+        || (echo "   ❌ MISSING: @ai-sdk/openai-compatible (nextjs)" && exit 1) && \
+    \
+    echo "=== All critical binaries and configs verified OK ==="
 
 # ---------------------------------------------------------------------------
 # Set Prisma engine path explicitly to prevent runtime download
@@ -376,6 +464,10 @@ RUN echo "=== Verifying critical native binaries ===" && \
 # attempts to download from https://binaries.prisma.sh (which fails in isolated env)
 # ---------------------------------------------------------------------------
 ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+
+# Explicitly set inner_skills path (getInnerSkillsDir() searches this env var first)
+# Prevents path resolution failure in standalone nested deployments
+ENV INNER_SKILLS_DIR=/app/inner_skills
 
 # ---------------------------------------------------------------------------
 # Create runtime directories (populated via volumes at deploy time)

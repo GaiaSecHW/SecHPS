@@ -1,7 +1,7 @@
 # .dockerignore for SecHPS Server
 # Build context: project root (docker build -f Dockerfile.server .)
 #
-# Note: CodeSwarm Worker uses codeswarm/.dockerignore (separate context)
+# Note: CodeSwarm Worker uses deploy/worker.dockerignore (separate context)
 
 # === Rebuilt in Docker (not needed in build context) ===
 .next

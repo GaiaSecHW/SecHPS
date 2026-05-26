@@ -137,6 +137,7 @@ export const WorkerEventTypeEnum = z.enum([
   'tool_call',
   'tool_call_update',
   'error',
+  'phase_error',         // 非致命阶段级错误（如标题生成失败、rate limit）
   'log_chunk',           // Worker层日志块
   'agent_log_chunk',     // Agent层日志块（替代ACP，直接捕获stdout）
   'agent_output',        // Agent结构化输出

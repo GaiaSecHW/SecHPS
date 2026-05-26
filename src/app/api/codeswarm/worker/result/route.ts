@@ -10,6 +10,9 @@ import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } 
 import { copyInnerSkillsToWorkspace, buildReportParseInstruction } from '@/lib/inner-skills';
 
 const PARSE_TIMEOUT_SEC = 3600;
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+
+const vulnParseInProgress = new Set<string>();
 
 const INSTRUCTION_PHASE2 = '读取 Report 文件夹内的报告文件，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion, rawReport 字段。仅输出可解析的 JSON，不要额外说明。';
 
@@ -146,6 +149,7 @@ try {
 
 async function runOpencodeParse(taskId: string, projectPath: string, instruction: string): Promise<ParsedVulnerabilityReport | null> {
   let childProcess: ChildProcess | null = null;
+  let proc: ChildProcess;
 
   try {
     const args: string[] = ['run', instruction];
@@ -182,32 +186,51 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: useShell,
     });
+    proc = childProcess!;
 
-    childProcess.on('spawn', () => {
-      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程已启动, pid=${childProcess?.pid}`);
+    proc.on('spawn', () => {
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程已启动, pid=${proc.pid}`);
     });
 
-    childProcess.on('error', (err) => {
+    proc.on('error', (err) => {
       logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程启动错误: ${err.message}`);
     });
 
-    childProcess.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
-    childProcess.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+    proc.stdout?.on('data', (data: Buffer) => {
+      const chunk = data.toString();
+      if (stdout.length + chunk.length > MAX_BUFFER_SIZE) {
+        stdout += chunk.substring(0, MAX_BUFFER_SIZE - stdout.length);
+        logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] stdout 超过 ${MAX_BUFFER_SIZE / 1024 / 1024}MB 上限，截断`);
+        proc.stdout?.pause();
+      } else {
+        stdout += chunk;
+      }
+    });
+    proc.stderr?.on('data', (data: Buffer) => {
+      const chunk = data.toString();
+      if (stderr.length + chunk.length > MAX_BUFFER_SIZE) {
+        stderr += chunk.substring(0, MAX_BUFFER_SIZE - stderr.length);
+        logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] stderr 超过 ${MAX_BUFFER_SIZE / 1024 / 1024}MB 上限，截断`);
+        proc.stderr?.pause();
+      } else {
+        stderr += chunk;
+      }
+    });
 
     const exitCode = await new Promise<number | null>((resolve) => {
-      childProcess?.on('exit', (code) => {
+      proc.on('exit', (code) => {
         logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程退出, code=${code}, stdout长度=${stdout.length}, stderr长度=${stderr.length}`);
         resolve(code ?? 1);
       });
-      childProcess?.on('error', () => {
+      proc.on('error', () => {
         logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 进程 error 事件, stderr=${stderr.substring(0, 200)}`);
         resolve(1);
       });
 
       setTimeout(() => {
-        if (childProcess && childProcess.exitCode === null) {
+        if (proc.exitCode === null) {
           logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 执行超时终止 (已收集 stdout=${stdout.length}, stderr=${stderr.length})`);
-          childProcess.kill('SIGTERM');
+          proc.kill('SIGTERM');
           resolve(124);
         }
       }, PARSE_TIMEOUT_SEC * 1000);
@@ -397,6 +420,7 @@ if (instructionPhase1) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vulnRequestBody),
+        signal: AbortSignal.timeout(30000),
       });
 
       logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 漏洞入库响应: status=${vulnRes.status}, ok=${vulnRes.ok}`);
@@ -426,6 +450,8 @@ if (instructionPhase1) {
     } catch (e) {
       logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 异常`, { details: { error: e instanceof Error ? e.message : String(e) } });
       await createParseLog(taskInstanceId, 'error', 'VulnParse 异常', e instanceof Error ? e.message : String(e));
+    } finally {
+      vulnParseInProgress.delete(taskId);
     }
   })();
 }
@@ -492,10 +518,11 @@ export async function POST(request: Request) {
     const taskInstance = txResult.taskInstance;
 
     if (taskInstance) {
+      const completeLogId = `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-complete`;
       await prisma.taskExecutionLog.upsert({
-        where: { id: `log-${Date.now()}-complete` },
+        where: { id: completeLogId },
         create: {
-          id: `log-${Date.now()}-complete`,
+          id: completeLogId,
           taskId: taskInstance.id,
           level: finalState === 'completed' ? 'success' : 'error',
           message: finalState === 'completed' ? '任务执行完成' : '任务执行失败',
@@ -529,7 +556,8 @@ export async function POST(request: Request) {
         select: { id: true, projectPath: true, name: true, targetProduct: true },
       });
 
-      if (taskInstanceForParse?.projectPath) {
+      if (taskInstanceForParse?.projectPath && !vulnParseInProgress.has(taskId)) {
+        vulnParseInProgress.add(taskId);
         let productName = taskInstanceForParse.targetProduct;
 
         if (!productName) {
@@ -550,6 +578,8 @@ export async function POST(request: Request) {
           taskInstanceForParse.id,
           { productName, taskName }
         );
+      } else if (vulnParseInProgress.has(taskId)) {
+        logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 已在处理中，跳过重复触发`);
       }
     }
 

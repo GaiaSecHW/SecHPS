@@ -277,10 +277,7 @@ export async function pushToOrgRepoViaGit(
   const protocol = isHttps ? 'https' : 'http';
   const repoUrl = `${protocol}://${GITEA_ORG_TOKEN}@${giteaHost}/${GITEA_ORG_NAME}/${repoName}.git`;
 
-  // 绕过全局 git 代理，避免内网地址走代理返回 502
-  const git: SimpleGit = simpleGit(localPath, {
-    config: ['http.proxy=', 'https.proxy='],
-  });
+  const git: SimpleGit = simpleGit(localPath);
 
   try {
     const remotes = await git.getRemotes(true);
@@ -341,6 +338,8 @@ export async function pushToOrgRepoViaGit(
       return { success: true, method: 'git' };
     }
 
+    await git.addConfig('user.email', 'sechps-bot@SecHPS.local');
+    await git.addConfig('user.name', 'SecHPS Bot');
     await git.commit(`Add AgentHarness for ${repoName}`);
 
     // 生成版本分支名：update-{YYYYMMDD}-{当日序号}
@@ -398,7 +397,7 @@ export async function uploadFilesToOrgRepo(
   const apiUrl = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/contents`;
 
   const fileOperations = Array.from(cleanedFiles.entries()).map(([relativePath, content]) => ({
-    operation: 'update',
+    operation: 'create',
     path: relativePath.replace(/^\/+/, ''),
     content: content.toString('base64'),
   }));

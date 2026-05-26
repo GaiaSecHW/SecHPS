@@ -9,7 +9,7 @@ import {
   type TaskResultStatus,
 } from '@codeswarm/types';
 import { EnvironmentFactory } from './environment.js';
-import { ProcessManager, type AgentEvent } from './process-manager.js';
+import { ProcessManager, type AgentEvent, classifyAcpError, hasSubstantialOutput } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 import { CodedmapManager } from './codedmap-manager.js';
 import { ensureBucket } from './minio-client.js';
@@ -516,39 +516,69 @@ export class WorkerDaemon {
       // ========== 推送 stderr 中的 LLM/API 错误事件 ==========
       // ACP 协议的 error handler 可能不会捕获 LLM rate limit 等错误，
       // 这些错误只在 opencode 进程的 stderr 中出现。解析并推送，确保前端可见。
-      if (status === 'failed' && !isCancelled && result.stderr) {
-        const LLM_ERROR_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
-          { pattern: /Rate limit exceeded/i, label: 'LLM 速率限制' },
-          { pattern: /FreeUsageLimitError/i, label: 'LLM 用量限制' },
-          { pattern: /429/i, label: 'HTTP 429 速率限制' },
-          { pattern: /AuthenticationError/i, label: '认证错误' },
-          { pattern: /API key.*invalid/i, label: 'API Key 无效' },
-          { pattern: /quota exceeded/i, label: '配额超限' },
-          { pattern: /ECONNREFUSED/i, label: '连接拒绝' },
-          { pattern: /ENOTFOUND/i, label: '域名解析失败' },
-          { pattern: /timeout.*exceeded/i, label: '超时' },
-        ];
-
+      // 异常隔离：如果 stdout 有实质内容且错误非关键（标题生成/rate limit），降级为 phase_error
+      if (!isCancelled && result.stderr) {
         const stderrLines = result.stderr.split('\n').filter(line => line.trim());
         const matchedLabels: string[] = [];
+        const stdoutHasContent = hasSubstantialOutput(result.stdout || '');
 
         for (const line of stderrLines) {
-          for (const { pattern, label } of LLM_ERROR_PATTERNS) {
-            if (pattern.test(line)) {
-              onEvent({
-                type: 'error',
-                message: `[${label}] ${line.trim()}`,
-                timestamp: new Date().toISOString(),
-                level: 'worker',
-              });
-              matchedLabels.push(label);
-              break;
-            }
+          const classified = classifyAcpError(line);
+          const isNonCriticalAfterOutput = stdoutHasContent && !classified.isCritical;
+
+          if (classified.category === 'title_generation' || isNonCriticalAfterOutput) {
+            onEvent({
+              type: 'phase_error',
+              message: `[${classified.category}] ${line.trim()}`,
+              phase: classified.category,
+              timestamp: new Date().toISOString(),
+              level: 'worker',
+            });
+            matchedLabels.push(classified.category);
+          } else if (/Rate limit exceeded|FreeUsageLimitError|429/i.test(line)) {
+            onEvent({
+              type: 'error',
+              message: `[LLM 速率限制] ${line.trim()}`,
+              timestamp: new Date().toISOString(),
+              level: 'worker',
+            });
+            matchedLabels.push('LLM 速率限制');
+          } else if (/AuthenticationError|API key.*invalid/i.test(line)) {
+            onEvent({
+              type: 'error',
+              message: `[认证错误] ${line.trim()}`,
+              timestamp: new Date().toISOString(),
+              level: 'worker',
+            });
+            matchedLabels.push('认证错误');
+          } else if (/quota exceeded/i.test(line)) {
+            onEvent({
+              type: 'error',
+              message: `[配额超限] ${line.trim()}`,
+              timestamp: new Date().toISOString(),
+              level: 'worker',
+            });
+            matchedLabels.push('配额超限');
+          } else if (/ECONNREFUSED|ENOTFOUND/i.test(line)) {
+            onEvent({
+              type: 'error',
+              message: `[网络错误] ${line.trim()}`,
+              timestamp: new Date().toISOString(),
+              level: 'worker',
+            });
+            matchedLabels.push('网络错误');
+          } else if (/timeout.*exceeded/i.test(line)) {
+            onEvent({
+              type: 'error',
+              message: `[超时] ${line.trim()}`,
+              timestamp: new Date().toISOString(),
+              level: 'worker',
+            });
+            matchedLabels.push('超时');
           }
         }
 
-        // fallback: stderr 有内容但无已知模式
-        if (matchedLabels.length === 0 && result.stderr.trim().length > 10) {
+        if (matchedLabels.length === 0 && result.stderr.trim().length > 10 && status === 'failed') {
           onEvent({
             type: 'error',
             message: `任务执行失败 (exitCode=${result.exitCode}): ${result.stderr.substring(0, 500)}`,
@@ -557,7 +587,6 @@ export class WorkerDaemon {
           });
         }
       } else if (status === 'failed' && !isCancelled && !result.stderr) {
-        // fallback: stderr 为空但进程失败
         onEvent({
           type: 'error',
           message: `任务执行失败，进程退出码: ${result.exitCode}`,
@@ -614,44 +643,27 @@ export class WorkerDaemon {
 
   /** Read security report files from the workspace. */
   private collectReport(workspace: string): string | undefined {
-    // Phase 1: 具名路径（原有逻辑）
-    const namedCandidates = [
-      path.join(workspace, 'reports.jsonl'),
-      path.join(workspace, 'code', 'reports.jsonl'),
-      path.join(workspace, '.security', 'reports.jsonl'),
-      path.join(workspace, 'code', '.security', 'reports.jsonl'),
-      path.join(workspace, '.security', 'report.md'),
-    ];
-    for (const candidate of namedCandidates) {
-      if (fs.existsSync(candidate)) {
+    const reportDir = path.join(workspace, 'Report');
+    const reportFileExts = [ '.json','.md', '.jsonl', '.txt', '.html'];
+    
+    if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) {
+      return undefined;
+    }
+    
+    try {
+      const entries = fs.readdirSync(reportDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!reportFileExts.includes(ext)) continue;
+        const filePath = path.join(reportDir, entry.name);
         try {
-          return fs.readFileSync(candidate, 'utf-8');
-        } catch {
-          continue;
-        }
+          const content = fs.readFileSync(filePath, 'utf-8');
+          if (content.trim().length > 0) return content;
+        } catch { continue; }
       }
-    }
-
-    // Phase 2: 扫描 Report/report 目录（与 Orchestrator 的 findReportFolder 逻辑对齐）
-    const reportDirs = [path.join(workspace, 'Report'), path.join(workspace, 'report')];
-    const reportFileExts = ['.md', '.json', '.jsonl', '.txt', '.html'];
-    for (const dir of reportDirs) {
-      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
-      try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isFile()) continue;
-          const ext = path.extname(entry.name).toLowerCase();
-          if (!reportFileExts.includes(ext)) continue;
-          const filePath = path.join(dir, entry.name);
-          try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            if (content.trim().length > 0) return content;
-          } catch { continue; }
-        }
-      } catch { continue; }
-    }
-
+    } catch { /* ignore */ }
+    
     return undefined;
   }
 

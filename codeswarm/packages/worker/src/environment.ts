@@ -22,8 +22,8 @@ export type BuildProgressCallback = (message: string) => void;
  * Derive a provider ID from a model name.
  * - "alibaba-cn/MiniMax/MiniMax-M2.7" → "alibaba-cn"
  * - "MiniMax/MiniMax-M2.5" → "MiniMax"
- * - "MiniMax-M2.7" (no slash) → "minimax" (first word, lowercase)
- * - "DeepSeek-V3" → "deepseek"
+ * - "MiniMax-M2.7" (no slash) → "MiniMax"
+ * - "DeepSeek-V3" → "DeepSeek"
  */
 function deriveProviderId(model: string): string {
   if (model.includes('/')) {
@@ -31,7 +31,7 @@ function deriveProviderId(model: string): string {
   }
   // Bare model name: extract first word segment as provider ID
   const firstWord = model.split(/[-._]/)[0];
-  return firstWord.toLowerCase();
+  return firstWord;
 }
 
 /**
@@ -63,9 +63,11 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
   if (apiBaseUrl) {
     const customProviderId = `custom-${deriveProviderId(model)}`;
     const modelId = extractModelId(model);
-    // Use raw model name (e.g. "zai-org/GLM-5.1-180k-MAAS") for team permission matching
-    // Provider key uses "custom-" prefix to distinguish from built-in providers
-    config.model = model;
+    // Model reference format: "provider_id/model_key" where provider_id = customProviderId,
+    // model_key = raw model name (e.g. "MiniMax/MiniMax-M2.5").
+    // opencode resolves this as: provider "custom-MiniMax", model key "MiniMax/MiniMax-M2.5"
+    // This matches examples like "alibaba-cn/MiniMax/MiniMax-M2.7" from opencode models list.
+    config.model = `${customProviderId}/${model}`;
     if (apiKey) {
       config.provider = {
         ...(config.provider || {}),
@@ -84,9 +86,10 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
       };
     }
   } else {
-    config.model = model;
+    const providerId = deriveProviderId(model);
+    const modelId = extractModelId(model);
+    config.model = `${providerId}/${modelId}`;
     if (apiKey) {
-      const providerId = deriveProviderId(model);
       if (providerId) {
         config.provider = {
           ...(config.provider || {}),
@@ -273,11 +276,9 @@ export class EnvironmentFactory {
         progress(`Step 2: 跳过 opencode.json 检查 (claudecode engine)`);
       }
 
-      // Write .opencode/.npmrc (offline=true) — prevent opencode from installing npm packages
+      // Ensure .opencode directory exists (skills, session data etc.)
       const opencodeDir = path.join(actualWorkspacePath, '.opencode');
       fs.mkdirSync(opencodeDir, { recursive: true });
-      fs.writeFileSync(path.join(opencodeDir, '.npmrc'), 'offline=true\n');
-      progress(`写入 .opencode/.npmrc (offline=true)`);
 
       progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
       return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate, model: payload.model };
@@ -304,8 +305,8 @@ export class EnvironmentFactory {
       const skillsDir = path.join(workspacePath, '.opencode', 'skills');
       fs.mkdirSync(skillsDir, { recursive: true });
 
-      // Write .opencode/.npmrc (offline=true) — prevent opencode from installing npm packages
-      fs.writeFileSync(path.join(workspacePath, '.opencode', '.npmrc'), 'offline=true\n');
+      // (Removed .npmrc offline=true — it blocks opencode from loading cached npm
+      //  provider packages like @ai-sdk/openai-compatible, causing "Internal error")
 
       // Step 4: Copy skill files
       if (payload.skills && payload.skills.length > 0) {

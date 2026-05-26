@@ -36,7 +36,7 @@ export async function POST(request: Request) {
         updatedAt: new Date(),
       },
       create: {
-        id: `worker-${Date.now()}`,
+        id: `worker-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         nodeId,
         address: address || '',
         systemType: systemType || null,

@@ -166,7 +166,7 @@ export async function POST(
 
     // 直接在数据库创建 CodeSwarm 任务，使用 $executeRaw 避免 Prisma ORM 连接问题
     const codeswarmTaskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const codeswarmDbId = `db-${Date.now()}`;
+    const codeswarmDbId = `db-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     await withRetry(() => prisma.$executeRaw`
       INSERT INTO "CodeswarmTask" (
@@ -240,10 +240,11 @@ export async function POST(
       }
     }
 
+    const dispatchLogId = `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     await prisma.taskExecutionLog.upsert({
-      where: { id: `log-${Date.now()}` },
+      where: { id: dispatchLogId },
       create: {
-        id: `log-${Date.now()}`,
+        id: dispatchLogId,
         taskId: id,
         level: 'info',
         message: 'CodeSwarm 任务已分发',

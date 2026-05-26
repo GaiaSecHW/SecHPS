@@ -169,7 +169,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 FROM node:20-trixie AS opencode-builder
 
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g opencode-ai@1.14.40 && \
+    npm install -g opencode-ai@1.15.10 && \
     which opencode && \
     opencode --version && \
     echo "=== OpenCode CLI installed OK ==="
@@ -244,7 +244,7 @@ RUN apt-get update && \
         iputils-ping \
         netcat-openbsd \
         # -- editing & file inspection --
-        vim-tiny \
+        vim \
         tree \
         less \
         wget \
@@ -275,13 +275,12 @@ RUN which claude && claude --version && echo "=== Claude Code CLI OK ==="
 # ---------------------------------------------------------------------------
 # Install OpenCode CLI (from builder stage — no runtime download)
 # ---------------------------------------------------------------------------
-# opencode-ai/bin/opencode is a Node.js wrapper script that resolves the
-# platform-specific ELF binary from node_modules/opencode-linux-x64/bin/opencode.
-# Docker COPY --from= resolves symlinks to file content, breaking the relative
-# path resolution. Solution: copy the module dir (includes nested platform bins),
-# then create the symlink manually.
+# opencode-ai@1.15.10 ships bin/opencode.exe (native ELF binary, 144MB),
+# NOT a Node.js wrapper script. npm global install symlinks /usr/local/bin/opencode
+# to the .exe binary directly. Docker COPY --from= resolves symlinks to file content,
+# so we must copy the module dir then recreate the symlink manually.
 COPY --from=opencode-builder /usr/local/lib/node_modules/opencode-ai /usr/local/lib/node_modules/opencode-ai
-RUN ln -sf ../lib/node_modules/opencode-ai/bin/opencode /usr/local/bin/opencode && \
+RUN ln -sf ../lib/node_modules/opencode-ai/bin/opencode.exe /usr/local/bin/opencode && \
     which opencode && opencode --version && echo "=== OpenCode CLI OK ==="
 
 # ---------------------------------------------------------------------------
@@ -347,6 +346,22 @@ RUN mkdir -p /root/.cache/opencode
 COPY models.json /root/.cache/opencode/models.json
 
 # ---------------------------------------------------------------------------
+# Pre-install opencode runtime dependencies into cache directory
+# opencode Bun auto-installer looks in ~/.cache/opencode/node_modules/ at runtime.
+# In an isolated environment (no internet), these packages must be pre-installed
+# to prevent "cache mode 'only-if-cached'" failures.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /tmp/opencode-pkg && \
+    cd /tmp/opencode-pkg && \
+    npm config set registry https://registry.npmmirror.com && \
+    npm init -y && \
+    npm install @opencode-ai/plugin@latest @ai-sdk/openai-compatible@latest && \
+    mkdir -p /root/.cache/opencode/node_modules && \
+    cp -r node_modules/* /root/.cache/opencode/node_modules/ && \
+    rm -rf /tmp/opencode-pkg && \
+    echo "=== opencode runtime deps pre-installed OK ==="
+
+# ---------------------------------------------------------------------------
 # Verify ALL critical components (fail build if any missing)
 # ---------------------------------------------------------------------------
 RUN echo "=== Verifying critical worker components ===" && \
@@ -397,8 +412,12 @@ RUN echo "=== Verifying critical worker components ===" && \
     which fd && echo "   ✅ fd (alias for fdfind)" && \
     which fzf && echo "   ✅ fzf" && \
     which jq && echo "   ✅ jq" && \
-    which vim.tiny && echo "   ✅ vim-tiny" && \
+    which vim && echo "   ✅ vim" && \
     which dig && echo "   ✅ dnsutils (dig)" && \
+    \
+    echo "13. OpenCode runtime deps..." && \
+    test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin && echo "   ✅ @opencode-ai/plugin" || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
+    test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible && echo "   ✅ @ai-sdk/openai-compatible" || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
     \
     echo "=== All critical components verified OK ==="
 
