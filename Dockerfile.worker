@@ -169,7 +169,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 FROM node:20-trixie AS opencode-builder
 
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g opencode-ai@1.14.40 && \
+    npm install -g opencode-ai@1.15.10 && \
     which opencode && \
     opencode --version && \
     echo "=== OpenCode CLI installed OK ==="
@@ -275,13 +275,12 @@ RUN which claude && claude --version && echo "=== Claude Code CLI OK ==="
 # ---------------------------------------------------------------------------
 # Install OpenCode CLI (from builder stage — no runtime download)
 # ---------------------------------------------------------------------------
-# opencode-ai/bin/opencode is a Node.js wrapper script that resolves the
-# platform-specific ELF binary from node_modules/opencode-linux-x64/bin/opencode.
-# Docker COPY --from= resolves symlinks to file content, breaking the relative
-# path resolution. Solution: copy the module dir (includes nested platform bins),
-# then create the symlink manually.
+# opencode-ai@1.15.10 ships bin/opencode.exe (native ELF binary, 144MB),
+# NOT a Node.js wrapper script. npm global install symlinks /usr/local/bin/opencode
+# to the .exe binary directly. Docker COPY --from= resolves symlinks to file content,
+# so we must copy the module dir then recreate the symlink manually.
 COPY --from=opencode-builder /usr/local/lib/node_modules/opencode-ai /usr/local/lib/node_modules/opencode-ai
-RUN ln -sf ../lib/node_modules/opencode-ai/bin/opencode /usr/local/bin/opencode && \
+RUN ln -sf ../lib/node_modules/opencode-ai/bin/opencode.exe /usr/local/bin/opencode && \
     which opencode && opencode --version && echo "=== OpenCode CLI OK ==="
 
 # ---------------------------------------------------------------------------

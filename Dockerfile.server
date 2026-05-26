@@ -246,7 +246,7 @@ RUN apt-get update && \
 # Uses npmmirror registry for faster download in China.
 # ---------------------------------------------------------------------------
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm i -g opencode-ai@latest && \
+    npm i -g opencode-ai@1.15.10 && \
     which opencode && \
     opencode --version && \
     echo "=== OpenCode CLI installed OK ==="
