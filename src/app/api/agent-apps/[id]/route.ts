@@ -9,8 +9,6 @@ import {
   pushOrUpdateOrgRepo,
   deleteOrgRepo,
   isConfigured as isGiteaOrgConfigured,
-  checkOrgRepoExists,
-  createOrgRepo,
 } from '@/lib/gitea-org-repo';
 
 interface RouteContext {
@@ -125,10 +123,6 @@ export async function PUT(
 
       if (filesMap.size > 0 && agentHarnessPath && isGiteaOrgConfigured()) {
         try {
-          const repoExists = await checkOrgRepoExists(agentHarnessPath);
-          if (!repoExists) {
-            await createOrgRepo(agentHarnessPath);
-          }
           const result = await pushOrUpdateOrgRepo(agentHarnessPath, filesMap);
           giteaUploaded = result.success;
           syncedFilesMap = filesMap;
