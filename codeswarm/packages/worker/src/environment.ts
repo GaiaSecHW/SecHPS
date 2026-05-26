@@ -22,8 +22,8 @@ export type BuildProgressCallback = (message: string) => void;
  * Derive a provider ID from a model name.
  * - "alibaba-cn/MiniMax/MiniMax-M2.7" → "alibaba-cn"
  * - "MiniMax/MiniMax-M2.5" → "MiniMax"
- * - "MiniMax-M2.7" (no slash) → "minimax" (first word, lowercase)
- * - "DeepSeek-V3" → "deepseek"
+ * - "MiniMax-M2.7" (no slash) → "MiniMax"
+ * - "DeepSeek-V3" → "DeepSeek"
  */
 function deriveProviderId(model: string): string {
   if (model.includes('/')) {
@@ -31,7 +31,7 @@ function deriveProviderId(model: string): string {
   }
   // Bare model name: extract first word segment as provider ID
   const firstWord = model.split(/[-._]/)[0];
-  return firstWord.toLowerCase();
+  return firstWord;
 }
 
 /**
@@ -86,8 +86,7 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
       };
     }
   } else {
-    // For built-in providers, provider ID must match opencode's naming convention (lowercase)
-    const providerId = deriveProviderId(model).toLowerCase();
+    const providerId = deriveProviderId(model);
     const modelId = extractModelId(model);
     config.model = `${providerId}/${modelId}`;
     if (apiKey) {
