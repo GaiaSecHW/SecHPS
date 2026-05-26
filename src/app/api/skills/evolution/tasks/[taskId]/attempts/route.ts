@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { getAttemptsByTaskId } from '@/services/skill-evolution/evolution-attempt-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -32,7 +33,7 @@ export async function GET(
       total: attempts.length,
     });
   } catch (error) {
-    console.error('[AttemptsAPI] Error:', error);
+    logger.error(LOG_MODULES.SKILL, 'AttemptsAPI Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to get attempts' },
       { status: 500 }

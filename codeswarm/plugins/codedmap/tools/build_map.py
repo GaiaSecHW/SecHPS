@@ -26,7 +26,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+import csv
 
+# 将字段大小限制提升至10MB (10 * 1024 * 1024 字节)
+# 或者直接设为系统最大值：csv.field_size_limit(sys.maxsize)
+csv.field_size_limit(10 * 1024 * 1024)  # 此方法需要放在读取文件之前
 
 SPECIAL_SOURCE_DIRS = {"src", "lib", "include", "source"}
 DEFAULT_DOCKER_IMAGE = "ghcr.io/joernio/joern-slim:nightly"

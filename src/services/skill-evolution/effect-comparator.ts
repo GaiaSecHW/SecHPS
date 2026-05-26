@@ -10,6 +10,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { calculateSkillMetrics, SkillMetrics } from './metrics-calculator';
 
 /**
@@ -186,7 +187,7 @@ export async function batchCompareEvolutionEffect(
       // 自动更新任务指标
       await updateEvolutionTaskMetrics(task.taskId, result);
     } catch (error) {
-      console.error(`[EffectComparator] 对比任务 ${task.taskId} 失败:`, error);
+      logger.error(LOG_MODULES.SKILL_EVOLUTION, `对比任务 ${task.taskId} 失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
       // 继续处理其他任务
     }
   }

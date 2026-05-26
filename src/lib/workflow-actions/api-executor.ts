@@ -2,6 +2,7 @@
 
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, ApiCallConfig, replaceVariables } from './index';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 执行 API 调用
@@ -98,7 +99,7 @@ export async function executeApiCall(
     };
   } catch (error) {
     logs.push(`[API] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error('[workflow-actions/api-executor] API调用失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, 'API调用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       output: null,

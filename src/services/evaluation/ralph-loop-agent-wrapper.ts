@@ -8,6 +8,7 @@ import { EnhancedEvaluationCaller } from './enhanced-caller';
 import type { EnhancedEvaluationConfig, EnhancedEvaluationCallbacks } from './enhanced-caller';
 import type { AgentDefinition } from '@/services/ai';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { VerifyCompletionFunction, VerifyCompletionResult, SimpleGenerateTextResult } from './ralph-loop-agent-evaluator';
 import {
   iterationCountIs,
@@ -158,7 +159,7 @@ export class RalphLoopAgent {
    */
   injectProgressInquiry(message: string): void {
     this.progressInquiryPending = message;
-    console.log(`[RalphLoopAgent] 已注入进展询问: ${message.substring(0, 50)}...`);
+    logger.info(LOG_MODULES.EVALUATION, `已注入进展询问: ${message.substring(0, 50)}...`);
   }
 
   /**
@@ -269,9 +270,9 @@ export class RalphLoopAgent {
     this.messageStore = createEvaluationMessageStore(projectId, evaluationId);
     try {
       await this.messageStore.initialize();
-      console.log(`[Ralph Loop] JSONL 消息存储初始化成功`);
+      logger.info(LOG_MODULES.EVALUATION, 'JSONL 消息存储初始化成功');
     } catch (error) {
-      console.error(`[Ralph Loop] JSONL 消息存储初始化失败:`, error);
+      logger.error(LOG_MODULES.EVALUATION, 'JSONL 消息存储初始化失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       this.messageStore = null;  // 失败时置空，不影响主流程
     }
 
@@ -282,7 +283,7 @@ export class RalphLoopAgent {
     while (true) {
       // 检查是否已中止
       if (this.isAborted()) {
-        console.log('[Ralph Loop] 检测到中止信号，停止循环');
+        logger.info(LOG_MODULES.EVALUATION, '检测到中止信号，停止循环');
         completionReason = 'aborted';
         reason = '用户中止';
         break;
@@ -321,7 +322,7 @@ export class RalphLoopAgent {
       
       // 清除已使用的进展询问
       if (this.progressInquiryPending) {
-        console.log(`[Ralph Loop] 已将进展询问注入迭代 ${iteration}，清除标志`);
+        logger.info(LOG_MODULES.EVALUATION, `已将进展询问注入迭代 ${iteration}，清除标志`);
         this.progressInquiryPending = null;
       }
 
@@ -357,9 +358,11 @@ export class RalphLoopAgent {
                 outputTokens: Math.max(iterationUsage.outputTokens, usage.outputTokens || 0),
                 totalTokens: Math.max(iterationUsage.inputTokens, usage.inputTokens || 0) + Math.max(iterationUsage.outputTokens, usage.outputTokens || 0),
               };
-              console.log(`[Ralph Loop] 迭代 ${iteration} 累计 Token (cumulative):`, {
-                本次: { input: usage.inputTokens, output: usage.outputTokens },
-                累计: iterationUsage,
+              logger.info(LOG_MODULES.EVALUATION, `迭代 ${iteration} 累计 Token (cumulative)`, {
+                details: {
+                  本次: { input: usage.inputTokens, output: usage.outputTokens },
+                  累计: iterationUsage,
+                }
               });
               callbacks.onUsage?.({
                 ...usage,
@@ -368,12 +371,12 @@ export class RalphLoopAgent {
               });
             },
             onStopReason: (data) => {
-              console.log(`[Ralph Loop] 迭代 ${iteration} stop_reason:`, data.stopReason, 'terminal_reason:', data.terminalReason);
+              logger.info(LOG_MODULES.EVALUATION, `迭代 ${iteration} stop_reason: ${data.stopReason}, terminal_reason: ${data.terminalReason}`);
               lastStopReason = data.stopReason;
               callbacks.onStopReason?.(data);
             },
             onCompaction: (data) => {
-              console.log(`[Ralph Loop] 迭代 ${iteration} Compaction 触发:`, data.trigger, 'summaryLength:', data.summaryLength);
+              logger.info(LOG_MODULES.EVALUATION, `迭代 ${iteration} Compaction 触发: ${data.trigger}, summaryLength: ${data.summaryLength}`);
               iterationCompactionTriggered = true;
               lastCompactionTriggered = true;
               callbacks.onCompaction?.(data);
@@ -416,7 +419,7 @@ export class RalphLoopAgent {
               
               // 检查是否是 AbortError（用户主动中止）
               if (error.name === 'AbortError' || error.message.includes('abort') || error.message.includes('Abort')) {
-                console.log(`[Ralph Loop] 检测到 AbortError，立即中止迭代`);
+                logger.info(LOG_MODULES.EVALUATION, '检测到 AbortError，立即中止迭代');
                 this.aborted = true;
                 resolve({
                   text: '',
@@ -437,18 +440,18 @@ export class RalphLoopAgent {
                 error.message.includes('error_max_structured_output_retries');
 
               if (isFatal) {
-                console.error(`[Ralph Loop] 致命错误，终止迭代:`, error.message);
+                logger.error(LOG_MODULES.EVALUATION, '致命错误，终止迭代', { details: { error: error.message } });
                 reject(error);
               } else {
                 // error_during_execution 等可恢复错误：记录日志，用空结果继续
-                console.warn(`[Ralph Loop] 迭代 ${iteration} 遇到可恢复错误，继续下一轮:`, error.message);
+                logger.warn(LOG_MODULES.EVALUATION, `迭代 ${iteration} 遇到可恢复错误，继续下一轮: ${error.message}`);
 
                 // 启动经验查询（异步，不阻塞 resolve）
                 const errorContext: ErrorContext = {
                   errorMessage: error.message,
                 };
                 experienceQueryPromise = buildDynamicExperiencePrompt(errorContext);
-                console.log(`[Ralph Loop] 已启动经验查询，错误: ${error.message.substring(0, 100)}...`);
+                logger.info(LOG_MODULES.EVALUATION, `已启动经验查询，错误: ${error.message.substring(0, 100)}...`);
 
                 resolve({
                   text: `[迭代错误] ${error.message}`,
@@ -475,7 +478,7 @@ export class RalphLoopAgent {
 
       // 立即检查中止状态（AbortError 或用户中止）
       if (this.isAborted()) {
-        console.log('[Ralph Loop] 检测到中止信号，立即停止循环');
+        logger.info(LOG_MODULES.EVALUATION, '检测到中止信号，立即停止循环');
         completionReason = 'aborted';
         reason = '用户中止';
         break;
@@ -489,17 +492,17 @@ export class RalphLoopAgent {
           const matches = expData.matches;
           if (prompt && matches && matches.length > 0) {
             lastExperienceGuidance = prompt;
-            console.log(`[Ralph Loop] ========== 动态查询结果注入 ==========`);
-            console.log(`[Ralph Loop] 查询到 ${matches.length} 条相关经验，已注入下一轮指导`);
-            console.log(`[Ralph Loop] 注入位置: iteration.feedback.experienceGuidance`);
-            
+            logger.info(LOG_MODULES.EVALUATION, `========== 动态查询结果注入 ==========`);
+            logger.info(LOG_MODULES.EVALUATION, `查询到 ${matches.length} 条相关经验，已注入下一轮指导`);
+            logger.info(LOG_MODULES.EVALUATION, `注入位置: iteration.feedback.experienceGuidance`);
+
             for (let i = 0; i < matches.length; i++) {
               const match = matches[i];
-              console.log(`[Ralph Loop] 经验 ${i + 1}: "${match.experience.title}"`);
-              console.log(`[Ralph Loop]   - 评分: ${match.relevanceScore.toFixed(1)}`);
-              console.log(`[Ralph Loop]   - 匹配特征: ${match.matchedPatterns.join(', ')}`);
+              logger.info(LOG_MODULES.EVALUATION, `经验 ${i + 1}: "${match.experience.title}"`);
+              logger.info(LOG_MODULES.EVALUATION, `  - 评分: ${match.relevanceScore.toFixed(1)}`);
+              logger.info(LOG_MODULES.EVALUATION, `  - 匹配特征: ${match.matchedPatterns.join(', ')}`);
             }
-            console.log(`[Ralph Loop] ========== 动态查询注入完成 ==========`);
+            logger.info(LOG_MODULES.EVALUATION, `========== 动态查询注入完成 ==========`);
 
             // 调用经验查询回调（发送 SSE 事件）
             if (callbacks.onExperienceQueried) {
@@ -511,17 +514,17 @@ export class RalphLoopAgent {
               });
             }
           } else {
-            console.log(`[Ralph Loop] 经验查询无结果，跳过注入`);
+            logger.info(LOG_MODULES.EVALUATION, '经验查询无结果，跳过注入');
           }
         } catch (queryError) {
-          console.error('[Ralph Loop] 经验查询失败:', queryError);
+          logger.error(LOG_MODULES.EVALUATION, '经验查询失败', { details: { error: queryError instanceof Error ? queryError.message : String(queryError) } });
         }
         experienceQueryPromise = null;
       }
 
       // 迭代结束后再次检查中止状态
       if (this.isAborted()) {
-        console.log('[Ralph Loop] 迭代结束后检测到中止信号');
+        logger.info(LOG_MODULES.EVALUATION, '迭代结束后检测到中止信号');
         completionReason = 'aborted';
         reason = '用户中止';
         break;
@@ -529,7 +532,7 @@ export class RalphLoopAgent {
 
       // 检查 max_tokens 截断
       if (lastStopReason === 'max_tokens') {
-        console.log(`[Ralph Loop] 迭代 ${iteration} stop_reason=max_tokens, compactionTriggered=${iterationCompactionTriggered}`);
+        logger.info(LOG_MODULES.EVALUATION, `迭代 ${iteration} stop_reason=max_tokens, compactionTriggered=${iterationCompactionTriggered}`);
         
         // 发送 SSE 事件通知前端截断状态
         if (callbacks.onMaxTokensTruncated) {
@@ -543,7 +546,7 @@ export class RalphLoopAgent {
         
         // 如果 Compaction 未触发且输出长度足够，继续迭代让 Agent 补充内容
         if (!iterationCompactionTriggered && (result.text?.length || 0) > 100) {
-          console.log(`[Ralph Loop] max_tokens 截断但输出长度 ${result.text?.length || 0} > 100，继续迭代补充内容`);
+          logger.info(LOG_MODULES.EVALUATION, `max_tokens 截断但输出长度 ${result.text?.length || 0} > 100，继续迭代补充内容`);
         }
       }
 
@@ -591,7 +594,7 @@ export class RalphLoopAgent {
 
         // 如果验证提供了反馈，记录到数据库
         if (verification.reason && !verification.complete) {
-          console.log(`[Ralph] 迭代 ${iteration} 反馈: ${verification.reason}`);
+          logger.info(LOG_MODULES.EVALUATION, `迭代 ${iteration} 反馈: ${verification.reason}`);
 
           // ========================================
           // 双写机制：同时写入 Prisma 和 JSONL
@@ -608,7 +611,7 @@ export class RalphLoopAgent {
                 agentCallMsgId: null,
               });
             } catch (jsonlError) {
-              console.error('[Ralph] JSONL 写入失败:', jsonlError);
+              logger.error(LOG_MODULES.EVALUATION, 'JSONL 写入失败', { details: { error: jsonlError instanceof Error ? jsonlError.message : String(jsonlError) } });
             }
           }
           
@@ -623,7 +626,7 @@ export class RalphLoopAgent {
               },
             });
           } catch (error) {
-            console.error('[Ralph] 保存反馈失败:', error);
+            logger.error(LOG_MODULES.EVALUATION, '保存反馈失败', { details: { error: error instanceof Error ? error.message : String(error) } });
           }
         }
       } else {
@@ -636,12 +639,12 @@ export class RalphLoopAgent {
           '报告已生成', '报告生成完成', '威胁建模完成', '已结束', 'end of task',
         ];
         
-        console.log(`[Ralph Loop] 检测完成关键词, 文本长度=${text.length}, 前100字符="${text.substring(0, 100)}..."`);
+        logger.info(LOG_MODULES.EVALUATION, `检测完成关键词, 文本长度=${text.length}, 前100字符="${text.substring(0, 100)}..."`);
         
         if (completionKeywords.some((kw) => text.includes(kw))) {
           completionReason = 'verified';
           reason = '检测到完成关键词';
-          console.log(`[Ralph Loop] 检测到完成关键词，节点标记为完成`);
+          logger.info(LOG_MODULES.EVALUATION, '检测到完成关键词，节点标记为完成');
           break;
         }
         
@@ -651,7 +654,7 @@ export class RalphLoopAgent {
         if (result.text.length > 500 && iteration >= maxIterations * 0.8) {
           completionReason = 'verified';
           reason = `文本长度足够(${result.text.length}字符)且迭代次数接近上限`;
-          console.log(`[Ralph Loop] 文本长度足够，迭代次数=${iteration}/${maxIterations}，节点标记为完成`);
+          logger.info(LOG_MODULES.EVALUATION, `文本长度足够，迭代次数=${iteration}/${maxIterations}，节点标记为完成`);
           break;
         }
       }
@@ -683,7 +686,7 @@ export class RalphLoopAgent {
    * 中止评估
    */
   abort(): void {
-    console.log('[Ralph Loop] 收到中止请求，设置中止标志');
+    logger.info(LOG_MODULES.EVALUATION, '收到中止请求，设置中止标志');
     this.aborted = true;
     this.caller.abort();
   }
@@ -747,12 +750,12 @@ export function createRalphLoopAgent(
     agents?: Record<string, AgentDefinition>;  // 子Agent定义（SDK官方推荐方式）
   }
 ): RalphLoopAgent {
-  console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: sdkOptions.mcpServers=${sdkOptions?.mcpServers?.length || 0}个`);
+  logger.info(LOG_MODULES.EVALUATION, `sdkOptions.mcpServers=${sdkOptions?.mcpServers?.length || 0}个`);
   if (sdkOptions?.mcpServers && sdkOptions.mcpServers.length > 0) {
-    console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: MCP服务器=${sdkOptions.mcpServers.map(s => s.name).join(', ')}`);
-    console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: 第一个MCP详情=${JSON.stringify(sdkOptions.mcpServers[0])}`);
+    logger.info(LOG_MODULES.EVALUATION, `MCP服务器=${sdkOptions.mcpServers.map(s => s.name).join(', ')}`);
+    logger.info(LOG_MODULES.EVALUATION, `第一个MCP详情=${JSON.stringify(sdkOptions.mcpServers[0])}`);
   } else {
-    console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: ⚠️ sdkOptions.mcpServers 为空！`);
+    logger.warn(LOG_MODULES.EVALUATION, 'sdkOptions.mcpServers 为空！');
   }
   
   // 解析模型名称
@@ -794,7 +797,7 @@ export function createRalphLoopAgent(
     ...ralphConfig,
   });
   
-  console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: RalphLoopAgent已创建，MCP传递完成`);
+  logger.info(LOG_MODULES.EVALUATION, 'RalphLoopAgent已创建，MCP传递完成');
 
   if (workingDirectory) {
     agent.setWorkingDirectory(workingDirectory);

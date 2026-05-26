@@ -7,6 +7,7 @@
 
 import { readFile, writeFile, access, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface SkillExecutionLogEntry {
   id: string;
@@ -97,9 +98,9 @@ export async function updateSkillExecutionLog(
     
     // 写回文件
     await writeFile(logPath, JSON.stringify(log, null, 2), 'utf-8');
-    console.log(`[SkillExecutionLog] 已更新 Skill ${skillId} 状态为 ${status}`);
+    logger.info(LOG_MODULES.SKILL, `已更新 Skill ${skillId} 状态为 ${status}`);
   } catch (error) {
-    console.error('[SkillExecutionLog] 更新失败:', error);
+    logger.error(LOG_MODULES.SKILL, '更新失败', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }
 

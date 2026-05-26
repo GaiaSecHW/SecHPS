@@ -3,6 +3,7 @@
  */
 
 import { PluginRunner } from '@/services/plugin-runner';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 let initialized = false;
 
@@ -17,9 +18,9 @@ export async function initializePlugins(): Promise<void> {
   try {
     await PluginRunner.initialize();
     initialized = true;
-    console.log('[PluginInit] Plugin system initialized successfully');
+    logger.info(LOG_MODULES.PLUGIN, 'Plugin system initialized successfully');
   } catch (error) {
-    console.error('[PluginInit] Failed to initialize plugin system:', error);
+    logger.error(LOG_MODULES.PLUGIN, 'Failed to initialize plugin system', { details: { error: error instanceof Error ? error.message : String(error) } });
     throw error;
   }
 }

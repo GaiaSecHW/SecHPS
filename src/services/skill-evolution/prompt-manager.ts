@@ -9,6 +9,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
 
 // ============================================================================
@@ -173,15 +174,15 @@ export async function getEvolutionPrompt(promptKey: PromptKey): Promise<string> 
 
     // 如果数据库有激活的提示词，使用它
     if (prompt && prompt.isActive) {
-      console.log(`[PromptManager] 使用数据库提示词: ${promptKey}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `使用数据库提示词: ${promptKey}`);
       return prompt.content;
     }
 
     // 否则使用默认值
-    console.log(`[PromptManager] 使用默认提示词: ${promptKey}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `使用默认提示词: ${promptKey}`);
     return DEFAULT_PROMPTS[promptKey]?.content || '';
   } catch (error) {
-    console.error(`[PromptManager] 获取提示词失败: ${promptKey}`, error);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, `获取提示词失败: ${promptKey}`, { details: { error: error instanceof Error ? error.message : String(error) } });
     return DEFAULT_PROMPTS[promptKey]?.content || '';
   }
 }
@@ -216,7 +217,7 @@ export async function getAllEvolutionPrompts(): Promise<EvolutionPrompt[]> {
       isActive: p.isActive,
     }));
   } catch (error) {
-    console.error('[PromptManager] 获取所有提示词失败', error);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, '获取所有提示词失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return Object.entries(DEFAULT_PROMPTS).map(([key, value]) => ({
       id: '',
       promptKey: key as PromptKey,
@@ -256,7 +257,7 @@ export async function updateEvolutionPrompt(
       },
     });
 
-    console.log(`[PromptManager] 已更新提示词: ${promptKey}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `已更新提示词: ${promptKey}`);
     return {
       id: updated.id,
       promptKey: updated.promptKey as PromptKey,
@@ -278,7 +279,7 @@ export async function updateEvolutionPrompt(
       },
     });
 
-    console.log(`[PromptManager] 已创建提示词: ${promptKey}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `已创建提示词: ${promptKey}`);
     return {
       id: created.id,
       promptKey: created.promptKey as PromptKey,
@@ -306,7 +307,7 @@ export async function seedEvolutionPrompts(): Promise<{ created: number; skipped
 
     if (existing) {
       skipped++;
-      console.log(`[PromptManager] 提示词已存在，跳过: ${promptKey}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `提示词已存在，跳过: ${promptKey}`);
       continue;
     }
 
@@ -323,10 +324,10 @@ export async function seedEvolutionPrompts(): Promise<{ created: number; skipped
     });
 
     created++;
-    console.log(`[PromptManager] 已创建提示词: ${promptKey}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `已创建提示词: ${promptKey}`);
   }
 
-  console.log(`[PromptManager] Seed 完成: 创建 ${created}, 跳过 ${skipped}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `Seed 完成: 创建 ${created}, 跳过 ${skipped}`);
   return { created, skipped };
 }
 

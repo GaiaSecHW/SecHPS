@@ -27,8 +27,6 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
   error?: string;
   evaluation?: any;
 }> {
-  console.log(`\n${LOG_PREFIX} ========== 开始启动排队评估 ==========`);
-  console.log(`${LOG_PREFIX} evaluationId: ${evaluationId}`);
   logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始启动排队评估`, { evaluationId });
 
   try {
@@ -53,7 +51,11 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
     const projectPath = evaluation.Project?.projectPath;
     const projectId = evaluation.projectId;
 
-    console.log(`${LOG_PREFIX} 项目信息: projectId=${projectId}, projectName=${projectName}, status=${evaluation.status}`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 项目信息`, {
+      projectId,
+      projectName,
+      status: evaluation.status,
+    });
 
     if (evaluation.status !== 'queued') {
       logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估状态不是 queued`, { 
@@ -95,7 +97,10 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
       return { success: false, error: errorMsg };
     }
 
-    console.log(`${LOG_PREFIX} 模型配置: ${modelConfig.name}, provider=${modelConfig.providerType}`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 模型配置`, {
+      name: modelConfig.name,
+      provider: modelConfig.providerType,
+    });
 
     // Step 3: 获取全局配置
     const globalConfig = await prisma.opencodeConfig.findFirst({
@@ -125,18 +130,18 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
     const toolPermissions = await prisma.toolPermission.findMany({
       where: { projectId },
     });
-    console.log(`${LOG_PREFIX} 工具权限配置: ${toolPermissions.length} 条`);
-    if (toolPermissions.length > 0) {
-      console.log(`${LOG_PREFIX} 权限规则: ${toolPermissions.map(p => `${p.toolPattern}:${p.permission}`).join(', ')}`);
-    }
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 工具权限配置`, {
+      count: toolPermissions.length,
+      rules: toolPermissions.map(p => `${p.toolPattern}:${p.permission}`),
+    });
 
     // Step 3.6: 加载 MCP Servers 配置
     const userId = evaluation.Project?.User?.id;
     const mcpServers = userId ? await loadMcpServersForProject(projectId, userId) : [];
-    console.log(`${LOG_PREFIX} MCP Servers 配置: ${mcpServers.length} 个`);
-    if (mcpServers.length > 0) {
-      console.log(`${LOG_PREFIX} MCP Servers: ${mcpServers.map(m => m.name).join(', ')}`);
-    }
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} MCP Servers 配置`, {
+      count: mcpServers.length,
+      names: mcpServers.map(m => m.name),
+    });
 
     // Step 4: 获取工作流信息
     const workflowId = evaluation.workflowId;
@@ -188,7 +193,10 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
       return { success: false, error: errorMsg };
     }
 
-    console.log(`${LOG_PREFIX} 工作流: ${workflow.name}, type=${workflow.workflowType}`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 工作流信息`, {
+      name: workflow.name,
+      type: workflow.workflowType,
+    });
 
     // Step 5: 更新评估状态为 preparing
     const updatedEvaluation = await prisma.evaluationSession.update({
@@ -209,7 +217,7 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
       data: { status: 'running' },
     });
 
-    console.log(`${LOG_PREFIX} ✓ 评估状态更新为 preparing，开始后台执行`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估状态更新为 preparing，开始后台执行`);
 
     // Step 7: 根据 workflowType 选择执行方式
     if (workflow.workflowType === 'fsm') {
@@ -321,7 +329,7 @@ async function executeFSMBackground(
   fsmTemplateId: string,
   toolPermissions: Array<{ toolPattern: string; permission: string; description?: string }>
 ): Promise<void> {
-  console.log(`${LOG_PREFIX} [Background] 开始 FSM 执行...`);
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [Background] 开始 FSM 执行...`);
 
   try {
     // Step 1: 清理工作目录
@@ -586,8 +594,8 @@ async function executeFSMBackground(
     );
 
     await fsmService.execute();
-    
-    console.log(`${LOG_PREFIX} [Background] FSM 执行完成`);
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [Background] FSM 执行完成`);
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -632,8 +640,9 @@ async function executeDAGBackground(
   mcpServers: any[],
   toolPermissions: any[]
 ): Promise<void> {
-  console.log(`${LOG_PREFIX} [DAG-Background] 开始 DAG 执行...`);
-  console.log(`${LOG_PREFIX} [DAG-Background] MCP Servers: ${mcpServers.length} 个`);
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 开始 DAG 执行`, {
+    mcpServersCount: mcpServers.length,
+  });
 
   try {
     // Step 1: 获取 WorkflowNode 定义
@@ -648,7 +657,9 @@ async function executeDAGBackground(
       }
     });
 
-    console.log(`${LOG_PREFIX} [DAG-Background] WorkflowNode 数量: ${workflowNodes.length}`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] WorkflowNode 数量`, {
+      count: workflowNodes.length,
+    });
 
     // 构建 DAG 节点列表
     const dagNodesList: Array<{ id: string; label: string; type: string; roleId?: string | null }> = [];
@@ -689,9 +700,13 @@ async function executeDAGBackground(
             })
           )
         );
-        console.log(`${LOG_PREFIX} [DAG-Background] NodeExecution 预创建完成: ${dagNodesList.length} 个`);
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] NodeExecution 预创建完成`, {
+          count: dagNodesList.length,
+        });
       } catch (e) {
-        console.log(`${LOG_PREFIX} [DAG-Background] NodeExecution 预创建失败:`, e);
+        logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] NodeExecution 预创建失败`, {
+          error: String(e),
+        });
       }
     }
 
@@ -710,23 +725,25 @@ async function executeDAGBackground(
     });
 
     // Step 4: 调用 DAG 执行服务
-    console.log(`${LOG_PREFIX} [DAG-Background] 开始调用统一执行引擎...`);
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 开始调用统一执行引擎...`);
 
     // 获取完整的节点定义（包含 skills, vulnerabilityCategories）
     const nodes = await generateNodeList(workflowId);
     if (!nodes.length) {
-      console.log(`${LOG_PREFIX} [DAG-Background] Workflow 节点不存在`);
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] Workflow 节点不存在`);
       throw new Error('Workflow 节点不存在');
     }
-    
-    console.log(`${LOG_PREFIX} [DAG-Background] 获取到 ${nodes.length} 个节点`);
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 获取到节点`, {
+      count: nodes.length,
+    });
 
     // ========================================
     // Step 4.1: 预创建 SkillExecution 记录（关键！）
     // ========================================
     for (const node of nodes) {
       const nodeSkills = node.skills || [];
-      
+
       if (nodeSkills.length > 0) {
         try {
           await createSkillExecutionsForNode({
@@ -735,9 +752,13 @@ async function executeDAGBackground(
             skills: nodeSkills,
             projectId,
           });
-          console.log(`${LOG_PREFIX} [DAG-Background] 为节点 ${node.id} (${node.label}) 创建 ${nodeSkills.length} 个 SkillExecution 记录`);
+          logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 为节点 ${node.id} (${node.label}) 创建 SkillExecution 记录`, {
+            count: nodeSkills.length,
+          });
         } catch (error) {
-          console.error(`${LOG_PREFIX} [DAG-Background] 为节点 ${node.id} 创建 SkillExecution 失败:`, error);
+          logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 为节点 ${node.id} 创建 SkillExecution 失败`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
     }
@@ -756,7 +777,7 @@ async function executeDAGBackground(
     // 构建 callbacks
     const callbacks: UnifiedExecutionCallbacks = {
       onNodeStart: (i, _nid, n) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i}: ${n} 开始`);
+        logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] Node ${i}: ${n} 开始`);
         emitPhaseStart(evaluationId, {
           nodeIndex: i,
           nodeId: _nid,
@@ -769,20 +790,20 @@ async function executeDAGBackground(
         emitMessageChunk(evaluationId, text);
       },
       onNodeToolCall: (i, tool) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} tool: ${tool}`);
+        logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] Node ${i} tool: ${tool}`);
       },
       onNodeComplete: (i) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} 完成`);
+        logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] Node ${i} 完成`);
         emitNodeComplete(evaluationId, nodes[i]?.id || `node-${i}`);
       },
       onNodeError: (i) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} 错误`);
+        logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] Node ${i} 错误`);
       },
       onNodeRetry: (i, _nid, _n, retry, max) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} retry ${retry}/${max}`);
+        logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] Node ${i} retry ${retry}/${max}`);
       },
       onWorkflowComplete: async (r) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] 工作流完成: ${r.status}`);
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 工作流完成`, { status: r.status });
         
         if (r.status === 'completed') {
           await completeEvaluationSuccess(evaluationId, projectId, projectPath, `DAG: ${r.nodeResults.length} nodes`, {
@@ -809,22 +830,22 @@ async function executeDAGBackground(
         await unlockProject(projectId);
       },
       onWorkflowError: async (e) => {
-        console.log(`${LOG_PREFIX} [DAG-Background] 工作流错误: ${e.message}`);
-        
+        logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 工作流错误`, { error: e.message });
+
         await completeEvaluationFailed(evaluationId, projectId, projectPath, e.message, 'error', e.stack);
-        
+
         emitEvaluationComplete(evaluationId, {
           status: 'failed',
           error: e.message,
           errorMessage: e.message,
           message: 'DAG 工作流执行失败',
         });
-        
+
         await prisma.project.update({
           where: { id: projectId },
           data: { status: 'failed' },
         });
-        
+
         await unlockProject(projectId);
       },
       onTokenUsage: (data) => {
@@ -858,22 +879,22 @@ async function executeDAGBackground(
     }, callbacks);
     
     engine.setNodes(nodes);
-    
+
     // 执行（异步，不阻塞）
     engine.execute().catch(async (e) => {
-      console.log(`${LOG_PREFIX} [DAG-Background] 执行异常: ${e.message}`);
-      
+      logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 执行异常`, { error: e.message });
+
       await completeEvaluationFailed(evaluationId, projectId, projectPath, e.message, 'error', e.stack);
-      
+
       await unlockProject(projectId);
     });
-    
-    console.log(`${LOG_PREFIX} [DAG-Background] DAG 执行引擎已启动`);
+
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] DAG 执行引擎已启动`);
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.log(`${LOG_PREFIX} [DAG-Background] 执行失败:`, errorMsg);
-    
+    logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} [DAG-Background] 执行失败`, { error: errorMsg });
+
     await prisma.evaluationSession.update({
       where: { id: evaluationId },
       data: {
@@ -883,7 +904,7 @@ async function executeDAGBackground(
         endReason: 'error',
       },
     });
-    
+
     await unlockProject(projectId);
   }
 }

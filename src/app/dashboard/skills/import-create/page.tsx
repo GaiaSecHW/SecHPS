@@ -25,7 +25,7 @@ import { hasPermission } from '@/lib/permissions';
 import { getFormatGuideData } from '@/lib/skill-builder';
 
 const FORMAT_GUIDE = getFormatGuideData();
-const VULNERABILITY_CATEGORY_ID = 'cat-vulnerability-mining';
+const VULNERABILITY_CATEGORY_ID = '';
 
 interface ParsedSkill {
   name: string;

@@ -30,6 +30,7 @@ import {
   Network,
   X,
   ArrowLeft,
+  Home,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -38,7 +39,8 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import type { ReactNode } from 'react';
 
 const PAGE_META: Record<string, { title: string; icon: ReactNode }> = {
-  '/dashboard': { title: '仪表盘', icon: <LayoutDashboard size={20} /> },
+  '/dashboard': { title: '首页', icon: <Home size={20} /> },
+  '/dashboard/overview': { title: '仪表盘', icon: <LayoutDashboard size={20} /> },
   '/dashboard/task-builder': { title: '我的任务', icon: <ClipboardList size={20} /> },
   '/dashboard/skills': { title: 'Skill 市场', icon: <Award size={20} /> },
   '/dashboard/skills/create': { title: '快速创建', icon: <Award size={20} /> },
@@ -142,6 +144,48 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       .catch(() => {});
   }, []);
 
+  // 强制改密
+  const [forceChangePassword, setForceChangePassword] = useState(false);
+  const [fcNewPassword, setFcNewPassword] = useState('');
+  const [fcConfirmPassword, setFcConfirmPassword] = useState('');
+  const [fcError, setFcError] = useState('');
+  const [fcLoading, setFcLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.mustChangePassword) {
+      setForceChangePassword(true);
+    }
+  }, [user]);
+
+  const handleForceChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFcError('');
+    if (fcNewPassword.length < 6) { setFcError('新密码长度至少为 6 位'); return; }
+    if (fcNewPassword !== fcConfirmPassword) { setFcError('两次输入的密码不一致'); return; }
+    setFcLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/users/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ newPassword: fcNewPassword, forceChange: true }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setFcError(data.details?.error || data.error || '修改密码失败');
+        setFcLoading(false);
+        return;
+      }
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
+      router.push('/login');
+    } catch {
+      setFcError('网络错误，请重试');
+      setFcLoading(false);
+    }
+  };
+
   const handleLogout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -215,7 +259,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             )}
             {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
 
-            <NavLink href="/dashboard" icon={<LayoutDashboard size={18} />} collapsed={sidebarCollapsed} exact pathname={pathname}>
+            <NavLink href="/dashboard" icon={<Home size={18} />} collapsed={sidebarCollapsed} exact pathname={pathname}>
+              首页
+            </NavLink>
+            <NavLink href="/dashboard/overview" icon={<LayoutDashboard size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
               仪表盘
             </NavLink>
             <NavLink href="/dashboard/task-builder" icon={<ClipboardList size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
@@ -405,6 +452,30 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
+
+      {/* 强制改密弹框 */}
+      {forceChangePassword && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
+          <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h2 className="text-lg font-semibold text-dark-text mb-2">修改密码</h2>
+            <p className="text-sm text-dark-text-muted mb-4">首次登录需要修改密码后才能继续使用</p>
+            <form onSubmit={handleForceChangePassword} className="space-y-4">
+              {fcError && <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm">{fcError}</div>}
+              <div>
+                <label className="block text-sm text-dark-text-secondary mb-1">新密码</label>
+                <input type="password" value={fcNewPassword} onChange={e => setFcNewPassword(e.target.value)} className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-sm text-dark-text focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="至少 6 位" required />
+              </div>
+              <div>
+                <label className="block text-sm text-dark-text-secondary mb-1">确认密码</label>
+                <input type="password" value={fcConfirmPassword} onChange={e => setFcConfirmPassword(e.target.value)} className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-sm text-dark-text focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="再次输入新密码" required />
+              </div>
+              <button type="submit" disabled={fcLoading} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm font-medium disabled:opacity-50">
+                {fcLoading ? '提交中...' : '确认修改'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <Toaster
         position="top-right"

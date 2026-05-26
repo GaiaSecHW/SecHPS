@@ -8,6 +8,7 @@ import { applyImprovement, rejectImprovement } from '@/services/skill-evolution/
 import { getImprovementDetail } from '@/services/skill-evolution/improvement-generator';
 import { prisma } from '@/lib/prisma';
 import { buildTenantFilter } from '@/lib/tenant-filter';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface EvolveRequest {
   improvementId: string;
@@ -156,7 +157,7 @@ export async function POST(
       });
     }
   } catch (error) {
-    console.error('[API] 进化 Skill 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '进化 Skill 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '进化操作失败' },
       { status: 500 }

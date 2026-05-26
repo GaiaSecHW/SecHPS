@@ -10,6 +10,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { getEvolutionConfig } from './evolution-scheduler';
 import { analyzeInBatches } from './balance-analyzer';
 import { generateImprovement } from './improvement-generator';
@@ -185,7 +186,7 @@ export async function startTaskProcessing(taskId: string): Promise<void> {
     },
   });
 
-  console.log(`[TaskManager] Task ${taskId} started processing`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `Task ${taskId} started processing`);
 }
 
 /**
@@ -210,7 +211,7 @@ export async function completeTask(
     },
   });
 
-  console.log(`[TaskManager] Task ${taskId} completed with improvement ${improvementId}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `Task ${taskId} completed with improvement ${improvementId}`);
 }
 
 /**
@@ -248,7 +249,7 @@ export async function rejectTask(
     data: updateData,
   });
 
-  console.log(`[TaskManager] Task ${taskId} rejected: ${reason}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `Task ${taskId} rejected: ${reason}`);
 }
 
 // ============================================================================
@@ -328,7 +329,7 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
     // ========== 重试循环：最多 10 次 ==========
     while (attemptNumber < MAX_RETRY_COUNT) {
       attemptNumber++;
-      console.log(`[TaskManager] Attempt ${attemptNumber}/${MAX_RETRY_COUNT} for task ${taskId}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Attempt ${attemptNumber}/${MAX_RETRY_COUNT} for task ${taskId}`);
 
       // 3. 获取精简案例（混合策略）
       // 第1次：全量获取
@@ -371,20 +372,20 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
       // 检查是否有足够的案例
       if (falsePositives.length === 0) {
         lastFailureReason = 'No false positive cases available for analysis';
-        console.log(`[TaskManager] ${lastFailureReason}, attempt ${attemptNumber}`);
+        logger.info(LOG_MODULES.SKILL_EVOLUTION, `${lastFailureReason}, attempt ${attemptNumber}`);
         continue;
       }
 
       if (confirmedCases.length === 0) {
         lastFailureReason = 'No confirmed cases available for analysis';
-        console.log(`[TaskManager] ${lastFailureReason}, attempt ${attemptNumber}`);
+        logger.info(LOG_MODULES.SKILL_EVOLUTION, `${lastFailureReason}, attempt ${attemptNumber}`);
         continue;
       }
 
-      console.log(`[TaskManager] Using ${falsePositives.length} FP cases, ${confirmedCases.length} CC cases`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Using ${falsePositives.length} FP cases, ${confirmedCases.length} CC cases`);
 
       // 4. 运行分批平衡分析（每批 2误报 + 2正确发现）
-      console.log(`[TaskManager] Running balance analysis for task ${taskId}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Running balance analysis for task ${taskId}`);
       const analysisResult = await analyzeInBatches(
         skillContent,
         falsePositives,
@@ -397,10 +398,10 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
         }
       );
 
-      console.log(`[TaskManager] Analysis complete: ${analysisResult.recommendations.length} recommendations`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Analysis complete: ${analysisResult.recommendations.length} recommendations`);
 
       // 5. 生成改进内容（传递失败信息）
-      console.log(`[TaskManager] Generating improvement for task ${taskId}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Generating improvement for task ${taskId}`);
       let improvementResult;
       try {
         improvementResult = await generateImprovement(
@@ -418,20 +419,20 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
         );
       } catch (genError) {
         lastFailureReason = genError instanceof Error ? genError.message : 'Failed to generate improvement';
-        console.log(`[TaskManager] Improvement generation failed: ${lastFailureReason}`);
+        logger.info(LOG_MODULES.SKILL_EVOLUTION, `Improvement generation failed: ${lastFailureReason}`);
         continue;
       }
 
       if (!improvementResult.improvementId || !improvementResult.improvedContent) {
         lastFailureReason = 'Improvement generation returned empty result';
-        console.log(`[TaskManager] ${lastFailureReason}`);
+        logger.info(LOG_MODULES.SKILL_EVOLUTION, `${lastFailureReason}`);
         continue;
       }
 
-      console.log(`[TaskManager] Improvement generated: ${improvementResult.improvementId}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Improvement generated: ${improvementResult.improvementId}`);
 
       // 6. 自动回测验证
-      console.log(`[TaskManager] Running backtest validation for task ${taskId}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Running backtest validation for task ${taskId}`);
       
       const backtestResult = await runBacktest(
         improvementResult.improvedContent,
@@ -442,7 +443,7 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
 
       const backtestDetailRows = getBacktestDetailRows(backtestResult);
 
-      console.log(`[TaskManager] Backtest result: passed=${backtestResult.isSuccessful}, exclusionRate=${(backtestResult.summary.falsePositiveExclusionRate * 100).toFixed(1)}%, missed=${backtestResult.summary.confirmedMissed}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Backtest result: passed=${backtestResult.isSuccessful}, exclusionRate=${(backtestResult.summary.falsePositiveExclusionRate * 100).toFixed(1)}%, missed=${backtestResult.summary.confirmedMissed}`);
 
       // 提取失败案例信息（用于下次重试）
       lastMissedCases = backtestResult.confirmedResults
@@ -474,13 +475,13 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
       // 7. 判断回测结果
       if (!backtestResult.isSuccessful) {
         lastFailureReason = backtestResult.recommendation;
-        console.log(`[TaskManager] Backtest failed: ${lastFailureReason}`);
-        console.log(`[TaskManager] Missed ${lastMissedCases.length} cases, ${lastRemainingFalsePositives.length} FP remaining`);
+        logger.info(LOG_MODULES.SKILL_EVOLUTION, `Backtest failed: ${lastFailureReason}`);
+        logger.info(LOG_MODULES.SKILL_EVOLUTION, `Missed ${lastMissedCases.length} cases, ${lastRemainingFalsePositives.length} FP remaining`);
         continue;
       }
 
       // 回测达标，完成任务
-      console.log(`[TaskManager] Backtest passed! Completing task ${taskId}`);
+      logger.info(LOG_MODULES.SKILL_EVOLUTION, `Backtest passed! Completing task ${taskId}`);
       successfulAttemptId = attemptId;
 
       // 8. 完成任务
@@ -494,7 +495,7 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
 
     // 10次都失败
     const finalError = `Max retry count (${MAX_RETRY_COUNT}) reached. Last failure: ${lastFailureReason}`;
-    console.error(`[TaskManager] Task processing failed after ${MAX_RETRY_COUNT} attempts: ${finalError}`);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, `Task processing failed after ${MAX_RETRY_COUNT} attempts: ${finalError}`);
     
     await rejectTask(taskId, 'Max retry count reached', finalError);
 
@@ -502,7 +503,7 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`[TaskManager] Task processing failed: ${errorMessage}`);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, `Task processing failed: ${errorMessage}`);
 
     try {
       await rejectTask(taskId, 'Processing failed', errorMessage);
@@ -607,7 +608,7 @@ export async function getTaskAnalysisResult(
   try {
     return JSON.parse(task.analysisResult) as BalanceAnalysisResult;
   } catch {
-    console.warn(`[TaskManager] Failed to parse analysis result for task ${taskId}`);
+    logger.warn(LOG_MODULES.SKILL_EVOLUTION, `Failed to parse analysis result for task ${taskId}`);
     return null;
   }
 }
@@ -638,7 +639,7 @@ export async function cancelTask(taskId: string, reason: string): Promise<void> 
 
   await rejectTask(taskId, reason);
 
-  console.log(`[TaskManager] Task ${taskId} cancelled: ${reason}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `Task ${taskId} cancelled: ${reason}`);
 }
 
 // ============================================================================

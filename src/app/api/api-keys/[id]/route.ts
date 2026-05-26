@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function DELETE(
   request: NextRequest,
@@ -38,7 +39,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'API Key 已撤销' });
   } catch (error) {
-    console.error('[API Keys] DELETE error:', error);
+    logger.error(LOG_MODULES.AUTH, 'DELETE error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '撤销 API Key 失败' }, { status: 500 });
   }
 }

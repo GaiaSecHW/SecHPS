@@ -1,12 +1,13 @@
 /**
  * MCP 配置加载器
- * 
+ *
  * 从数据库加载项目级和用户级的 MCP 服务器配置
  * 用于传递给 Claude Agent SDK
  */
 
 import { prisma } from '@/lib/prisma';
 import type { AppMcpServerConfig } from '@/services/ai';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 加载项目关联的 MCP 服务器配置
@@ -69,19 +70,19 @@ export async function loadMcpServersForProject(
       tools: mcp.tools ? parseTools(mcp.tools) : undefined,
     }));
 
-    console.log(`[McpLoader] 加载 MCP 配置: 项目=${projectId}, 用户=${userId}`);
-    console.log(`[McpLoader] 项目级 MCP: ${projectMcps.length} 个`);
-    console.log(`[McpLoader] 用户私有 MCP: ${userPrivateMcps.length} 个`);
-    console.log(`[McpLoader] 共享 MCP: ${sharedMcps.length} 个`);
-    console.log(`[McpLoader] 合计（去重后）: ${mcpConfigs.length} 个`);
-    
+    logger.info(LOG_MODULES.MCP, `加载 MCP 配置: 项目=${projectId}, 用户=${userId}`);
+    logger.info(LOG_MODULES.MCP, `项目级 MCP: ${projectMcps.length} 个`);
+    logger.info(LOG_MODULES.MCP, `用户私有 MCP: ${userPrivateMcps.length} 个`);
+    logger.info(LOG_MODULES.MCP, `共享 MCP: ${sharedMcps.length} 个`);
+    logger.info(LOG_MODULES.MCP, `合计（去重后）: ${mcpConfigs.length} 个`);
+
     if (mcpConfigs.length > 0) {
-      console.log(`[McpLoader] MCP 名称列表: ${mcpConfigs.map(m => m.name).join(', ')}`);
+      logger.info(LOG_MODULES.MCP, `MCP 名称列表: ${mcpConfigs.map(m => m.name).join(', ')}`);
     }
 
     return mcpConfigs;
   } catch (error) {
-    console.error('[McpLoader] 加载 MCP 配置失败:', error);
+    logger.error(LOG_MODULES.MCP, '加载 MCP 配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -129,18 +130,18 @@ export async function loadMcpServersForUser(
       tools: mcp.tools ? parseTools(mcp.tools) : undefined,
     }));
 
-    console.log(`[McpLoader] 加载用户 MCP 配置: 用户=${userId}, 合计=${mcpConfigs.length} 个`);
+    logger.info(LOG_MODULES.MCP, `加载用户 MCP 配置: 用户=${userId}, 合计=${mcpConfigs.length} 个`);
 
     // 日志工具数量
     for (const mcp of mcpConfigs) {
       if (mcp.tools && mcp.tools.length > 0) {
-        console.log(`[McpLoader] MCP "${mcp.name}" 有 ${mcp.tools.length} 个工具: ${mcp.tools.map(t => t.name).join(', ')}`);
+        logger.info(LOG_MODULES.MCP, `MCP "${mcp.name}" 有 ${mcp.tools.length} 个工具: ${mcp.tools.map(t => t.name).join(', ')}`);
       }
     }
 
     return mcpConfigs;
   } catch (error) {
-    console.error('[McpLoader] 加载用户 MCP 配置失败:', error);
+    logger.error(LOG_MODULES.MCP, '加载用户 MCP 配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }

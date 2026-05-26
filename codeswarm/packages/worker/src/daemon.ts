@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   TaskPayloadSchema,
@@ -18,6 +19,10 @@ interface WorkerDaemonConfig {
   port: number;
   maxConcurrent: number;
   orchestratorUrl: string;
+  /** Worker 外部可达地址（跨服务器部署时必须设置，否则心跳上报自动检测的容器内网 IP + localhost） */
+  address?: string;
+  /** 单任务超时时间（毫秒），默认 7*24*3600*1000 = 7天，可通过 TASK_TIMEOUT_SEC 环境变量配置 */
+  taskTimeoutMs: number;
 }
 
 export class WorkerDaemon {
@@ -45,6 +50,55 @@ export class WorkerDaemon {
     this.processMgr = new ProcessManager();
     this.semaphore = new Semaphore(config.maxConcurrent);
     this.codedmapMgr = new CodedmapManager();
+  }
+
+  /**
+   * Check if required engine binaries are available in PATH.
+   * Logs availability status for each engine so admins can diagnose
+   * spawn failures before tasks are dispatched.
+   */
+  private checkBinaries(): { opencode: boolean; claudecode: boolean } {
+    const binaries = {
+      opencode: 'opencode',
+      claudecode: 'claude-agent-acp',
+    };
+    const result: Record<string, boolean> = {};
+
+    for (const [engine, binary] of Object.entries(binaries)) {
+      try {
+        const resolved = execSync(`which ${binary} 2>/dev/null`, {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
+        result[engine] = true;
+        this.server.log.info({ engine, binary, path: resolved }, `Engine binary available`);
+      } catch {
+        result[engine] = false;
+        this.server.log.warn(
+          { engine, binary },
+          `Engine binary NOT found — tasks with engine=${engine} will fail at spawn (ENOENT). Install: ${engine === 'opencode' ? 'npm i -g opencode-ai' : 'npm i -g @agentclientprotocol/claude-agent-acp'}`,
+        );
+      }
+    }
+
+    const availableEngines = Object.entries(result)
+      .filter(([, ok]) => ok)
+      .map(([engine]) => engine);
+    const missingEngines = Object.entries(result)
+      .filter(([, ok]) => !ok)
+      .map(([engine]) => engine);
+
+    if (availableEngines.length > 0) {
+      this.server.log.info({ availableEngines }, `Available engine binaries`);
+    }
+    if (missingEngines.length > 0) {
+      this.server.log.warn(
+        { missingEngines },
+        `Missing engine binaries — tasks using these engines will fail until the binaries are installed`,
+      );
+    }
+
+    return result as { opencode: boolean; claudecode: boolean };
   }
 
   async start(): Promise<void> {
@@ -130,6 +184,7 @@ export class WorkerDaemon {
     });
 
     await this.server.listen({ port: this.config.port, host: '0.0.0.0' });
+    this.checkBinaries();
     this.startHeartbeat();
     // Ensure MinIO bucket exists at startup
     ensureBucket().catch(err => {
@@ -231,25 +286,39 @@ export class WorkerDaemon {
     }, delay);
   }
 
-  /** Get all local IPv4 addresses, excluding loopback. */
-  private getLocalAddresses(): string[] {
-    const addresses: string[] = [];
+  /** Build the address string for heartbeat reporting.
+   *  If WORKER_ADDRESS is set (recommended for cross-server / Docker deployment),
+   *  use it as primary address and append auto-detected IPs as fallback.
+   *  If not set, auto-detect local IPs (but exclude localhost to prevent
+   *  the orchestrator from misclassifying remote workers as local). */
+  private getHeartbeatAddress(): string {
+    const autoDetected: string[] = [];
     const interfaces = os.networkInterfaces();
     for (const addrs of Object.values(interfaces)) {
       if (!addrs) continue;
       for (const addr of addrs) {
         if (addr.family === 'IPv4' && !addr.internal) {
-          addresses.push(`${addr.address}:${this.config.port}`);
+          autoDetected.push(`${addr.address}:${this.config.port}`);
         }
       }
     }
-    addresses.push(`localhost:${this.config.port}`);
-    return [...new Set(addresses)];
+
+    if (this.config.address) {
+      // WORKER_ADDRESS configured: use it as primary, auto-detected as fallback
+      const parts = this.config.address.split(',').map(a => a.trim()).filter(Boolean);
+      const all = [...parts, ...autoDetected];
+      return [...new Set(all)].join(',');
+    }
+
+    // No WORKER_ADDRESS: auto-detect only, skip localhost
+    // (localhost in address triggers isLocalWorker on the orchestrator,
+    //  causing wrong callbackUrl for cross-server deployments)
+    return [...new Set(autoDetected)].join(',');
   }
 
   private async sendHeartbeat(): Promise<boolean> {
     try {
-      const addresses = this.getLocalAddresses();
+      const address = this.getHeartbeatAddress();
       const systemType = os.platform() === 'win32' ? 'windows' : os.platform() === 'darwin' ? 'darwin' : 'linux';
       const arch = os.arch() === 'x64' ? 'x64' : os.arch() === 'arm64' ? 'arm64' : os.arch();
       const resp = await fetch(`${this.config.orchestratorUrl}/api/codeswarm/worker/heartbeat`, {
@@ -259,7 +328,7 @@ export class WorkerDaemon {
           nodeId: this.config.nodeId,
           maxConcurrent: this.config.maxConcurrent,
           currentTasks: this.config.maxConcurrent - this.semaphore.available,
-          address: addresses.join(','),
+          address,
           systemType,
           arch,
         }),
@@ -285,8 +354,9 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env } = payload;
+    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env, timeoutSec } = payload;
     const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
+    const taskTimeoutMs = timeoutSec ? timeoutSec * 1000 : this.config.taskTimeoutMs;
     let buildResult = null;
     let codedmapPromise: Promise<void> | null = null;
 
@@ -416,7 +486,8 @@ export class WorkerDaemon {
         env,
         instruction,
         onEvent,
-        apiBaseUrl
+        apiBaseUrl,
+        taskTimeoutMs
       );
       console.log(`[Daemon] Step 3 DONE: runAgent returned`);
 
@@ -564,22 +635,34 @@ export class WorkerDaemon {
 
   private async postEvent(payload: TaskPayload, events: unknown[]): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
-    try {
-      const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
-        signal: AbortSignal.timeout(10000),
-      });
-      
-      if (!response.ok) {
-        this.server.log.warn({ taskId: payload.taskId, status: response.status }, 'Event post failed');
-      } else {
-        this.server.log.debug({ taskId: payload.taskId, eventCount: events.length }, 'Events posted');
+    const maxRetries = 3;
+    const retryDelay = 1000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
+          signal: AbortSignal.timeout(10000),
+        });
+        
+        if (response.ok) {
+          this.server.log.debug({ taskId: payload.taskId, eventCount: events.length }, 'Events posted');
+          return;
+        }
+        
+        this.server.log.warn({ taskId: payload.taskId, status: response.status, attempt }, 'Event post failed');
+      } catch (err) {
+        this.server.log.warn({ taskId: payload.taskId, error: err, attempt, callbackUrl }, 'Event post error');
       }
-    } catch (err) {
-      this.server.log.warn({ taskId: payload.taskId, error: err, callbackUrl }, 'Failed to post events to platform');
+
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+      }
     }
+
+    this.server.log.error({ taskId: payload.taskId }, 'Event post failed after all retries');
   }
 
   private async postResult(payload: TaskPayload, result: {

@@ -17,6 +17,7 @@ import path from 'path';
 import crypto from 'crypto';
 import readline from 'readline';
 import AsyncLock from 'async-lock';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================
 // 类型定义
@@ -356,7 +357,7 @@ export class EvaluationMessageStore {
         // 整个文件内容可能是不完整的 JSON，截断整个文件
         await fs.writeFile(this.messagesPath, '', 'utf-8');
         await this.rebuildIndex();
-        console.warn(`[Crash Recovery] Truncated entire corrupted file: ${this.messagesPath}`);
+        logger.warn(LOG_MODULES.EVALUATION, `[Crash Recovery] Truncated entire corrupted file: ${this.messagesPath}`);
         return;
       }
       
@@ -381,11 +382,13 @@ export class EvaluationMessageStore {
         
         // 重建索引
         await this.rebuildIndex();
-        
-        console.warn(`[Crash Recovery] Truncated corrupted last line in: ${this.messagesPath}`);
+
+        logger.warn(LOG_MODULES.EVALUATION, `[Crash Recovery] Truncated corrupted last line in: ${this.messagesPath}`);
       }
     } catch (error) {
-      console.error('[Crash Recovery] Error validating last line:', error);
+      logger.error(LOG_MODULES.EVALUATION, '[Crash Recovery] Error validating last line', {
+        error: error instanceof Error ? error.message : String(error)
+      });
       // 校验失败时，尝试重建索引作为安全措施
       await this.rebuildIndex();
     }
@@ -485,7 +488,9 @@ export class EvaluationMessageStore {
         // summary.json 不存在或损坏，忽略
       }
     } catch (error) {
-      console.error('[Crash Recovery] Error rebuilding index:', error);
+      logger.error(LOG_MODULES.EVALUATION, '[Crash Recovery] Error rebuilding index', {
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 
@@ -675,7 +680,9 @@ export class EvaluationMessageStore {
         limit,
       };
     } catch (error) {
-      console.error('Error reading messages:', error);
+      logger.error(LOG_MODULES.EVALUATION, 'Error reading messages', {
+        error: error instanceof Error ? error.message : String(error)
+      });
       return {
         messages: [],
         total: 0,
@@ -753,7 +760,9 @@ export class EvaluationMessageStore {
       
       return foundMessage;
     } catch (error) {
-      console.error('Error finding message by ID:', error);
+      logger.error(LOG_MODULES.EVALUATION, 'Error finding message by ID', {
+        error: error instanceof Error ? error.message : String(error)
+      });
       return null;
     }
   }
@@ -793,10 +802,13 @@ export class EvaluationMessageStore {
       }
       
       await fileStream.close();
-      
+
       return foundMessage;
     } catch (error) {
-      console.error('Error reading message at line:', error);
+      logger.error(LOG_MODULES.EVALUATION, 'Error reading message at line', {
+        lineIndex,
+        error: error instanceof Error ? error.message : String(error)
+      });
       return null;
     }
   }

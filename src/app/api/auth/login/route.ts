@@ -113,6 +113,7 @@ export async function POST(request: Request) {
           tenantId: tenant?.id ?? null,
           tenantName: tenant?.name ?? null,
           isIcsTenant: tenant?.isIcsTenant ?? false,
+          mustChangePassword: user.mustChangePassword ?? false,
         },
       },
       {

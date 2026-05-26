@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { getCompactCases, type GetCompactCasesOptions } from '@/services/skill-evolution/case-extractor';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -54,7 +55,7 @@ export async function GET(
       lastExtracted: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[API] 获取 Skill 案例失败:', error);
+    logger.error(LOG_MODULES.SKILL, '获取 Skill 案例失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : '获取案例失败' },
       { status: 500 }

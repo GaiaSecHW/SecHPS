@@ -1,6 +1,8 @@
 // src/lib/evaluation-lock.ts
 // 全局评估锁管理 - 使用 Map 存储正在评估的项目
 
+import { logger, LOG_MODULES } from '@/lib/logger';
+
 /**
  * 全局 Map：存储正在评估的项目
  * key: projectId
@@ -30,10 +32,10 @@ export async function lockProject(projectId: string, evaluationId: string): Prom
   if (existingLock) {
     // 如果锁定属于当前评估（恢复场景），允许继续
     if (existingLock.evaluationId === evaluationId) {
-      console.log(`[EvaluationLock] 项目已被当前评估锁定: ${projectId} -> ${evaluationId}（恢复场景）`);
+      logger.info(LOG_MODULES.EVALUATION, `项目已被当前评估锁定: ${projectId} -> ${evaluationId}（恢复场景）`);
       return true;
     }
-    console.log(`[EvaluationLock] 项目已被其他评估锁定: ${projectId} -> ${existingLock.evaluationId}（当前: ${evaluationId}）`);
+    logger.info(LOG_MODULES.EVALUATION, `项目已被其他评估锁定: ${projectId} -> ${existingLock.evaluationId}（当前: ${evaluationId}）`);
     return false;
   }
   
@@ -43,7 +45,7 @@ export async function lockProject(projectId: string, evaluationId: string): Prom
     startedAt: new Date(),
   });
   
-  console.log(`[EvaluationLock] 项目已锁定: ${projectId} -> ${evaluationId}`);
+  logger.info(LOG_MODULES.EVALUATION, `项目已锁定: ${projectId} -> ${evaluationId}`);
   return true;
 }
 
@@ -54,7 +56,7 @@ export async function lockProject(projectId: string, evaluationId: string): Prom
 export async function unlockProject(projectId: string): Promise<void> {
   if (projectLockMap.has(projectId)) {
     projectLockMap.delete(projectId);
-    console.log(`[EvaluationLock] 项目已解锁: ${projectId}`);
+    logger.info(LOG_MODULES.EVALUATION, `项目已解锁: ${projectId}`);
   }
 }
 
@@ -70,7 +72,7 @@ export function getAllLockedProjects(): Map<string, { evaluationId: string; star
  */
 export function clearAllLocks(): void {
   projectLockMap.clear();
-  console.log(`[EvaluationLock] 所有锁定已清理`);
+  logger.info(LOG_MODULES.EVALUATION, '所有锁定已清理');
 }
 
 /**
@@ -108,10 +110,10 @@ export async function restoreLocksFromDatabase(prismaClient: any): Promise<void>
     // 记录警告：同一项目有多个活跃评估
     for (const [projectId, count] of projectEvalCounts.entries()) {
       if (count > 1) {
-        console.warn(`[EvaluationLock] 项目 ${projectId} 有 ${count} 个活跃评估，将只锁定最新的一个`);
+        logger.warn(LOG_MODULES.EVALUATION, `项目 ${projectId} 有 ${count} 个活跃评估，将只锁定最新的一个`);
       }
     }
-    
+
     // 写回 Map（由于已按 startedAt 降序排序，后面的同项目评估会跳过）
     const addedProjects = new Set<string>();
     for (const session of activeEvaluations) {
@@ -125,9 +127,9 @@ export async function restoreLocksFromDatabase(prismaClient: any): Promise<void>
       });
       addedProjects.add(session.projectId);
     }
-    
-    console.log(`[EvaluationLock] 已从数据库恢复 ${addedProjects.size} 个锁定（共 ${activeEvaluations.length} 个评估）`);
+
+    logger.info(LOG_MODULES.EVALUATION, `已从数据库恢复 ${addedProjects.size} 个锁定（共 ${activeEvaluations.length} 个评估）`);
   } catch (error) {
-    console.error('[EvaluationLock] 恢复锁定状态失败:', error);
+    logger.error(LOG_MODULES.EVALUATION, '恢复锁定状态失败', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
 }

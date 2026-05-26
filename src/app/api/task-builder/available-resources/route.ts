@@ -4,6 +4,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('获取可用资源失败:', error);
+    logger.error(LOG_MODULES.AGENT, '获取可用资源失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取可用资源失败' }, { status: 500 });
   }
 }

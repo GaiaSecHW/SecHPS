@@ -1,0 +1,403 @@
+# ============================================================================
+# SecHPS Server - Docker Build (Full Project + All Dependencies)
+#
+# Build context: project root
+#   docker build -f Dockerfile.server -t sechps-server:latest .
+#
+# 特点:
+#   - 完整项目作为工作目录（含源码、脚本、prisma、plugins、skills）
+#   - 打包所有所需第三方软件和系统库（PostgreSQL、Redis、Git 等）
+#   - 保留 npm 脚本运行能力（db:push、db:seed、migrate 等）
+#   - 多阶段构建优化镜像体积
+#   - 完全自包含：适用于无外网隔离部署环境
+#
+# Runtime env vars (see .env.example for full list):
+#   DATABASE_URL       - PostgreSQL connection string (REQUIRED)
+#   JWT_SECRET         - JWT signing key (REQUIRED)
+#   NODE_ENV           - production
+#   REDIS_URL          - Redis for CodeSwarm scheduling
+#   NEXT_PUBLIC_BASE_URL - Worker callback URL
+#   GITEA_*            - Gitea file sync config
+#   MINIO_*            - MinIO object storage config
+#   PORT               - HTTP port (default 3000)
+#
+# Important:
+#   - Do NOT use --omit=optional or --production for npm install
+#     (@anthropic-ai/claude-agent-sdk requires optional native-binary deps)
+#   - Prisma binaryTargets include debian-openssl-3.0.x (matches bookworm)
+#   - node-pty requires native compilation (needs build-essential in builder)
+#   - better-sqlite3 moved to dependencies (used in 4 production API routes)
+#   - 在隔离环境中，Prisma 禁止运行时下载引擎（通过环境变量阻止）
+#   - COPY 顺序：先 standalone，后 node_modules（合并而非覆盖）
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Build Next.js + Prisma + Native Modules
+# ---------------------------------------------------------------------------
+FROM node:20-bookworm AS builder
+
+ARG BUILD_DATE
+ARG VERSION
+
+WORKDIR /app
+
+# ---------------------------------------------------------------------------
+# Configure Chinese mirror sources for faster downloads
+# ---------------------------------------------------------------------------
+# APT: Tsinghua mirror (Debian bookworm)
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+# NPM: Taobao registry (will be overridden by .npmrc COPY)
+RUN npm config set registry https://registry.npmmirror.com
+
+# Install build tools for native C++ modules:
+#   - node-pty: needs forkpty/openpty (C++ addon, node-gyp)
+#   - better-sqlite3: needs C++20 compiler (node-gyp)
+#   - @img/sharp-*: prebuilt, no compilation needed
+#   - @anthropic-ai/claude-agent-sdk: prebuilt native binaries, no compilation
+#   - cpu-features (ssh2 optional): C addon, node-gyp
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        python3 \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency manifests first (leverage Docker layer cache)
+COPY package.json package-lock.json ./
+COPY .npmrc ./
+
+# Copy Prisma schema BEFORE npm ci (postinstall triggers prisma generate)
+# Without this, npm ci fails: "Could not find Prisma Schema"
+COPY prisma/ ./prisma/
+
+# CRITICAL: Do NOT add --omit=optional or --production flags.
+# @anthropic-ai/claude-agent-sdk requires @img/sharp-* optional deps
+# with platform-specific native binaries.
+# npm ci runs postinstall → prisma generate → downloads engine binaries
+RUN npm ci && \
+    echo "=== Verifying Prisma engine ===" && \
+    ls -la node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node && \
+    echo "=== Prisma engine OK ==="
+
+# Copy build-time config files
+COPY next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
+COPY tailwind.config.ts ./
+
+# Copy application source code
+COPY src/ ./src/
+
+# Copy plugins (postbuild will include in standalone output)
+COPY plugins/ ./plugins/
+
+# Copy skills data (postbuild will include in standalone output)
+COPY skills/ ./skills/
+
+# Copy postbuild script (called by npm run build)
+COPY scripts/postbuild.js ./scripts/postbuild.js
+
+# Build Next.js standalone output + run postbuild
+# postbuild handles: anthropic SDK copy, chunk sync, platform cleanup, static placement
+# NOTE: postbuild does NOT copy .prisma/client/ to standalone — we handle that in runner stage
+#
+# CRITICAL: Next.js build tries to instantiate PrismaClient during page data collection,
+# which requires DATABASE_URL. It also checks JWT_SECRET at module evaluation time.
+# In Docker build, there's no real database or real secrets available.
+# We provide dummy values just for the build phase — they are NOT used at runtime.
+# At runtime, the real DATABASE_URL and JWT_SECRET must be provided via docker run --env-file or -e.
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?connect_timeout=1"
+ENV JWT_SECRET="dummy-build-secret-not-for-production"
+RUN npm run build
+
+# ---------------------------------------------------------------------------
+# Stage 2: Production Runtime (Full Project + All System Libraries + Tools)
+# ---------------------------------------------------------------------------
+# Using node:20-bookworm (FULL, not slim) as base ensures all system shared
+# libraries are present: libssl3 (OpenSSL 3.0.x for Prisma), libstdc++6,
+# libgcc-s1, ncurses-base (terminfo for node-pty), fontconfig, zlib, glibc.
+FROM node:20-bookworm AS runner
+
+ARG BUILD_DATE
+ARG VERSION
+
+# APT: Tsinghua mirror for runner stage apt-get installs
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+LABEL org.opencontainers.image.created=$BUILD_DATE
+LABEL org.opencontainers.image.version=$VERSION
+LABEL org.opencontainers.image.title="SecHPS Server"
+LABEL org.opencontainers.image.description="AI-driven security testing platform - Server (full project + all dependencies)"
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# ---------------------------------------------------------------------------
+# CRITICAL: Prevent Prisma from downloading engines at runtime
+# In an isolated (no internet) environment, Prisma Client would crash if
+# it tries to download the query engine on first use.
+# These env vars force Prisma to use the local engine files only.
+# ---------------------------------------------------------------------------
+ENV PRISMA_CLI_QUERY_ENGINE_TYPE=library
+ENV PRISMA_QUERY_ENGINE_TYPE=library
+
+# Create non-root user for security
+RUN addgroup --system nodejs && \
+    adduser --system --ingroup nodejs nextjs
+
+# ---------------------------------------------------------------------------
+# Install ALL required third-party software and system dependency components
+# These are needed for runtime operations in an isolated environment
+# ---------------------------------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        \
+        # === Database ===
+        # PostgreSQL client: psql, pg_dump, pg_restore
+        #   - db:push, db:seed, migrations at runtime
+        #   - database debugging and manual queries
+        postgresql-client \
+        \
+        # === Queue / Cache ===
+        # Redis client: redis-cli
+        #   - CodeSwarm queue debugging (ioredis is pure JS, no native deps)
+        redis-tools \
+        \
+        # === System Libraries (native module runtime deps) ===
+        # libssl3: OpenSSL 3.0.x shared libs (libssl.so.3, libcrypto.so.3)
+        #   - Required by Prisma query engine (debian-openssl-3.0.x target)
+        #   - Required by any TLS/HTTPS connections
+        #   - NOTE: node:20-bookworm already includes libssl3, but we
+        #     explicitly install to ensure it's never removed by apt cleanup
+        libssl3 \
+        # libstdc++6: C++ runtime library
+        #   - Required by: better-sqlite3 (C++20), node-pty, sharp native addons
+        libstdc++6 \
+        # libgcc-s1: GCC runtime library
+        #   - Required by: @img/sharp-libvips-linux-x64 bundled .so files
+        libgcc-s1 \
+        # ncurses-base: terminfo database
+        #   - Required by: node-pty (terminal emulation, xterm-color terminal)
+        #   - node-pty does NOT link libncurses.so, only needs terminfo data
+        ncurses-base \
+        # fontconfig + fonts: font rendering system
+        #   - Required by: @img/sharp-* for SVG text rendering
+        #   - DejaVu fonts provide basic Latin/CJK coverage
+        fontconfig \
+        fonts-dejavu-core \
+        # zlib1g: compression library
+        #   - Required by: @img/sharp-libvips-linux-x64 (still links system zlib)
+        zlib1g \
+        \
+        # === Network / HTTP ===
+        # curl: healthcheck endpoint + HTTP debugging
+        curl \
+        # ca-certificates: TLS root CA certificates
+        #   - Required for HTTPS connections to external services
+        #   - In isolated env, needed for internal TLS if configured
+        ca-certificates \
+        # netcat-openbsd: TCP connectivity testing and debugging
+        netcat-openbsd \
+        \
+        # === Version Control ===
+        # git: Skill Gitea synchronization via simple-git
+        #   - Also useful for debugging, patching in isolated env
+        git \
+        \
+        # === Crypto ===
+        # openssl: CLI tool for certificate/key operations
+        #   - JWT debug, certificate generation, crypto testing
+        openssl \
+        \
+        # === Data Processing ===
+        # jq: JSON processing and API response debugging
+        jq \
+        # vim: text editor for debugging and config editing in isolated env
+        vim \
+        \
+        # === Process Management ===
+        # procps: ps, top, kill, free - process monitoring in container
+        procps \
+        \
+        # === Locale / Timezone ===
+        # locales: internationalization support
+        locales \
+        # tzdata: timezone database
+        #   - Required for correct date/time handling across timezones
+        tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && localedef -i en_US -f UTF-8 en_US.UTF-8 \
+    && localedef -i zh_CN -f UTF-8 zh_CN.UTF-8
+
+# ---------------------------------------------------------------------------
+# Install OpenCode CLI (global npm package)
+# OpenCode is the AI agent CLI tool used by SecHPS for:
+#   - ACP protocol: `opencode acp --pure --print-logs --cwd <workspace>`
+#   - Agent run mode: `opencode run --agent build "instruction"`
+#   - Command run mode: `opencode run --command <command>`
+# It is invoked via spawn() in server API routes and Worker processes.
+# Must be installed globally so `opencode` binary is in PATH.
+# Uses npmmirror registry for faster download in China.
+# ---------------------------------------------------------------------------
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm i -g opencode-ai@latest && \
+    which opencode && \
+    opencode --version && \
+    echo "=== OpenCode CLI installed OK ==="
+
+# Default locale
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# ---------------------------------------------------------------------------
+# Copy full project structure from builder
+# IMPORTANT: Copy order matters!
+#   1) First copy standalone output (creates /app/ structure with traced node_modules)
+#   2) Then copy full node_modules (merges into traced one, adding missing packages)
+#   3) Then EXPLICITLY copy Prisma engine (not traced by Next.js standalone)
+#   This ensures all packages are present, including native modules and Prisma engine.
+# ---------------------------------------------------------------------------
+
+# Step 1: Copy Next.js standalone output (includes traced node_modules subset)
+# This creates /app/server.js, /app/.next/, /app/node_modules/ (traced subset)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/ ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static/ ./.next/static/
+
+# Step 2: Copy full node_modules (merges with traced subset)
+# Docker COPY merges: overwrites existing files, preserves files not in source.
+# This adds packages missing from tracing: prisma CLI, better-sqlite3, etc.
+# Native binaries preserved: node-pty, better-sqlite3, @img/sharp-*, cpu-features
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/ ./node_modules/
+
+# Step 3: EXPLICITLY copy Prisma engine and client (critical for isolated env)
+# Next.js standalone tracing does NOT include .prisma/client/ engine binaries.
+# postbuild.js does NOT copy .prisma/client/ to standalone.
+# Without this explicit copy, Prisma would try to DOWNLOAD the engine at runtime,
+# which fails in an isolated environment.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma/ ./node_modules/.prisma/
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client/ ./node_modules/@prisma/client/
+
+# Step 4: Copy Prisma CLI (for db:push, db:seed, prisma commands at runtime)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma/ ./node_modules/prisma/
+
+# Step 5: Copy @anthropic-ai SDK (native binaries, already in standalone via postbuild)
+# But copy again to ensure full SDK is in the merged node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@anthropic-ai/ ./node_modules/@anthropic-ai/
+
+# -- Application source code --
+COPY --chown=nextjs:nodejs src/ ./src/
+
+# -- Configuration files --
+COPY --chown=nextjs:nodejs next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
+COPY --chown=nextjs:nodejs tailwind.config.ts package.json package-lock.json ./
+
+# -- Prisma schema and seed files (for db:push, db:seed at runtime) --
+# Includes: schema.prisma, seed scripts, migrations
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/ ./prisma/
+
+# -- Skills and Plugins (runtime data) --
+COPY --from=builder --chown=nextjs:nodejs /app/skills/ ./skills/
+COPY --from=builder --chown=nextjs:nodejs /app/plugins/ ./plugins/
+
+# -- Scripts (migrations, seed, postbuild) --
+COPY --chown=nextjs:nodejs scripts/ ./scripts/
+
+# ---------------------------------------------------------------------------
+# Verify ALL critical native binaries exist (fail build if any missing)
+# In an isolated environment, missing binaries = runtime crash with no recovery
+# ---------------------------------------------------------------------------
+RUN echo "=== Verifying critical native binaries ===" && \
+    \
+    # Prisma query engine (OpenSSL 3.0.x linked .so)
+    echo "1. Prisma query engine..." && \
+    test -f /app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node \
+        && echo "   ✅ libquery_engine-debian-openssl-3.0.x.so.node" \
+        || (echo "   ❌ MISSING: Prisma engine binary" && exit 1) && \
+    \
+    # Prisma client JS
+    echo "2. Prisma client..." && \
+    test -f /app/node_modules/@prisma/client/index.js \
+        && echo "   ✅ @prisma/client/index.js" \
+        || (echo "   ❌ MISSING: @prisma/client" && exit 1) && \
+    \
+    # Prisma CLI binary
+    echo "3. Prisma CLI..." && \
+    test -f /app/node_modules/prisma/build/index.js \
+        && echo "   ✅ prisma CLI" \
+        || (echo "   ❌ MISSING: prisma CLI" && exit 1) && \
+    \
+    # node-pty (terminal emulation)
+    echo "4. node-pty..." && \
+    find /app/node_modules/node-pty -name "*.node" | head -1 | xargs test -f \
+        && echo "   ✅ node-pty native addon" \
+        || (echo "   ❌ MISSING: node-pty native addon" && exit 1) && \
+    \
+    # better-sqlite3 (statically embedded SQLite)
+    echo "5. better-sqlite3..." && \
+    find /app/node_modules/better-sqlite3 -name "*.node" | head -1 | xargs test -f \
+        && echo "   ✅ better-sqlite3 native addon" \
+        || (echo "   ❌ MISSING: better-sqlite3 native addon" && exit 1) && \
+    \
+    # @anthropic-ai/claude-agent-sdk
+    echo "6. @anthropic-ai/claude-agent-sdk..." && \
+    test -f /app/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs \
+        && echo "   ✅ claude-agent-sdk" \
+        || (echo "   ❌ MISSING: claude-agent-sdk" && exit 1) && \
+    \
+    # @img/sharp (image processing)
+    echo "7. @img/sharp-linux-x64..." && \
+    find /app/node_modules/@img/sharp-linux-x64 -name "*.node" | head -1 | xargs test -f \
+        && echo "   ✅ sharp native addon" \
+        || (echo "   ⚠️  sharp native addon missing (optional, non-critical)") && \
+    \
+    # OpenSSL shared library (Prisma runtime dependency)
+    echo "8. OpenSSL 3.0.x shared libs..." && \
+    test -f /usr/lib/x86_64-linux-gnu/libssl.so.3 \
+        && echo "   ✅ libssl.so.3" \
+        || (echo "   ❌ MISSING: libssl.so.3 (Prisma will crash)" && exit 1) && \
+    test -f /usr/lib/x86_64-linux-gnu/libcrypto.so.3 \
+        && echo "   ✅ libcrypto.so.3" \
+        || (echo "   ❌ MISSING: libcrypto.so.3 (Prisma will crash)" && exit 1) && \
+    \
+    # OpenCode CLI (global binary for ACP/agent/command modes)
+    echo "9. OpenCode CLI..." && \
+    which opencode \
+        && echo "   ✅ opencode CLI in PATH" \
+        || (echo "   ❌ MISSING: opencode CLI binary" && exit 1) && \
+    \
+    echo "=== All critical binaries verified OK ==="
+
+# ---------------------------------------------------------------------------
+# Set Prisma engine path explicitly to prevent runtime download
+# This tells Prisma Client exactly where the engine file is, so it never
+# attempts to download from https://binaries.prisma.sh (which fails in isolated env)
+# ---------------------------------------------------------------------------
+ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+
+# ---------------------------------------------------------------------------
+# Create runtime directories (populated via volumes at deploy time)
+# ---------------------------------------------------------------------------
+RUN mkdir -p /app/data/skills \
+              /app/uploads \
+              /app/skill_management \
+              /app/AgentHarness \
+              /app/backups \
+              /app/outputs \
+              /app/tmp && \
+    chown -R nextjs:nodejs /app/data /app/uploads /app/skill_management \
+                            /app/AgentHarness /app/backups /app/outputs /app/tmp
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/api/global/health || exit 1
+
+USER nextjs
+
+ENTRYPOINT ["node", "server.js"]

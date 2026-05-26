@@ -3,6 +3,7 @@ import { authenticateApiKey, apiKeyAuthErrorResponse } from '@/lib/api-key-auth'
 import type { ApiKeyAuthSuccess } from '@/lib/api-key-auth';
 import { prisma } from '@/lib/prisma';
 import { badRequest, notFound } from '@/lib/api-errors';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(
   request: NextRequest,
@@ -44,7 +45,7 @@ export async function POST(
         method: 'DELETE',
       });
     } catch (deleteError) {
-      console.error('Failed to delete CodeSwarm task:', deleteError);
+      logger.error(LOG_MODULES.CODE, 'Failed to delete CodeSwarm task', { details: { error: deleteError instanceof Error ? deleteError.message : String(deleteError) } });
     }
   }
 

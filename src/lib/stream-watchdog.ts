@@ -1,7 +1,7 @@
 // src/lib/stream-watchdog.ts
 /**
  * SSE 流健康检查服务 (Watchdog)
- * 
+ *
  * 监控 Claude SDK 的 SSE 流是否正常：
  * 1. 超时检测：长时间没有消息活动
  * 2. 心跳检测：定期检查流是否存活
@@ -10,6 +10,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { abortAgent, removeAgent } from '@/lib/agent-registry';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================================================
 // 类型定义
@@ -118,7 +119,7 @@ export class StreamWatchdog {
    */
   start(): void {
     if (this.isRunning) {
-      console.warn(`[Watchdog] ${this.config.evaluationId} 已经在运行`);
+      logger.warn(LOG_MODULES.STREAM, `${this.config.evaluationId} 已经在运行`);
       return;
     }
     
@@ -126,8 +127,8 @@ export class StreamWatchdog {
     this.startTime = Date.now();
     this.lastActivityTime = this.startTime;
     
-    console.log(`[Watchdog] 启动监控: ${this.config.evaluationId}`);
-    console.log(`[Watchdog] 配置: idleTimeout=${this.config.idleTimeout}ms, maxRunTime=${this.config.maxRunTime}ms`);
+    logger.info(LOG_MODULES.STREAM, `启动监控: ${this.config.evaluationId}`);
+    logger.info(LOG_MODULES.STREAM, `配置: idleTimeout=${this.config.idleTimeout}ms, maxRunTime=${this.config.maxRunTime}ms`);
     
     // 启动心跳检查
     this.startHeartbeat();
@@ -161,7 +162,7 @@ export class StreamWatchdog {
       this.maxRunTimer = undefined;
     }
     
-    console.log(`[Watchdog] 停止监控: ${this.config.evaluationId}`);
+    logger.info(LOG_MODULES.STREAM, `停止监控: ${this.config.evaluationId}`);
   }
 
   /**
@@ -233,7 +234,7 @@ export class StreamWatchdog {
         // 调用心跳回调
         this.config.onHeartbeat(stats);
         
-        console.log(`[Watchdog] 心跳: ${this.config.evaluationId} | ` +
+        logger.info(LOG_MODULES.STREAM, `心跳: ${this.config.evaluationId} | ` +
           `运行=${Math.round(stats.runTime / 1000)}s | ` +
           `空闲=${Math.round(stats.idleTime / 1000)}s | ` +
           `消息=${stats.totalMessages} | ` +
@@ -249,8 +250,8 @@ export class StreamWatchdog {
       const stats = this.getStats();
       if (stats.idleTime >= this.config.idleTimeout) {
         // 空闲超时：不中止评估，改为发送进展询问
-        console.warn(`[Watchdog] 空闲超时: ${this.config.evaluationId} (${Math.round(stats.idleTime / 1000)}秒无消息)`);
-        console.log(`[Watchdog] 触发进展询问，不中止评估`);
+        logger.warn(LOG_MODULES.STREAM, `空闲超时: ${this.config.evaluationId} (${Math.round(stats.idleTime / 1000)}秒无消息)`);
+        logger.info(LOG_MODULES.STREAM, '触发进展询问，不中止评估');
         
         // 调用进展询问回调
         this.config.onProgressInquiry('idle_timeout', stats);
@@ -271,8 +272,8 @@ export class StreamWatchdog {
       
       const stats = this.getStats();
       // 最大运行时间：不中止评估，改为发送进展询问
-      console.warn(`[Watchdog] 运行时间较长: ${this.config.evaluationId} (${Math.round(stats.runTime / 60000)}分钟)`);
-      console.log(`[Watchdog] 触发进展询问，不中止评估`);
+      logger.warn(LOG_MODULES.STREAM, `运行时间较长: ${this.config.evaluationId} (${Math.round(stats.runTime / 60000)}分钟)`);
+      logger.info(LOG_MODULES.STREAM, '触发进展询问，不中止评估');
       
       // 调用进展询问回调
       this.config.onProgressInquiry('max_runtime', stats);
@@ -290,7 +291,7 @@ export class StreamWatchdog {
       if (evaluation.status === 'cancelled') return 'cancelled';
       return 'running';
     } catch (error) {
-      console.error('[Watchdog] 检查评估状态失败:', error);
+      logger.error(LOG_MODULES.STREAM, '检查评估状态失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return 'running'; // 出错时假设仍在运行
     }
   }
@@ -307,10 +308,10 @@ export class StreamWatchdog {
       timestamp: Date.now(),
     };
     
-    console.error(`[Watchdog] ⚠️ 触发超时: ${this.config.evaluationId}`);
-    console.error(`[Watchdog] 原因: ${reason}`);
-    console.error(`[Watchdog] 消息: ${message}`);
-    console.error(`[Watchdog] 统计: ${JSON.stringify(stats)}`);
+    logger.error(LOG_MODULES.STREAM, `⚠️ 触发超时: ${this.config.evaluationId}`);
+    logger.error(LOG_MODULES.STREAM, `原因: ${reason}`);
+    logger.error(LOG_MODULES.STREAM, `消息: ${message}`);
+    logger.error(LOG_MODULES.STREAM, `统计: ${JSON.stringify(stats)}`);
     
     // 停止监控
     this.stop();
@@ -318,7 +319,7 @@ export class StreamWatchdog {
     // 中止 Agent
     const aborted = abortAgent(this.config.evaluationId);
     if (aborted) {
-      console.log(`[Watchdog] 已中止 Agent: ${this.config.evaluationId}`);
+      logger.info(LOG_MODULES.STREAM, `已中止 Agent: ${this.config.evaluationId}`);
     }
     
     // 更新数据库状态（保留已累加的 Token）
@@ -355,17 +356,17 @@ export class StreamWatchdog {
         data: { status: 'failed' },
       });
       
-      console.log(`[Watchdog] 已更新评估状态为 failed, tokens: input=${currentTokens?.totalInputTokens}, output=${currentTokens?.totalOutputTokens}`);
+      logger.info(LOG_MODULES.STREAM, `已更新评估状态为 failed, tokens: input=${currentTokens?.totalInputTokens}, output=${currentTokens?.totalOutputTokens}`);
     } catch (error) {
-      console.error('[Watchdog] 更新数据库失败:', error);
+      logger.error(LOG_MODULES.STREAM, '更新数据库失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
     
     // 处理队列
     try {
       const { processQueue } = await import('@/services/evaluation-queue');
-      processQueue().catch(err => console.error('[Watchdog] 处理队列失败:', err));
+      processQueue().catch(err => logger.error(LOG_MODULES.STREAM, '处理队列失败', { details: { error: err instanceof Error ? err.message : String(err) } }));
     } catch (error) {
-      console.error('[Watchdog] 导入队列服务失败:', error);
+      logger.error(LOG_MODULES.STREAM, '导入队列服务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
     
     // 调用超时回调

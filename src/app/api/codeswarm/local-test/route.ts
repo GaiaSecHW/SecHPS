@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
+import { copyInnerSkillsToWorkspace, buildReportParseInstruction } from '@/lib/inner-skills';
 
 interface LocalTestRequest {
   workspacePath: string;
@@ -103,7 +105,6 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
   } catch { return null; }
 }
 
-const INSTRUCTION_PHASE1 = '执行 audit-report-parser skill 解析漏洞报告';
 const INSTRUCTION_PHASE2 = '读取 Report 文件夹内的报告文件，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。仅输出可解析的 JSON，不要额外说明。';
 
 function runOpencodeParse(
@@ -115,7 +116,7 @@ function runOpencodeParse(
 ): Promise<ParsedVulnerabilityReport | null> {
   return new Promise((resolve) => {
     let childProcess: ChildProcess | null = null;
-    const args: string[] = ['run', '--agent', 'build', instruction];
+    const args: string[] = ['run', instruction];
     const env: NodeJS.ProcessEnv = { ...process.env, TERM: 'dumb', NO_COLOR: '1' };
 
     let cmd: string;
@@ -136,10 +137,10 @@ function runOpencodeParse(
       useShell = true;
     } else {
       cmd = 'bash';
-      finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
+      finalArgs = ['-c', `opencode run "${instruction}"`];
     }
 
-    addLog('info', `执行: opencode run --agent build "${instruction.slice(0, 50)}..."`);
+    addLog('info', `执行: opencode run "${instruction.slice(0, 50)}..."`);
 
     let stdout = '';
     let stderr = '';
@@ -217,7 +218,7 @@ export async function POST(request: Request) {
       message: '任务已提交，后台执行中',
     });
   } catch (error) {
-    console.error('[LocalTest] Error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'LocalTest Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -248,7 +249,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ record });
   } catch (error) {
-    console.error('[LocalTest] GET Error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'LocalTest GET Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -286,6 +287,20 @@ function executeTaskAsync(
       const { productName, taskName } = await getTaskContext(LOCAL_TEST_VULN_TASK_ID);
       addLog('info', `获取任务上下文: productName=${productName}, taskName=${taskName}`);
 
+      // 将内置 skill 拷贝到工作区，确保 opencode run 能发现 audit-report-parser
+      const copyResult = copyInnerSkillsToWorkspace(workspacePath);
+      if (copyResult.success > 0) {
+        addLog('info', `内置 skill 已部署到工作区: ${copyResult.copiedSkills.join(', ')}`);
+      } else {
+        addLog('warn', '内置 skill 拷贝失败，Phase 1 可能无法找到 audit-report-parser');
+      }
+
+      // 动态构建 Phase 1 指令（从 inner_skills/ 获取 skill 名称）
+      const instructionPhase1 = buildReportParseInstruction();
+      if (!instructionPhase1) {
+        addLog('warn', 'Phase 1 指令构建失败（inner_skills/ 中缺少 audit-report-parser skill）');
+      }
+
       const reportFolder = findReportFolder(workspacePath);
       let filePath: string = '';
       let report: ParsedVulnerabilityReport | null = null;
@@ -311,8 +326,12 @@ function executeTaskAsync(
         filePath = workspacePath;
       }
 
-      addLog('info', 'Phase 1: 启动 audit-report-parser skill');
-      report = await runOpencodeParse(taskId, workspacePath, timeoutSec, addLog, INSTRUCTION_PHASE1);
+      if (instructionPhase1) {
+        addLog('info', `Phase 1: 启动内置 skill 解析`);
+        report = await runOpencodeParse(taskId, workspacePath, timeoutSec, addLog, instructionPhase1);
+      } else {
+        addLog('warn', 'Phase 1 跳过（inner_skills/ 中无 audit-report-parser）');
+      }
 
       if (!report) {
         addLog('info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback');
@@ -373,7 +392,7 @@ function executeTaskAsync(
         durationMs: Date.now() - startTime,
       });
     } catch (error) {
-      console.error(`[LocalTest:${taskId}] Error:`, error);
+      logger.error(LOG_MODULES.CODESWARM, `LocalTest:${taskId} Error`, { details: { error: error instanceof Error ? error.message : String(error) } });
       addLog('error', `异常: ${error instanceof Error ? error.message : String(error)}`);
       await updateRecord({
         status: 'failed',

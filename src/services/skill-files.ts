@@ -11,6 +11,7 @@ import * as path from 'path';
 import type { Skill } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getSkillOutputTemplate } from '@/lib/skill-template';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 路径安全验证
@@ -130,7 +131,7 @@ export function getSkillMetadata(skillName: string, userId: string | null): Skil
     const content = fs.readFileSync(metadataPath, 'utf-8');
     return JSON.parse(content);
   } catch (error) {
-    console.error(`[SkillFiles] 读取元数据失败: ${skillName}`, error);
+    logger.error(LOG_MODULES.SKILL, `读取元数据失败: ${skillName}`, { error });
     return null;
   }
 }
@@ -232,11 +233,11 @@ export async function saveSkillToDisk(skill: Skill, overrideTemplate?: string): 
       const metadataPath = path.join(skillDir, 'metadata.json');
       fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
     }
-    
-    console.log(`[SkillFiles] 保存成功: ${skill.name} v${skill.version} -> ${skillDir}`);
+
+    logger.info(LOG_MODULES.SKILL, `保存成功: ${skill.name} v${skill.version}`, { skillDir });
     return true;
   } catch (error) {
-    console.error(`[SkillFiles] 保存失败: ${skill.name}`, error);
+    logger.error(LOG_MODULES.SKILL, `保存失败: ${skill.name}`, { error });
     return false;
   }
 }
@@ -259,21 +260,21 @@ export async function deleteSkillFromDisk(skillName: string, userId: string | nu
   try {
     if (fs.existsSync(skillDir)) {
       fs.rmSync(skillDir, { recursive: true, force: true });
-      console.log(`[SkillFiles] 删除成功: ${skillName} -> ${skillDir}`);
-      
+      logger.info(LOG_MODULES.SKILL, `删除成功: ${skillName}`, { skillDir });
+
       // 如果是私有 Skill，检查父目录是否为空，为空则删除
       if (userId) {
         const userDir = path.dirname(skillDir);
         const remainingSkills = fs.readdirSync(userDir);
         if (remainingSkills.length === 0) {
           fs.rmdirSync(userDir);
-          console.log(`[SkillFiles] 清理空目录: ${userDir}`);
+          logger.info(LOG_MODULES.SKILL, `清理空目录: ${userDir}`);
         }
       }
     }
     return true;
   } catch (error) {
-    console.error(`[SkillFiles] 删除失败: ${skillName}`, error);
+    logger.error(LOG_MODULES.SKILL, `删除失败: ${skillName}`, { error });
     return false;
   }
 }
@@ -294,11 +295,12 @@ export async function copySkillsToProject(
   skillOutputTemplate?: string,
   projectTechStack?: string[] | null  // 项目技术栈，null 或空数组表示拷贝所有
 ): Promise<CopyResult> {
-  console.log('[SkillFiles] copySkillsToProject 调用参数:');
-  console.log(`  - projectPath: ${projectPath}`);
-  console.log(`  - userId: ${userId}`);
-  console.log(`  - projectTechStack: ${JSON.stringify(projectTechStack)}`);
-  
+  logger.info(LOG_MODULES.SKILL, 'copySkillsToProject 调用参数', {
+    projectPath,
+    userId: userId ?? undefined,
+    projectTechStack,
+  });
+
   const skillsDataDir = getSkillsDataDir();
   const targetDir = path.join(projectPath, '.claude', 'skills');
   
@@ -334,17 +336,17 @@ export async function copySkillsToProject(
     
     // 检查源目录是否存在
     if (!fs.existsSync(skillsDataDir)) {
-      console.log('[SkillFiles] Skills 数据目录不存在，创建目录');
+      logger.info(LOG_MODULES.SKILL, 'Skills 数据目录不存在，创建目录');
       ensureDir(skillsDataDir);
     }
-    
+
     // ========================================
     // 新流程：先过滤，再按需生成，最后拷贝
     // ========================================
-    
+
     // Step 1: 从数据库查询满足条件的 Skills（先过滤）
-    console.log('[SkillFiles] Step 1: 从数据库查询满足条件的 Skills');
-    
+    logger.debug(LOG_MODULES.SKILL, 'Step 1: 从数据库查询满足条件的 Skills');
+
     // 构建 where 条件
     const whereCondition: any = {
       isActive: true,
@@ -390,27 +392,26 @@ export async function copySkillsToProject(
         vulnerabilityTreeId: true,
       },
     });
-    
-    console.log(`[SkillFiles] 数据库查询到 ${filteredDbSkills.length} 个激活的 Skills`);
-    console.log(`[SkillFiles] 查询条件: ${JSON.stringify(whereCondition)}`);
+
+    logger.info(LOG_MODULES.SKILL, `数据库查询到 ${filteredDbSkills.length} 个激活的 Skills`, { whereCondition });
     if (filteredDbSkills.length > 0) {
-      console.log(`[SkillFiles] 查询到的 Skills: ${filteredDbSkills.map(s => s.name).join(', ')}`);
+      logger.debug(LOG_MODULES.SKILL, `查询到的 Skills: ${filteredDbSkills.map(s => s.name).join(', ')}`);
     }
-    
+
     // Step 2: 应用技术栈过滤 + 治理过滤
-    console.log('[SkillFiles] Step 2: 应用技术栈过滤和治理过滤');
-    
+    logger.debug(LOG_MODULES.SKILL, 'Step 2: 应用技术栈过滤和治理过滤');
+
     const skillsToCopy: typeof filteredDbSkills = [];
-    
+
     for (const skill of filteredDbSkills) {
       // 技术栈匹配过滤
       if (projectTechStack && projectTechStack.length > 0 && skill.categoryId) {
         if (!projectTechStack.includes(skill.categoryId)) {
-          console.log(`[SkillFiles] 技术栈不匹配，跳过: ${skill.name} (Skill分类ID: ${skill.categoryId})`);
+          logger.debug(LOG_MODULES.SKILL, `技术栈不匹配，跳过: ${skill.name}`, { categoryId: skill.categoryId });
           continue;
         }
       }
-      
+
       // 检查是否已合并
       const completedMergeRecords = await prisma.skillMergeRecord.findMany({
         where: {
@@ -418,7 +419,7 @@ export async function copySkillsToProject(
           status: 'completed',
         },
       });
-      
+
       if (completedMergeRecords.length > 0) {
         const mergeRecord = completedMergeRecords[0];
         const targetSkill = await prisma.skill.findUnique({
@@ -426,7 +427,7 @@ export async function copySkillsToProject(
           select: { name: true, displayName: true },
         });
         const targetSkillName = targetSkill?.displayName || targetSkill?.name || '未知';
-        
+
         if (!result.filteredSkills) result.filteredSkills = [];
         result.filteredSkills.push({
           skillId: skill.id,
@@ -434,10 +435,10 @@ export async function copySkillsToProject(
           reason: 'merged',
           mergedInto: targetSkillName,
         });
-        console.log(`[SkillFiles] 治理过滤: ${skill.name} 已合并到 ${targetSkillName}`);
+        logger.debug(LOG_MODULES.SKILL, `治理过滤: ${skill.name} 已合并到 ${targetSkillName}`);
         continue;
       }
-      
+
       // 检查是否有待处理的合并请求
       const pendingMergeRecords = await prisma.skillMergeRecord.findMany({
         where: {
@@ -447,7 +448,7 @@ export async function copySkillsToProject(
           ],
         },
       });
-      
+
       if (pendingMergeRecords.length > 0) {
         if (!result.filteredSkills) result.filteredSkills = [];
         result.filteredSkills.push({
@@ -455,29 +456,28 @@ export async function copySkillsToProject(
           skillName: skill.name,
           reason: 'pending_merge',
         });
-        console.log(`[SkillFiles] 治理过滤: ${skill.name} 正在合并流程中`);
+        logger.debug(LOG_MODULES.SKILL, `治理过滤: ${skill.name} 正在合并流程中`);
         continue;
       }
-      
+
       // 通过所有过滤，加入待拷贝列表
       skillsToCopy.push(skill);
     }
-    
-    console.log(`[SkillFiles] 过滤后剩余 ${skillsToCopy.length} 个 Skills 待拷贝`);
-    
+
+    logger.info(LOG_MODULES.SKILL, `过滤后剩余 ${skillsToCopy.length} 个 Skills 待拷贝`);
     // Step 3: 检查磁盘文件，不存在则生成
-    console.log('[SkillFiles] Step 3: 检查磁盘文件，按需生成');
+    logger.info(LOG_MODULES.SKILL, 'Step 3: 检查磁盘文件，按需生成');
     
     for (const skill of skillsToCopy) {
       const skillDir = getSkillDir(skill.name, skill.userId);
       const metadataPath = path.join(skillDir, 'metadata.json');
       const skillFile = path.join(skillDir, `SKILL-v${skill.version}.md`);
       
-      console.log(`[SkillFiles] 检查 Skill ${skill.name}:`);
-      console.log(`  - skillDir: ${skillDir}`);
-      console.log(`  - 目录存在: ${fs.existsSync(skillDir)}`);
-      console.log(`  - metadata.json 存在: ${fs.existsSync(metadataPath)}`);
-      console.log(`  - SKILL-v${skill.version}.md 存在: ${fs.existsSync(skillFile)}`);
+      logger.info(LOG_MODULES.SKILL, `检查 Skill ${skill.name}:`);
+      logger.debug(LOG_MODULES.SKILL, `  - skillDir: ${skillDir}`);
+      logger.debug(LOG_MODULES.SKILL, `  - 目录存在: ${fs.existsSync(skillDir)}`);
+      logger.debug(LOG_MODULES.SKILL, `  - metadata.json 存在: ${fs.existsSync(metadataPath)}`);
+      logger.debug(LOG_MODULES.SKILL, `  - SKILL-v${skill.version}.md 存在: ${fs.existsSync(skillFile)}`);
       
       // 检查磁盘上是否有这个 Skill 的文件
       const needsGeneration = !fs.existsSync(skillDir) || 
@@ -485,7 +485,7 @@ export async function copySkillsToProject(
                               !fs.existsSync(skillFile);
       
       if (needsGeneration) {
-        console.log(`[SkillFiles] 磁盘上缺少 Skill 文件，从数据库生成: ${skill.name}`);
+        logger.info(LOG_MODULES.SKILL, `磁盘上缺少 Skill 文件，从数据库生成: ${skill.name}`);
         // 转换为完整的 Skill 对象（包含所有必需字段）
         const fullSkill: Skill = {
           ...skill,
@@ -512,7 +512,7 @@ export async function copySkillsToProject(
     }
     
     // Step 4: 从磁盘拷贝到项目目录
-    console.log('[SkillFiles] Step 4: 拷贝到项目目录');
+    logger.info(LOG_MODULES.SKILL, 'Step 4: 拷贝到项目目录');
     
     for (const skill of skillsToCopy) {
       try {
@@ -548,18 +548,18 @@ export async function copySkillsToProject(
         result.success++;
         result.copiedSkills.push(skill.name);
         result.skillIds.push(skill.id);
-        console.log(`[SkillFiles] 拷贝成功: ${skill.name} v${skill.version}`);
+        logger.info(LOG_MODULES.SKILL, `拷贝成功: ${skill.name} v${skill.version}`);
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
         result.errors.push(`Skill ${skill.name}: ${errorMsg}`);
-        console.error(`[SkillFiles] 拷贝失败: ${skill.name}`, error);
+        logger.error(LOG_MODULES.SKILL, `拷贝失败: ${skill.name}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
     
-    console.log(`[SkillFiles] 拷贝完成: 成功 ${result.success}, 失败 ${result.failed}`);
+    logger.info(LOG_MODULES.SKILL, `拷贝完成: 成功 ${result.success}, 失败 ${result.failed}`);
   } catch (error) {
-    console.error('[SkillFiles] 拷贝过程出错:', error);
+    logger.error(LOG_MODULES.SKILL, '拷贝过程出错', { details: { error: error instanceof Error ? error.message : String(error) } });
     result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
   }
   
@@ -602,7 +602,7 @@ export function listSkillsOnDisk(userId?: string | null): Array<{
               path: skillDir,
             });
           } catch (e) {
-            console.warn(`[SkillFiles] 解析元数据失败: ${entry.name}`, e);
+            logger.warn(LOG_MODULES.SKILL, `解析元数据失败: ${entry.name}`, { details: { error: e instanceof Error ? e.message : String(e) } });
           }
         }
       }
@@ -627,7 +627,7 @@ export function listSkillsOnDisk(userId?: string | null): Array<{
                   path: skillDir,
                 });
               } catch (e) {
-                console.warn(`[SkillFiles] 解析私有 Skill 元数据失败: ${entry.name}`, e);
+                logger.warn(LOG_MODULES.SKILL, `解析私有 Skill 元数据失败: ${entry.name}`, { details: { error: e instanceof Error ? e.message : String(e) } });
               }
             }
           }
@@ -635,7 +635,7 @@ export function listSkillsOnDisk(userId?: string | null): Array<{
       }
     }
   } catch (error) {
-    console.error('[SkillFiles] 列出 Skills 失败:', error);
+    logger.error(LOG_MODULES.SKILL, '列出 Skills 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
   }
   
   return skills;
@@ -664,9 +664,9 @@ export async function syncAllSkillsToDisk(skillOutputTemplate?: string): Promise
       where: { isLatest: true },
     });
     
-    console.log(`[SkillFiles] 开始同步 ${skills.length} 个 Skills 到磁盘`);
+    logger.info(LOG_MODULES.SKILL, `开始同步 ${skills.length} 个 Skills 到磁盘`);
     if (skillOutputTemplate && skillOutputTemplate.trim()) {
-      console.log(`[SkillFiles] 使用标准输出模板，长度: ${skillOutputTemplate.length}`);
+      logger.debug(LOG_MODULES.SKILL, `使用标准输出模板，长度: ${skillOutputTemplate.length}`);
     }
     
     for (const skill of skills) {
@@ -679,11 +679,11 @@ export async function syncAllSkillsToDisk(skillOutputTemplate?: string): Promise
       }
     }
     
-    console.log(`[SkillFiles] 同步完成: 总计 ${result.success + result.failed}, 成功 ${result.success}, 失败 ${result.failed}`);
+    logger.info(LOG_MODULES.SKILL, `同步完成: 总计 ${result.success + result.failed}, 成功 ${result.success}, 失败 ${result.failed}`);
     
     return result;
   } catch (error) {
-    console.error('[SkillFiles] 同步失败:', error);
+    logger.error(LOG_MODULES.SKILL, '同步失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
     return result;
   }
@@ -696,7 +696,7 @@ export async function ensureSkillsDataDir(): Promise<boolean> {
   const skillsDataDir = getSkillsDataDir();
   
   if (!fs.existsSync(skillsDataDir)) {
-    console.log('[SkillFiles] 创建 Skills 数据目录:', skillsDataDir);
+    logger.info(LOG_MODULES.SKILL, `创建 Skills 数据目录: ${skillsDataDir}`);
     fs.mkdirSync(skillsDataDir, { recursive: true });
     
     // 首次创建，同步数据库中的所有 Skills
@@ -719,7 +719,7 @@ export async function importSkillFromDisk(
   const metadataPath = path.join(skillDir, 'metadata.json');
 
   if (!fs.existsSync(metadataPath)) {
-    console.error(`[SkillFiles] Skill 元数据不存在: ${skillName}`);
+    logger.error(LOG_MODULES.SKILL, `Skill 元数据不存在: ${skillName}`);
     return false;
   }
 
@@ -732,16 +732,16 @@ export async function importSkillFromDisk(
     // 读取最新版本的 SKILL.md
     const skillFile = path.join(skillDir, 'SKILL.md');
     if (!fs.existsSync(skillFile)) {
-      console.error(`[SkillFiles] SKILL.md 不存在: ${skillName}`);
+      logger.error(LOG_MODULES.SKILL, `SKILL.md 不存在: ${skillName}`);
       return false;
     }
 
     // 这里可以添加解析 SKILL.md 的逻辑
     // 目前简化处理，仅返回成功
-    console.log(`[SkillFiles] 导入成功: ${skillName}`);
+    logger.info(LOG_MODULES.SKILL, `导入成功: ${skillName}`);
     return true;
   } catch (error) {
-    console.error(`[SkillFiles] 导入失败: ${skillName}`, error);
+    logger.error(LOG_MODULES.SKILL, `导入失败: ${skillName}`, { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -922,18 +922,18 @@ export async function copySkillsByIds(
         result.success++;
         result.copiedSkills.push(skill.name);
         result.skillIds.push(skill.id);
-        console.log(`[SkillFiles] 按 ID 拷贝成功: ${skill.name} (${skill.id})`);
+        logger.info(LOG_MODULES.SKILL, `按 ID 拷贝成功: ${skill.name} (${skill.id})`);
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
         result.errors.push(`Skill ${skill.name} (${skill.id}): ${errorMsg}`);
-        console.error(`[SkillFiles] 按 ID 拷贝失败: ${skill.id}`, error);
+        logger.error(LOG_MODULES.SKILL, `按 ID 拷贝失败: ${skill.id}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
 
-    console.log(`[SkillFiles] 按 ID 拷贝完成: 成功 ${result.success}, 失败 ${result.failed}`);
+    logger.info(LOG_MODULES.SKILL, `按 ID 拷贝完成: 成功 ${result.success}, 失败 ${result.failed}`);
   } catch (error) {
-    console.error('[SkillFiles] 按 ID 拷贝过程出错:', error);
+    logger.error(LOG_MODULES.SKILL, '按 ID 拷贝过程出错', { details: { error: error instanceof Error ? error.message : String(error) } });
     result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
   }
 

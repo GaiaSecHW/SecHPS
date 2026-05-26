@@ -1,13 +1,14 @@
-# .dockerignore for codeswarm worker
-# Build context: project root (docker build -f codeswarm/Dockerfile .)
+# .dockerignore for SecHPS Server
+# Build context: project root (docker build -f Dockerfile.server .)
+#
+# Note: CodeSwarm Worker uses codeswarm/.dockerignore (separate context)
 
-# === Exclude main Next.js app (not needed in worker container) ===
-src/
-prisma/
-public/
-.next/
-package.json
-package-lock.json
+# === Rebuilt in Docker (not needed in build context) ===
+.next
+node_modules
+
+# === Separate Docker image (worker has its own build) ===
+codeswarm/
 
 # === Version control ===
 .git
@@ -17,31 +18,50 @@ package-lock.json
 .idea
 .vscode
 *.swp
+.claude/
+.omc/
 
-# === Root node_modules (Next.js app) ===
-node_modules
-
-# === Codedmap runtime state ===
-codedmap/.audit_state
-codedmap/audit.db
-codedmap/ignored.db
-codedmap/.claude
-codedmap/codedmap.egg-info
-codedmap/**/__pycache__
-
-# === Codeswarm build artifacts (rebuilt in Docker) ===
-codeswarm/node_modules
-codeswarm/packages/*/dist
-codeswarm/packages/*/data/task_workspaces
-codeswarm/**/.omc
-codeswarm/**/.claude
-
-# === Misc ===
-*.log
-tsconfig.tsbuildinfo
-temp-*
-*.png
-logs-page-verification.png
+# === Secrets (must never be in image) ===
 .env
 .env.local
-codedmap/uv.lock
+.env.example
+
+# === Runtime data (mounted as volumes at deploy time) ===
+data/
+uploads/
+skill_management/
+AgentHarness/
+skills.clone/
+test-skills-output/
+
+# === Logs ===
+*.log
+app.log
+worker.log
+
+# === Scripts (only postbuild.js needed for build, rest excluded) ===
+scripts/*
+!scripts/postbuild.js
+
+# === Dev/test artifacts ===
+docs/
+test-*.js
+test-*.ts
+test-*.py
+test-*.cjs
+test-*.mjs
+test-project/
+test-results/
+test-outputs/
+
+# === Misc ===
+/*.md
+*.zip
+*.tar.gz
+*.7z
+*.db
+dev.db
+prod_dev.db
+tsconfig.tsbuildinfo
+temp-*
+session-ses_*.md

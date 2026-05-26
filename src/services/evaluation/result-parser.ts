@@ -5,29 +5,8 @@
 //
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { ClaudeVulnerabilityReport } from '@/types/vulnerability';
-
-// ============================================
-// 日志工具
-// ============================================
-
-const LOG_PREFIX = '[ResultParser]';
-
-function logInfo(message: string, ...args: unknown[]) {
-  console.log(`${LOG_PREFIX} [INFO] ${message}`, ...args);
-}
-
-function logWarn(message: string, ...args: unknown[]) {
-  console.warn(`${LOG_PREFIX} [WARN] ${message}`, ...args);
-}
-
-function logError(message: string, ...args: unknown[]) {
-  console.error(`${LOG_PREFIX} [ERROR] ${message}`, ...args);
-}
-
-function logSuccess(message: string, ...args: unknown[]) {
-  console.log(`${LOG_PREFIX} [SUCCESS] ${message}`, ...args);
-}
 
 // ============================================
 // Skills 提取
@@ -66,7 +45,7 @@ export function extractUsedSkills(fullResponse: string): string[] {
   }
 
   if (skills.length > 0) {
-    logInfo(`检测到使用的 Skills: ${skills.join(', ')}`);
+    logger.info(LOG_MODULES.EVALUATION,`检测到使用的 Skills: ${skills.join(', ')}`);
   }
 
   return skills;
@@ -86,7 +65,7 @@ export function extractUsedSkills(fullResponse: string): string[] {
  * - 多个 JSON 块（取包含漏洞的）
  */
 function extractJsonBlock(text: string): { json: string; source: string } | null {
-  logInfo('开始提取 JSON 块，响应长度:', text.length);
+  logger.info(LOG_MODULES.EVALUATION, `开始提取 JSON 块，响应长度: ${text.length}`);
 
   // 策略1: 尝试匹配 ```json ... ``` 代码块
   const jsonCodeBlockRegex = /```json\s*\n?([\s\S]*?)```/gi;
@@ -96,7 +75,7 @@ function extractJsonBlock(text: string): { json: string; source: string } | null
   while ((match = jsonCodeBlockRegex.exec(text)) !== null) {
     const json = match[1].trim();
     if (json) {
-      logInfo(`找到 JSON 代码块 (策略1-json标签)，长度: ${json.length}`);
+      logger.info(LOG_MODULES.EVALUATION,`找到 JSON 代码块 (策略1-json标签)，长度: ${json.length}`);
       jsonBlocks.push({ json, source: 'json-code-block' });
     }
   }
@@ -107,7 +86,7 @@ function extractJsonBlock(text: string): { json: string; source: string } | null
     const content = match[1].trim();
     // 检查是否看起来像 JSON
     if (content.startsWith('{') && content.includes('vulnerabilit')) {
-      logInfo(`找到通用代码块 (策略2-通用标签)，长度: ${content.length}`);
+      logger.info(LOG_MODULES.EVALUATION,`找到通用代码块 (策略2-通用标签)，长度: ${content.length}`);
       jsonBlocks.push({ json: content, source: 'generic-code-block' });
     }
   }
@@ -117,7 +96,7 @@ function extractJsonBlock(text: string): { json: string; source: string } | null
   const braceMatches = findJsonObjects(text);
   for (const json of braceMatches) {
     if (json.includes('vulnerabilit') || json.includes('summary')) {
-      logInfo(`找到 JSON 对象 (策略3-括号匹配)，长度: ${json.length}`);
+      logger.info(LOG_MODULES.EVALUATION,`找到 JSON 对象 (策略3-括号匹配)，长度: ${json.length}`);
       jsonBlocks.push({ json, source: 'brace-match' });
     }
   }
@@ -127,21 +106,21 @@ function extractJsonBlock(text: string): { json: string; source: string } | null
     // 优先级: 包含 vulnerabilities > 包含 summary > 其他
     const withVulns = jsonBlocks.find(b => b.json.includes('"vulnerabilities"'));
     if (withVulns) {
-      logInfo(`选择包含漏洞列表的 JSON 块，来源: ${withVulns.source}`);
+      logger.info(LOG_MODULES.EVALUATION,`选择包含漏洞列表的 JSON 块，来源: ${withVulns.source}`);
       return withVulns;
     }
 
     const withSummary = jsonBlocks.find(b => b.json.includes('"summary"'));
     if (withSummary) {
-      logInfo(`选择包含摘要的 JSON 块，来源: ${withSummary.source}`);
+      logger.info(LOG_MODULES.EVALUATION,`选择包含摘要的 JSON 块，来源: ${withSummary.source}`);
       return withSummary;
     }
 
-    logInfo(`选择第一个 JSON 块，来源: ${jsonBlocks[0].source}`);
+    logger.info(LOG_MODULES.EVALUATION,`选择第一个 JSON 块，来源: ${jsonBlocks[0].source}`);
     return jsonBlocks[0];
   }
 
-  logWarn('未找到任何 JSON 块');
+  logger.warn(LOG_MODULES.EVALUATION, '未找到任何 JSON 块');
   return null;
 }
 
@@ -321,12 +300,12 @@ export async function parseAndSaveResults(
   projectId: string,
   fullResponse: string
 ): Promise<{ success: boolean; vulnCount: number; error?: string }> {
-  logInfo('========================================');
-  logInfo('开始解析评估结果');
-  logInfo(`评估ID: ${evaluationId}`);
-  logInfo(`项目ID: ${projectId}`);
-  logInfo(`响应长度: ${fullResponse.length} 字符`);
-  logInfo('========================================');
+  logger.info(LOG_MODULES.EVALUATION, '========================================');
+  logger.info(LOG_MODULES.EVALUATION, '开始解析评估结果');
+  logger.info(LOG_MODULES.EVALUATION, `评估ID: ${evaluationId}`);
+  logger.info(LOG_MODULES.EVALUATION, `项目ID: ${projectId}`);
+  logger.info(LOG_MODULES.EVALUATION, `响应长度: ${fullResponse.length} 字符`);
+  logger.info(LOG_MODULES.EVALUATION, '========================================');
 
   const result = { success: false, vulnCount: 0, error: undefined as string | undefined };
 
@@ -344,53 +323,53 @@ export async function parseAndSaveResults(
       jsonSource = jsonResult.source;
       try {
         report = JSON.parse(jsonResult.json);
-        logInfo(`JSON 解析成功，来源: ${jsonSource}`);
+        logger.info(LOG_MODULES.EVALUATION,`JSON 解析成功，来源: ${jsonSource}`);
       } catch (parseError: unknown) {
         const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
-        logWarn(`JSON 解析失败: ${errorMsg}`);
+        logger.warn(LOG_MODULES.EVALUATION,`JSON 解析失败: ${errorMsg}`);
         
         // 日志：打印完整的 JSON 块内容和解析失败原因
-        logError('========================================');
-        logError('!!! JSON 解析失败 - 打印完整 JSON 块 !!!');
-        logError(`解析失败原因: ${errorMsg}`);
-        logError(`JSON 来源: ${jsonSource}`);
-        logError(`JSON 长度: ${jsonResult.json.length} 字符`);
-        logError('----------------------------------------');
-        logError('完整 JSON 内容:');
-        logError('----------------------------------------');
+        logger.error(LOG_MODULES.EVALUATION,'========================================');
+        logger.error(LOG_MODULES.EVALUATION,'!!! JSON 解析失败 - 打印完整 JSON 块 !!!');
+        logger.error(LOG_MODULES.EVALUATION,`解析失败原因: ${errorMsg}`);
+        logger.error(LOG_MODULES.EVALUATION,`JSON 来源: ${jsonSource}`);
+        logger.error(LOG_MODULES.EVALUATION,`JSON 长度: ${jsonResult.json.length} 字符`);
+        logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
+        logger.error(LOG_MODULES.EVALUATION,'完整 JSON 内容:');
+        logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
         // 分段打印，避免日志截断
         const jsonContent = jsonResult.json;
         const chunkSize = 5000;
         for (let i = 0; i < jsonContent.length; i += chunkSize) {
           const chunk = jsonContent.substring(i, Math.min(i + chunkSize, jsonContent.length));
-          console.error(`${LOG_PREFIX} [JSON内容 ${Math.floor(i/chunkSize) + 1}/${Math.ceil(jsonContent.length/chunkSize)}]`, chunk);
+          logger.error(LOG_MODULES.EVALUATION, `[JSON内容 ${Math.floor(i/chunkSize) + 1}/${Math.ceil(jsonContent.length/chunkSize)}] ${chunk}`);
         }
-        logError('----------------------------------------');
-        logError('JSON 内容结束');
-        logError('========================================');
+        logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
+        logger.error(LOG_MODULES.EVALUATION,'JSON 内容结束');
+        logger.error(LOG_MODULES.EVALUATION,'========================================');
         
-        logWarn('尝试修复 JSON...');
+        logger.warn(LOG_MODULES.EVALUATION,'尝试修复 JSON...');
         
         // 尝试修复常见的 JSON 问题
         try {
           const fixedJson = fixJson(jsonResult.json);
           report = JSON.parse(fixedJson);
-          logInfo('JSON 修复后解析成功');
+          logger.info(LOG_MODULES.EVALUATION,'JSON 修复后解析成功');
         } catch (fixError: unknown) {
           const fixErrorMsg = fixError instanceof Error ? fixError.message : String(fixError);
-          logWarn(`JSON 修复失败: ${fixErrorMsg}`);
+          logger.warn(LOG_MODULES.EVALUATION,`JSON 修复失败: ${fixErrorMsg}`);
           
           // 打印修复后的 JSON（调试用）
-          logError('修复后的 JSON 仍然无法解析');
+          logger.error(LOG_MODULES.EVALUATION,'修复后的 JSON 仍然无法解析');
         }
       }
     } else {
       // 没有找到 JSON 块
-      logWarn('未找到任何 JSON 块');
-      logWarn('========================================');
-      logWarn('!!! 未找到 JSON 块 - 可能的漏洞文件内容 !!!');
-      logWarn('响应长度:', fullResponse.length);
-      logWarn('----------------------------------------');
+      logger.warn(LOG_MODULES.EVALUATION,'未找到任何 JSON 块');
+      logger.warn(LOG_MODULES.EVALUATION,'========================================');
+      logger.warn(LOG_MODULES.EVALUATION,'!!! 未找到 JSON 块 - 可能的漏洞文件内容 !!!');
+      logger.warn(LOG_MODULES.EVALUATION, `响应长度: ${fullResponse.length}`);
+      logger.warn(LOG_MODULES.EVALUATION,'----------------------------------------');
       // 查找可能的漏洞相关内容
       const vulnKeywords = ['vulnerability', 'vulnerabilities', '漏洞', '注入', 'XSS', 'CSRF', '风险', '问题'];
       const relevantParts: string[] = [];
@@ -404,17 +383,17 @@ export async function parseAndSaveResults(
       }
       
       if (relevantParts.length > 0) {
-        logWarn(`找到 ${relevantParts.length} 个可能包含漏洞的段落:`);
+        logger.warn(LOG_MODULES.EVALUATION,`找到 ${relevantParts.length} 个可能包含漏洞的段落:`);
         relevantParts.forEach((part, idx) => {
-          logWarn(`--- 段落 ${idx + 1} ---`);
-          console.warn(`${LOG_PREFIX}`, part.substring(0, 1000));
+          logger.warn(LOG_MODULES.EVALUATION,`--- 段落 ${idx + 1} ---`);
+          logger.warn(LOG_MODULES.EVALUATION, part.substring(0, 1000));
         });
       } else {
         // 打印前5000字符作为参考
-        logWarn('未找到明确包含漏洞的内容，打印响应前5000字符:');
-        console.warn(`${LOG_PREFIX}`, fullResponse.substring(0, 5000));
+        logger.warn(LOG_MODULES.EVALUATION,'未找到明确包含漏洞的内容，打印响应前5000字符:');
+        logger.warn(LOG_MODULES.EVALUATION, fullResponse.substring(0, 5000));
       }
-      logWarn('========================================');
+      logger.warn(LOG_MODULES.EVALUATION,'========================================');
     }
 
     // 3. 提取漏洞列表
@@ -422,36 +401,36 @@ export async function parseAndSaveResults(
 
     if (report?.vulnerabilities && Array.isArray(report.vulnerabilities)) {
       vulnerabilities = report.vulnerabilities;
-      logInfo(`从 JSON 报告中提取到 ${vulnerabilities.length} 个漏洞`);
+      logger.info(LOG_MODULES.EVALUATION,`从 JSON 报告中提取到 ${vulnerabilities.length} 个漏洞`);
     } else {
       // 降级：从文本中提取漏洞
-      logWarn('JSON 中未找到漏洞列表，尝试从文本中提取...');
+      logger.warn(LOG_MODULES.EVALUATION,'JSON 中未找到漏洞列表，尝试从文本中提取...');
       vulnerabilities = extractVulnerabilitiesFromText(fullResponse);
-      logInfo(`从文本中提取到 ${vulnerabilities.length} 个漏洞`);
+      logger.info(LOG_MODULES.EVALUATION,`从文本中提取到 ${vulnerabilities.length} 个漏洞`);
     }
 
     // 4. 如果没有找到任何漏洞，记录原始响应并返回
     if (vulnerabilities.length === 0) {
-      logError('========================================');
-      logError('!!! 未找到任何漏洞 - 打印完整响应 !!!');
-      logError(`评估ID: ${evaluationId}`);
-      logError(`项目ID: ${projectId}`);
-      logError(`响应长度: ${fullResponse.length} 字符`);
-      logError(`JSON 来源: ${jsonSource}`);
-      logError('----------------------------------------');
-      logError('解析失败原因: JSON中没有漏洞列表且文本提取也为空');
-      logError('----------------------------------------');
-      logError('完整响应内容:');
-      logError('----------------------------------------');
+      logger.error(LOG_MODULES.EVALUATION,'========================================');
+      logger.error(LOG_MODULES.EVALUATION,'!!! 未找到任何漏洞 - 打印完整响应 !!!');
+      logger.error(LOG_MODULES.EVALUATION,`评估ID: ${evaluationId}`);
+      logger.error(LOG_MODULES.EVALUATION,`项目ID: ${projectId}`);
+      logger.error(LOG_MODULES.EVALUATION,`响应长度: ${fullResponse.length} 字符`);
+      logger.error(LOG_MODULES.EVALUATION,`JSON 来源: ${jsonSource}`);
+      logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
+      logger.error(LOG_MODULES.EVALUATION,'解析失败原因: JSON中没有漏洞列表且文本提取也为空');
+      logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
+      logger.error(LOG_MODULES.EVALUATION,'完整响应内容:');
+      logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
       // 分段打印，避免日志截断
       const chunkSize = 5000;
       for (let i = 0; i < fullResponse.length; i += chunkSize) {
         const chunk = fullResponse.substring(i, Math.min(i + chunkSize, fullResponse.length));
-        console.error(`${LOG_PREFIX} [响应内容 ${Math.floor(i/chunkSize) + 1}/${Math.ceil(fullResponse.length/chunkSize)}]`, chunk);
+        logger.error(LOG_MODULES.EVALUATION, `[响应内容 ${Math.floor(i/chunkSize) + 1}/${Math.ceil(fullResponse.length/chunkSize)}] ${chunk}`);
       }
-      logError('----------------------------------------');
-      logError('响应内容结束');
-      logError('========================================');
+      logger.error(LOG_MODULES.EVALUATION,'----------------------------------------');
+      logger.error(LOG_MODULES.EVALUATION,'响应内容结束');
+      logger.error(LOG_MODULES.EVALUATION,'========================================');
       
       // 保存一个空的结果记录，包含原始响应
       try {
@@ -469,9 +448,9 @@ export async function parseAndSaveResults(
             rawReport: fullResponse.substring(0, 50000), // 限制大小
           },
         });
-        logInfo('已保存空的评估结果记录（包含原始响应）');
+        logger.info(LOG_MODULES.EVALUATION,'已保存空的评估结果记录（包含原始响应）');
       } catch (dbError) {
-        logError('保存空结果记录失败:', dbError);
+        logger.error(LOG_MODULES.EVALUATION, '保存空结果记录失败', { details: { error: dbError instanceof Error ? dbError.message : String(dbError) } });
       }
 
       result.error = '未找到漏洞数据';
@@ -489,13 +468,13 @@ export async function parseAndSaveResults(
       info: summary.info || vulnerabilities.filter(v => v.severity === 'info').length,
     };
 
-    logInfo('漏洞统计:');
-    logInfo(`  - 总数: ${stats.total}`);
-    logInfo(`  - 严重: ${stats.critical}`);
-    logInfo(`  - 高危: ${stats.high}`);
-    logInfo(`  - 中危: ${stats.medium}`);
-    logInfo(`  - 低危: ${stats.low}`);
-    logInfo(`  - 信息: ${stats.info}`);
+    logger.info(LOG_MODULES.EVALUATION,'漏洞统计:');
+    logger.info(LOG_MODULES.EVALUATION,`  - 总数: ${stats.total}`);
+    logger.info(LOG_MODULES.EVALUATION,`  - 严重: ${stats.critical}`);
+    logger.info(LOG_MODULES.EVALUATION,`  - 高危: ${stats.high}`);
+    logger.info(LOG_MODULES.EVALUATION,`  - 中危: ${stats.medium}`);
+    logger.info(LOG_MODULES.EVALUATION,`  - 低危: ${stats.low}`);
+    logger.info(LOG_MODULES.EVALUATION,`  - 信息: ${stats.info}`);
 
     // 6. 保存评估结果摘要
     try {
@@ -505,7 +484,7 @@ export async function parseAndSaveResults(
       });
 
       if (existing) {
-        logInfo('更新已存在的评估结果');
+        logger.info(LOG_MODULES.EVALUATION,'更新已存在的评估结果');
         await prisma.evaluationResult.update({
           where: { evaluationId },
           data: {
@@ -535,9 +514,9 @@ export async function parseAndSaveResults(
           },
         });
       }
-      logSuccess('评估结果摘要已保存');
+      logger.info(LOG_MODULES.EVALUATION,'评估结果摘要已保存');
     } catch (dbError) {
-      logError('保存评估结果摘要失败:', dbError);
+      logger.error(LOG_MODULES.EVALUATION, '保存评估结果摘要失败', { details: { error: dbError instanceof Error ? dbError.message : String(dbError) } });
       result.error = `保存摘要失败: ${dbError}`;
       return result;
     }
@@ -548,27 +527,27 @@ export async function parseAndSaveResults(
     let savedCount = 0;
     let failedCount = 0;
 
-    logInfo(`[已禁用] 漏洞入库跳过 - 统一在评估结束时处理`);
-    logInfo(`发现漏洞 ${vulnerabilities.length} 个，将在评估结束后统一入库`);
+    logger.info(LOG_MODULES.EVALUATION,`[已禁用] 漏洞入库跳过 - 统一在评估结束时处理`);
+    logger.info(LOG_MODULES.EVALUATION,`发现漏洞 ${vulnerabilities.length} 个，将在评估结束后统一入库`);
 
-    logSuccess('========================================');
-    logSuccess('漏洞保存完成');
-    logSuccess(`发现漏洞文件: ${vulnerabilities.length} 个`);
-    logSuccess(`成功入库: ${savedCount} 个`);
+    logger.info(LOG_MODULES.EVALUATION,'========================================');
+    logger.info(LOG_MODULES.EVALUATION,'漏洞保存完成');
+    logger.info(LOG_MODULES.EVALUATION,`发现漏洞文件: ${vulnerabilities.length} 个`);
+    logger.info(LOG_MODULES.EVALUATION,`成功入库: ${savedCount} 个`);
     if (failedCount > 0) {
-      logWarn(`入库失败: ${failedCount} 个`);
+      logger.warn(LOG_MODULES.EVALUATION,`入库失败: ${failedCount} 个`);
     }
-    logSuccess('========================================');
+    logger.info(LOG_MODULES.EVALUATION,'========================================');
 
     result.success = true;
     result.vulnCount = savedCount;
     return result;
 
   } catch (error: unknown) {
-    logError('========================================');
-    logError('解析结果失败');
-    logError(String(error));
-    logError('========================================');
+    logger.error(LOG_MODULES.EVALUATION,'========================================');
+    logger.error(LOG_MODULES.EVALUATION,'解析结果失败');
+    logger.error(LOG_MODULES.EVALUATION,String(error));
+    logger.error(LOG_MODULES.EVALUATION,'========================================');
     
     result.error = error instanceof Error ? error.message : String(error);
     return result;

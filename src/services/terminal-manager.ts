@@ -1,5 +1,6 @@
 import * as pty from 'node-pty';
 import { WebSocket } from 'ws';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 终端会话类
@@ -41,7 +42,7 @@ export class TerminalSession {
       }
     });
 
-    console.log(`[Terminal] Session ${sessionId} created in ${cwd}`);
+    logger.info(LOG_MODULES.SESSION, 'Session created', { details: { sessionId, cwd } });
   }
 
   /**
@@ -63,10 +64,10 @@ export class TerminalSession {
           }
           break;
         default:
-          console.warn(`[Terminal] Unknown message type: ${msg.type}`);
+          logger.warn(LOG_MODULES.SESSION, 'Unknown message type', { details: { type: msg.type } });
       }
     } catch (error) {
-      console.error('[Terminal] Error parsing message:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error parsing message', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -88,10 +89,10 @@ export class TerminalSession {
     try {
       this.ptyProcess.kill();
     } catch (error) {
-      console.error('[Terminal] Error killing PTY process:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error killing PTY process', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
-    
-    console.log(`[Terminal] Session ${this.sessionId} disposed`);
+
+    logger.info(LOG_MODULES.SESSION, 'Session disposed', { details: { sessionId: this.sessionId } });
   }
 }
 
@@ -123,7 +124,7 @@ export class TerminalManager {
 
     // WebSocket 错误处理
     ws.on('error', (error) => {
-      console.error(`[Terminal] WebSocket error for session ${sessionId}:`, error);
+      logger.error(LOG_MODULES.SESSION, 'WebSocket error for session', { details: { sessionId, error: error instanceof Error ? error.message : String(error) } });
       this.disposeSession(sessionId);
     });
 
@@ -164,7 +165,7 @@ export class TerminalManager {
       session.dispose();
     }
     this.sessions.clear();
-    console.log('[Terminal] All sessions disposed');
+    logger.info(LOG_MODULES.SESSION, 'All sessions disposed');
   }
 
   /**

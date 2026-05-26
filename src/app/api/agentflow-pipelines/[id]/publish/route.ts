@@ -5,6 +5,7 @@ import { getTenantIdForCreate } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
 import { uploadFileToGitea, isGiteaConfigured, getGiteaRepoUrl, GiteaAuthError } from '@/lib/gitea';
 import { generatePipelinePy, type AgentFlowNode, type AgentFlowEdge } from '@/lib/agentflow-codegen';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('发布 Pipeline 失败:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '发布 Pipeline 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '发布 Pipeline 失败', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 }

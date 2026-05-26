@@ -3,6 +3,8 @@
  * 用于将 AgentHarness 文件上传到 Gitea 仓库
  */
 
+import { logger, LOG_MODULES } from '@/lib/logger';
+
 export class GiteaAuthError extends Error {
   constructor(message: string = 'Gitea 认证失败，请检查 GITEA_TOKEN 配置') {
     super(message);
@@ -32,7 +34,7 @@ function getGiteaConfig(): GiteaConfig | null {
   const branch = process.env.GITEA_BRANCH || 'main';
 
   if (!url || !token || !repoOwner) {
-    console.warn('[Gitea] 配置不完整，跳过 Gitea 上传');
+    logger.warn(LOG_MODULES.GITEA, '配置不完整，跳过 Gitea 上传');
     return null;
   }
 
@@ -100,17 +102,17 @@ export async function uploadFileToGitea(
 ): Promise<FileUploadResult | null> {
   const config = getGiteaConfig();
   if (!config) {
-    console.log('[Gitea] 配置不完整，文件未上传到 Gitea');
+    logger.info(LOG_MODULES.GITEA, '配置不完整，文件未上传到 Gitea');
     return null;
   }
 
   const filePath = `${appId}/${fileName}`;
   const apiUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}`;
 
-  const content = isBase64 
-    ? fileContent.toString() 
-    : Buffer.isBuffer(fileContent) 
-      ? fileContent.toString('base64') 
+  const content = isBase64
+    ? fileContent.toString()
+    : Buffer.isBuffer(fileContent)
+      ? fileContent.toString('base64')
       : Buffer.from(fileContent).toString('base64');
 
   let existingFile = null;
@@ -120,13 +122,13 @@ export async function uploadFileToGitea(
   } catch (getError) {
     if (getError instanceof GiteaAuthError) {
       if (retries > 1) {
-        console.log(`[Gitea] Rate limited, waiting 2s before retry...`);
+        logger.info(LOG_MODULES.GITEA, 'Rate limited, waiting 2s before retry...');
         await new Promise(resolve => setTimeout(resolve, 2000));
         return uploadFileToGitea(appId, fileName, fileContent, isBase64, retries - 1);
       }
       throw getError;
     }
-    console.log('[Gitea] getFileContent error (will retry):', getError);
+    logger.info(LOG_MODULES.GITEA, 'getFileContent error (will retry)', { details: { error: getError instanceof Error ? getError.message : String(getError) } });
   }
 
   const body = {
@@ -154,7 +156,7 @@ export async function uploadFileToGitea(
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`[Gitea] 文件上传成功: ${filePath}`);
+        logger.info(LOG_MODULES.GITEA, `文件上传成功: ${filePath}`);
         return {
           path: filePath,
           sha: data.content.sha,
@@ -163,23 +165,23 @@ export async function uploadFileToGitea(
       }
 
       const errorText = await response.text();
-      
+
       if (response.status === 403 && errorText.includes('push is rejected') && attempt < retries) {
-        console.log(`[Gitea] Push rejected (attempt ${attempt}/${retries}), waiting 500ms...`);
+        logger.info(LOG_MODULES.GITEA, `Push rejected (attempt ${attempt}/${retries}), waiting 500ms...`);
         await new Promise(resolve => setTimeout(resolve, 500));
         continue;
       }
-      
+
       if (response.status === 401 || response.status === 403) {
         throw new GiteaAuthError(`Gitea 认证失败 (${response.status})，请检查 GITEA_TOKEN 权限配置`);
       }
-      
+
       throw new Error(`上传文件失败: ${response.status} ${response.statusText} - ${errorText}`);
     } catch (error) {
       if (error instanceof GiteaAuthError) {
         throw error;
       }
-      
+
       const isNetworkError = error instanceof Error && (
         error.message.includes('ECONNRESET') ||
         error.message.includes('ETIMEDOUT') ||
@@ -187,13 +189,13 @@ export async function uploadFileToGitea(
         error.message.includes('请求超时') ||
         error.message.includes('network')
       );
-      
+
       if (isNetworkError && attempt < retries) {
-        console.log(`[Gitea] 网络错误 (attempt ${attempt}/${retries}), 等待 2s 后重试...`, error instanceof Error ? error.message : error);
+        logger.info(LOG_MODULES.GITEA, `网络错误 (attempt ${attempt}/${retries}), 等待 2s 后重试...`, { details: { error: error instanceof Error ? error.message : String(error) } });
         await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
-      
+
       throw error;
     }
   }
@@ -214,7 +216,7 @@ export async function uploadMultipleFilesToGitea(
         results.push(result);
       }
     } catch (error) {
-      console.error(`[Gitea] 上传文件 ${file.name} 失败:`, error);
+      logger.error(LOG_MODULES.GITEA, `上传文件 ${file.name} 失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -230,15 +232,15 @@ export async function deleteFileFromGitea(
     return false;
   }
 
-  const filePath = fileName 
-    ? `${appId}/${fileName}` 
+  const filePath = fileName
+    ? `${appId}/${fileName}`
     : `${appId}`;
 
   try {
     if (fileName) {
       const existingFile = await getFileContent(config, filePath);
       if (!existingFile) {
-        console.log(`[Gitea] 文件不存在: ${filePath}`);
+        logger.info(LOG_MODULES.GITEA, `文件不存在: ${filePath}`);
         return true;
       }
 
@@ -262,14 +264,14 @@ export async function deleteFileFromGitea(
         throw new Error(`删除文件失败: ${response.status}`);
       }
 
-      console.log(`[Gitea] 文件删除成功: ${filePath}`);
+      logger.info(LOG_MODULES.GITEA, `文件删除成功: ${filePath}`);
     } else {
-      console.log(`[Gitea] 目录删除需要逐个删除文件: ${appId}`);
+      logger.info(LOG_MODULES.GITEA, `目录删除需要逐个删除文件: ${appId}`);
     }
 
     return true;
   } catch (error) {
-    console.error(`[Gitea] 删除失败:`, error);
+    logger.error(LOG_MODULES.GITEA, '删除失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -296,15 +298,15 @@ export interface GiteaFile {
 export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]> {
   const config = getGiteaConfig();
   if (!config) {
-    console.log('[Gitea] 配置不完整，无法下载文件');
+    logger.info(LOG_MODULES.GITEA, '配置不完整，无法下载文件');
     return [];
   }
 
   const files: GiteaFile[] = [];
-  
+
   try {
     const treeUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/git/trees/${config.branch}?recursive=1`;
-    
+
     const treeResponse = await fetchWithTimeout(treeUrl, {
       headers: {
         Authorization: `token ${config.token}`,
@@ -321,20 +323,20 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
 
     const treeData = await treeResponse.json();
     const entries = treeData.tree || [];
-    
-    const appEntries = entries.filter((entry: { path: string; type: string }) => 
+
+    const appEntries = entries.filter((entry: { path: string; type: string }) =>
       entry.path.startsWith(`${appId}/`) && entry.type === 'blob'
     );
 
-    console.log(`[Gitea] 找到 ${appEntries.length} 个文件需要下载`);
+    logger.info(LOG_MODULES.GITEA, `找到 ${appEntries.length} 个文件需要下载`);
 
     for (const entry of appEntries) {
       const filePath = entry.path;
       const relativePath = filePath.replace(`${appId}/`, '');
-      
+
       try {
         const contentUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
-        
+
         const contentResponse = await fetchWithTimeout(contentUrl, {
           headers: {
             Authorization: `token ${config.token}`,
@@ -346,32 +348,32 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
           if (contentResponse.status === 401 || contentResponse.status === 403) {
             throw new GiteaAuthError(`Gitea 认证失败 (${contentResponse.status})，请检查 GITEA_TOKEN 权限配置`);
           }
-          console.error(`[Gitea] 下载文件失败: ${filePath}`);
+          logger.error(LOG_MODULES.GITEA, `下载文件失败: ${filePath}`);
           continue;
         }
 
         const contentData = await contentResponse.json();
         const decodedContent = Buffer.from(contentData.content, 'base64');
-        
+
         files.push({
           path: relativePath,
           content: decodedContent,
           size: decodedContent.length,
         });
-        
-        console.log(`[Gitea] 下载文件成功: ${relativePath} (${decodedContent.length} bytes)`);
+
+        logger.info(LOG_MODULES.GITEA, `下载文件成功: ${relativePath} (${decodedContent.length} bytes)`);
       } catch (downloadError) {
         if (downloadError instanceof GiteaAuthError) {
           throw downloadError;
         }
-        console.error(`[Gitea] 下载文件失败: ${filePath}`, downloadError);
+        logger.error(LOG_MODULES.GITEA, `下载文件失败: ${filePath}`, { details: { error: downloadError instanceof Error ? downloadError.message : String(downloadError) } });
       }
     }
 
-    console.log(`[Gitea] 共下载 ${files.length} 个文件`);
+    logger.info(LOG_MODULES.GITEA, `共下载 ${files.length} 个文件`);
     return files;
   } catch (error) {
-    console.error('[Gitea] 获取文件树失败:', error);
+    logger.error(LOG_MODULES.GITEA, '获取文件树失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return [];
   }
 }
@@ -385,7 +387,7 @@ export async function downloadSingleFileFromGitea(appId: string, fileName: strin
   try {
     const filePath = `${appId}/${fileName}`;
     const contentUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
-    
+
     const response = await fetchWithTimeout(contentUrl, {
       headers: {
         Authorization: `token ${config.token}`,
@@ -395,7 +397,7 @@ export async function downloadSingleFileFromGitea(appId: string, fileName: strin
 
     if (!response.ok) {
       if (response.status === 404) {
-        console.log(`[Gitea] 文件不存在: ${filePath}`);
+        logger.info(LOG_MODULES.GITEA, `文件不存在: ${filePath}`);
         return null;
       }
       throw new Error(`下载文件失败: ${response.status}`);
@@ -403,11 +405,11 @@ export async function downloadSingleFileFromGitea(appId: string, fileName: strin
 
     const data = await response.json();
     const content = Buffer.from(data.content, 'base64');
-    
-    console.log(`[Gitea] 下载单个文件成功: ${filePath}`);
+
+    logger.info(LOG_MODULES.GITEA, `下载单个文件成功: ${filePath}`);
     return content;
   } catch (error) {
-    console.error(`[Gitea] 下载单个文件失败:`, error);
+    logger.error(LOG_MODULES.GITEA, '下载单个文件失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }

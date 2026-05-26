@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, Prisma } from '@/lib/prisma';
 
 export async function GET(
@@ -71,7 +72,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('[CodeSwarm] Get node error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Get node error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to fetch node' }, { status: 500 });
   }
 }
@@ -97,7 +98,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, worker });
   } catch (error) {
-    console.error('[CodeSwarm] Patch node error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Patch node error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to update node' }, { status: 500 });
   }
 }
@@ -112,7 +113,7 @@ export async function DELETE(
     await prisma.codeswarmWorker.delete({ where: { nodeId } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[CodeSwarm] Delete node error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Delete node error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to delete node' }, { status: 500 });
   }
 }

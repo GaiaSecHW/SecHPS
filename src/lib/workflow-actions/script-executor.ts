@@ -2,6 +2,7 @@
 
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, ScriptExecuteConfig } from './index';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 执行脚本（安全沙箱）
@@ -62,7 +63,7 @@ export async function executeScript(
     };
   } catch (error) {
     logs.push(`[Script] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error('[workflow-actions/script-executor] 脚本执行失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, '脚本执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       output: null,

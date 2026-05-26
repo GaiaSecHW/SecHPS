@@ -19,6 +19,7 @@ model AgentApp {
   startCommand      String?
   notes             String?
   inputRequirements String?
+  requireCodedmap   Boolean  @default(false)
   status            String   @default("active")
   isPublic          Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -1796,6 +1797,7 @@ model User {
   avatar                                       String?
   tenantId                                     String?
   isActive                                     Boolean               @default(true)
+  mustChangePassword                           Boolean               @default(false)
   createdAt                                    DateTime              @default(now())
   updatedAt                                    DateTime
   AgentApp                                     AgentApp[]

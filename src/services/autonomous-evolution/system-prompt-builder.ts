@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /** 预注入经验的最大数量 */
 export const MAX_PRE_INJECTED = 3;
@@ -40,11 +41,11 @@ export async function buildExperiencePromptWithMeta(): Promise<BuildExperienceRe
   });
 
   if (experiences.length === 0) {
-    console.log('[经验预注入] 无已标记注入的经验，跳过预注入');
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, '无已标记注入的经验，跳过预注入');
     return { prompt: '', count: 0, experiences: [] };
   }
 
-  console.log(`[经验预注入] ========== 预注入 Top ${experiences.length} 高频经验 ==========`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, '预注入高频经验', { details: { count: experiences.length } });
   
   const lines: string[] = [
     '## ⚠️ 已知执行经验（直接使用，跳过失败尝试）',
@@ -63,16 +64,15 @@ export async function buildExperiencePromptWithMeta(): Promise<BuildExperienceRe
     lines.push(`直达方案: ${exp.directSolution}`);
     lines.push('');
 
-    console.log(`[经验预注入] Top ${i + 1}: "${exp.title}"`);
-    console.log(`[经验预注入]   - ID: ${exp.id}`);
-    console.log(`[经验预注入]   - 分类: ${exp.errorCategory}`);
-    console.log(`[经验预注入]   - 命中次数: ${exp.hitCount}`);
-    console.log(`[经验预注入]   - 触发特征: ${patterns.join(', ') || '无'}`);
-    console.log(`[经验预注入]   - 直达方案: ${exp.directSolution.substring(0, 50)}...`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `Top ${i + 1}`, { details: { title: exp.title } });
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, 'ID', { details: { id: exp.id } });
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, '分类', { details: { errorCategory: exp.errorCategory } });
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, '命中次数', { details: { hitCount: exp.hitCount } });
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, '触发特征', { details: { patterns: patterns.join(', ') || '无' } });
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, '直达方案', { details: { preview: exp.directSolution.substring(0, 50) + '...' } });
   }
 
-  console.log(`[经验预注入] ========== 共预注入 ${experiences.length} 条经验 ==========`);
-  console.log(`[经验预注入] 注入位置: System Prompt 开头（高关注度）`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, '共预注入经验', { details: { count: experiences.length, injectLocation: 'System Prompt 开头（高关注度）' } });
 
   return {
     prompt: lines.join('\n'),

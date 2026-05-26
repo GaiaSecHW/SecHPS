@@ -1,12 +1,13 @@
 /**
  * Workspace 报告扫描器
- * 
+ *
  * 扫描项目 workspace 中的各种安全扫描报告，
  * 解析并标准化漏洞数据。
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 报告类型定义
 export type ReportType = 
@@ -133,12 +134,12 @@ export async function scanWorkspaceReports(
             }
           }
         } catch (err) {
-          console.error('[report-scanner] 解析报告文件失败:', err instanceof Error ? err.message : String(err));
+          logger.error(LOG_MODULES.FILE, '解析报告文件失败', { details: { error: err instanceof Error ? err.message : String(err) } });
           result.errors.push(`解析报告文件失败: ${file} - ${err}`);
         }
       }
     } catch (err) {
-      console.error('[report-scanner] 扫描目录失败:', err instanceof Error ? err.message : String(err));
+      logger.error(LOG_MODULES.FILE, '扫描目录失败', { details: { error: err instanceof Error ? err.message : String(err) } });
       result.errors.push(`扫描目录失败: ${scanPath} - ${err}`);
     }
   }
@@ -175,7 +176,7 @@ async function scanDirectory(dirPath: string): Promise<string[]> {
       }
     }
   } catch (err) {
-    console.error('[report-scanner] 目录访问失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, '目录访问失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 目录访问失败，忽略
   }
   
@@ -323,7 +324,7 @@ function parseZapReport(filePath: string): WorkspaceVulnerability[] {
       }
     }
   } catch (err) {
-    console.error('[report-scanner] ZAP报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'ZAP报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   
@@ -365,7 +366,7 @@ function parseSemgrepReport(filePath: string): WorkspaceVulnerability[] {
       });
     }
   } catch (err) {
-    console.error('[report-scanner] Semgrep报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'Semgrep报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   
@@ -402,7 +403,7 @@ function parseSnykReport(filePath: string): WorkspaceVulnerability[] {
       });
     }
   } catch (err) {
-    console.error('[report-scanner] Snyk报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'Snyk报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   
@@ -440,7 +441,7 @@ function parseTrufflehogReport(filePath: string): WorkspaceVulnerability[] {
       });
     }
   } catch (err) {
-    console.error('[report-scanner] TruffleHog报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'TruffleHog报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   
@@ -477,7 +478,7 @@ function parseSonarqubeReport(filePath: string): WorkspaceVulnerability[] {
       });
     }
   } catch (err) {
-    console.error('[report-scanner] SonarQube报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'SonarQube报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   
@@ -531,7 +532,7 @@ function parseMarkdownReport(filePath: string): WorkspaceVulnerability[] {
       }
     }
   } catch (err) {
-    console.error('[report-scanner] Markdown报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'Markdown报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   
@@ -573,7 +574,7 @@ function parseGenericJsonReport(filePath: string): WorkspaceVulnerability[] {
       }
     }
   } catch (err) {
-    console.error('[report-scanner] JSON报告解析失败:', err instanceof Error ? err.message : String(err));
+    logger.error(LOG_MODULES.FILE, 'JSON报告解析失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     // 解析失败
   }
   

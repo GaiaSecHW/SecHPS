@@ -5,6 +5,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 全局事件发射器实例
 const eventBus = new EventEmitter();
@@ -162,7 +163,7 @@ export function emitTodoUpdate(evaluationId: string, todos: TodoUpdateEvent['tod
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.TODO_UPDATE, event);
-  console.log(`[EventBus] TODO update emitted for evaluation ${evaluationId}:`, todos.length, 'items');
+  logger.info(LOG_MODULES.WORKFLOW, `TODO update emitted for evaluation ${evaluationId}: ${todos.length} items`);
 }
 
 /**
@@ -225,7 +226,7 @@ export function emitPhaseTokenUsage(evaluationId: string, data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.PHASE_TOKEN_USAGE, event);
-  console.log(`[EventBus] Token usage emitted for evaluation ${evaluationId}:`, data.nodeIndex, data.modelName, 'input:', data.inputTokens, 'output:', data.outputTokens);
+  logger.info(LOG_MODULES.WORKFLOW, `Token usage emitted for evaluation ${evaluationId}: ${data.nodeIndex} ${data.modelName} input:${data.inputTokens} output:${data.outputTokens}`);
 }
 
 /**
@@ -248,7 +249,7 @@ export function emitPhaseStart(evaluationId: string, data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.PHASE_START, event);
-  console.log(`[EventBus] Phase start emitted for evaluation ${evaluationId}:`, data.nodeIndex, data.nodeName);
+  logger.info(LOG_MODULES.WORKFLOW, `Phase start emitted for evaluation ${evaluationId}: ${data.nodeIndex} ${data.nodeName}`);
 }
 
 /**
@@ -269,7 +270,7 @@ export function emitPreparingProgress(evaluationId: string, data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.PREPARING_PROGRESS, event);
-  console.log(`[EventBus] Preparing progress emitted for evaluation ${evaluationId}:`, data.stage, data.message);
+  logger.info(LOG_MODULES.WORKFLOW, `Preparing progress emitted for evaluation ${evaluationId}: ${data.stage} ${data.message}`);
 }
 
 /**
@@ -286,7 +287,7 @@ export function emitEvaluationStarted(evaluationId: string, data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.EVALUATION_STARTED, event);
-  console.log(`[EventBus] Evaluation started emitted for evaluation ${evaluationId}:`, data.workflowType);
+  logger.info(LOG_MODULES.WORKFLOW, `Evaluation started emitted for evaluation ${evaluationId}: ${data.workflowType}`);
 }
 
 /**
@@ -305,7 +306,7 @@ export function emitQueueStatusChange(data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.QUEUE_STATUS_CHANGE, event);
-  console.log(`[EventBus] Queue status change:`, data.trigger, `active=${data.activeCount}, queued=${data.queuedCount}`);
+  logger.info(LOG_MODULES.WORKFLOW, `Queue status change: ${data.trigger} active=${data.activeCount} queued=${data.queuedCount}`);
 }
 
 /**
@@ -323,7 +324,7 @@ export function emitEvaluationQueued(data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.EVALUATION_QUEUED, event);
-  console.log(`[EventBus] Evaluation queued:`, data.evaluationId, `position=${data.queuePosition}`);
+  logger.info(LOG_MODULES.WORKFLOW, `Evaluation queued: ${data.evaluationId} position=${data.queuePosition}`);
 }
 
 /**
@@ -340,7 +341,7 @@ export function emitEvaluationDequeued(data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.EVALUATION_DEQUEUED, event);
-  console.log(`[EventBus] Evaluation dequeued:`, data.evaluationId, `waited=${data.waitTime}s`);
+  logger.info(LOG_MODULES.WORKFLOW, `Evaluation dequeued: ${data.evaluationId} waited=${data.waitTime}s`);
 }
 
 /**
@@ -359,7 +360,7 @@ export function emitQueueProcessing(data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.QUEUE_PROCESSING, event);
-  console.log(`[EventBus] Queue processing:`, `active=${data.activeCount}/${data.maxConcurrent}`);
+  logger.info(LOG_MODULES.WORKFLOW, `Queue processing: active=${data.activeCount}/${data.maxConcurrent}`);
 }
 
 /**
@@ -376,7 +377,7 @@ export function emitQueueError(data: {
     timestamp: Date.now(),
   };
   eventBus.emit(EventType.QUEUE_ERROR, event);
-  console.error(`[EventBus] Queue error:`, data.evaluationId, data.error);
+  logger.error(LOG_MODULES.WORKFLOW, `Queue error: ${data.evaluationId} ${data.error}`);
 }
 
 /**
@@ -694,12 +695,12 @@ export function subscribeToEvaluationEvents(
   eventBus.on(EventType.QUEUE_ERROR, queueErrorHandler);
   unsubscribers.push(() => eventBus.off(EventType.QUEUE_ERROR, queueErrorHandler));
 
-  console.log(`[EventBus] SSE subscribed to evaluation ${evaluationId}`);
+  logger.info(LOG_MODULES.WORKFLOW, `SSE subscribed to evaluation ${evaluationId}`);
 
   // 返回取消订阅函数
   return () => {
     unsubscribers.forEach(unsub => unsub());
-    console.log(`[EventBus] SSE unsubscribed from evaluation ${evaluationId}`);
+    logger.info(LOG_MODULES.WORKFLOW, `SSE unsubscribed from evaluation ${evaluationId}`);
   };
 }
 

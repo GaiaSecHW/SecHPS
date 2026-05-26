@@ -5,6 +5,7 @@
 
 import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { TokenUsageContext } from '@/types/call-scene';
 
 // ============================================================================
@@ -221,7 +222,7 @@ export async function inferSkillMetadata(
     // 构建请求
     const prompt = buildInferencePrompt(skill, languages, vulnerabilityPatterns);
     
-    console.log(`[SkillMigrationInference] 推断 Skill: ${skill.name}`);
+    logger.info(LOG_MODULES.SKILL, `推断 Skill: ${skill.name}`);
 
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
@@ -244,7 +245,7 @@ export async function inferSkillMetadata(
                       content.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
-      console.warn('[SkillMigrationInference] 无法解析 LLM 响应');
+      logger.warn(LOG_MODULES.SKILL, '无法解析 LLM 响应');
       return createDefaultResult(skill, '无法解析 LLM 响应');
     }
 
@@ -299,7 +300,7 @@ export async function inferSkillMetadata(
     };
 
   } catch (error) {
-    console.error('[SkillMigrationInference] LLM 推断失败:', error);
+    logger.error(LOG_MODULES.SKILL, 'LLM 推断失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return createDefaultResult(skill, error instanceof Error ? error.message : '未知错误');
   }
 }
@@ -391,7 +392,7 @@ export async function batchInferSkills(
               },
             });
           } catch (dbError) {
-            console.error(`[SkillMigrationInference] 更新数据库失败: ${skill.id}`, dbError);
+            logger.error(LOG_MODULES.SKILL, `更新数据库失败: ${skill.id}`, { details: { error: dbError instanceof Error ? dbError.message : String(dbError) } });
             result.error = `数据库更新失败: ${dbError instanceof Error ? dbError.message : '未知错误'}`;
           }
         }

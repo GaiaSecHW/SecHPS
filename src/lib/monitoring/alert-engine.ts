@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import type { AlertCondition, MetricType } from '@/types/monitoring';
 import { metricsCollector } from '@/lib/metrics/collector';
 import { sendAlertNotification } from './alert-notifier';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 告警引擎
@@ -22,7 +23,7 @@ export class AlertEngine {
    */
   start(): void {
     this.checkTimer = setInterval(() => {
-      this.checkAllRules().catch(console.error);
+      this.checkAllRules().catch(error => logger.error(LOG_MODULES.MONITOR, 'checkAllRules failed', { details: { error: error instanceof Error ? error.message : String(error) } }));
     }, this.checkInterval);
   }
 
@@ -48,7 +49,7 @@ export class AlertEngine {
       try {
         await this.checkRule(rule);
       } catch (error) {
-        console.error(`Error checking rule ${rule.name}:`, error);
+        logger.error(LOG_MODULES.MONITOR, `Error checking rule ${rule.name}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
   }

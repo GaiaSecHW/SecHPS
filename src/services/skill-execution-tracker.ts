@@ -10,6 +10,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 创建 Skill 执行记录
@@ -41,7 +42,10 @@ export async function createSkillExecution(params: {
     },
   });
 
-  console.log(`[SkillExecution] 创建执行记录: skill=${params.skillId}, execution=${execution.id}`);
+  logger.info(LOG_MODULES.SKILL, '创建执行记录', {
+    skillId: params.skillId,
+    executionId: execution.id
+  });
   return execution.id;
 }
 
@@ -110,7 +114,12 @@ export async function completeSkillExecution(params: {
     });
   }
 
-  console.log(`[SkillExecution] 完成执行记录: execution=${params.executionId}, status=${status}, findings=${params.findingsCount || 0}, duration=${duration}ms`);
+  logger.info(LOG_MODULES.SKILL, '完成执行记录', {
+    executionId: params.executionId,
+    status,
+    findingsCount: params.findingsCount || 0,
+    duration
+  });
 }
 
 /**
@@ -140,11 +149,11 @@ export async function createSkillExecutionsForEvaluation(params: {
       });
       executionIds.push(executionId);
     } catch (error) {
-      console.error(`[SkillExecution] 创建执行记录失败: skill=${skillId}`, error);
+      logger.error(LOG_MODULES.SKILL, `创建执行记录失败: skill=${skillId}`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
-  console.log(`[SkillExecution] 批量创建 ${executionIds.length} 个 pending 执行记录`);
+  logger.info(LOG_MODULES.SKILL, `批量创建 ${executionIds.length} 个 pending 执行记录`);
   return executionIds;
 }
 
@@ -168,7 +177,7 @@ export async function createSkillExecutionsForNode(params: {
   const { evaluationId, nodeId, skills, projectId } = params;
   
   if (!skills || skills.length === 0) {
-    console.log(`[SkillExecution] 节点 ${nodeId} 没有 skills，跳过创建`);
+    logger.info(LOG_MODULES.SKILL, `节点 ${nodeId} 没有 skills，跳过创建`);
     return [];
   }
 
@@ -197,10 +206,10 @@ export async function createSkillExecutionsForNode(params: {
       })
     );
 
-    console.log(`[SkillExecution] 为节点 ${nodeId} 批量创建 ${executionIds.length} 个 pending 执行记录`);
+    logger.info(LOG_MODULES.SKILL, `为节点 ${nodeId} 批量创建 ${executionIds.length} 个 pending 执行记录`);
     return executionIds;
   } catch (error) {
-    console.error(`[SkillExecution] 为节点 ${nodeId} 批量创建执行记录失败`, error);
+    logger.error(LOG_MODULES.SKILL, `为节点 ${nodeId} 批量创建执行记录失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     // 批量创建失败则整个评估失败（抛出异常）
     throw new Error(`Failed to create SkillExecutions for node ${nodeId}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -323,7 +332,7 @@ export async function updateSkillExecutionFindings(params: {
     }
   }
 
-  console.log(`[SkillExecution] 更新 ${params.skillFindings.length} 个 Skill 的发现数`);
+  logger.info(LOG_MODULES.SKILL, `更新 ${params.skillFindings.length} 个 Skill 的发现数`);
 }
 
 /**
@@ -400,7 +409,7 @@ export async function completeAllPendingSkillExecutions(params: {
     }
   }
   
-  console.log(`[SkillExecution] 已将 ${pendingExecutions.length} 个未完成的执行记录标记为 ${status}`);
+  logger.info(LOG_MODULES.SKILL, `已将 ${pendingExecutions.length} 个未完成的执行记录标记为 ${status}`);
   return pendingExecutions.length;
 }
 
@@ -425,7 +434,7 @@ export async function updateSkillExecutionFindingsFromVulnerabilities(params: {
   });
   
   if (vulnerabilities.length === 0) {
-    console.log(`[SkillExecution] 评估 ${params.evaluationId} 没有发现漏洞`);
+    logger.info(LOG_MODULES.SKILL, `评估 ${params.evaluationId} 没有发现漏洞`);
     return { updated: 0, totalVulns: 0 };
   }
   
@@ -437,9 +446,9 @@ export async function updateSkillExecutionFindingsFromVulnerabilities(params: {
     skillVulnCounts.set(skillName, count + 1);
   }
   
-  console.log(`[SkillExecution] 漏洞统计: 总数=${vulnerabilities.length}, Skills=${skillVulnCounts.size}`);
+  logger.info(LOG_MODULES.SKILL, `漏洞统计: 总数=${vulnerabilities.length}, Skills=${skillVulnCounts.size}`);
   skillVulnCounts.forEach((count, skill) => {
-    console.log(`  - ${skill}: ${count} 个漏洞`);
+    logger.info(LOG_MODULES.SKILL, `  - ${skill}: ${count} 个漏洞`);
   });
   
   // 3. 查询本次评估的所有 SkillExecution 记录
@@ -501,12 +510,12 @@ export async function updateSkillExecutionFindingsFromVulnerabilities(params: {
       });
       
       updated++;
-      console.log(`[SkillExecution] 更新 Skill=${skillName}, findingsCount=${vulnCount}`);
+      logger.info(LOG_MODULES.SKILL, `更新 Skill=${skillName}, findingsCount=${vulnCount}`);
     } else {
-      console.warn(`[SkillExecution] 未找到 Skill=${skillName} 的执行记录`);
+      logger.warn(LOG_MODULES.SKILL, `未找到 Skill=${skillName} 的执行记录`);
     }
   }
   
-  console.log(`[SkillExecution] 完成: 更新了 ${updated} 个 Skill 执行记录，总漏洞数 ${vulnerabilities.length}`);
+  logger.info(LOG_MODULES.SKILL, `完成: 更新了 ${updated} 个 Skill 执行记录，总漏洞数 ${vulnerabilities.length}`);
   return { updated, totalVulns: vulnerabilities.length };
 }

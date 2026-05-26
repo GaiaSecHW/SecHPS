@@ -7,6 +7,9 @@ import simpleGit, { SimpleGit } from 'simple-git';
 import { mkdir, writeFile, rm } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
+
+const GITEA = 'GiteaOrg';
 
 const GITEA_ORG_URL = process.env.GITEA_ORG_URL || 'http://172.31.30.81:30030';
 const GITEA_ORG_TOKEN = process.env.GITEA_ORG_TOKEN || '';
@@ -58,12 +61,12 @@ export function sanitizeRepoName(fileName: string): string {
 
 export async function checkOrgRepoExists(repoName: string): Promise<boolean> {
   if (!isConfigured()) {
-    console.warn('[GiteaOrg] 配置不完整');
+    logger.warn(GITEA, '配置不完整');
     return false;
   }
 
   const url = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}`;
-  
+
   try {
     const response = await fetchWithTimeout(url, {
       headers: {
@@ -75,27 +78,27 @@ export async function checkOrgRepoExists(repoName: string): Promise<boolean> {
     if (response.ok) {
       return true;
     }
-    
+
     if (response.status === 404) {
       return false;
     }
-    
-    console.error(`[GiteaOrg] 检查仓库失败: ${response.status}`);
+
+    logger.error(GITEA, `检查仓库失败: ${response.status}`);
     return false;
   } catch (error) {
-    console.error('[GiteaOrg] 检查仓库异常:', error);
+    logger.error(GITEA, '检查仓库异常', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
 
 export async function createOrgRepo(repoName: string): Promise<GiteaRepoInfo | null> {
   if (!isConfigured()) {
-    console.warn('[GiteaOrg] 配置不完整，无法创建仓库');
+    logger.warn(GITEA, '配置不完整，无法创建仓库');
     return null;
   }
 
   const url = `${GITEA_ORG_URL}/api/v1/orgs/${GITEA_ORG_NAME}/repos`;
-  
+
   try {
     const response = await fetchWithTimeout(url, {
       method: 'POST',
@@ -121,15 +124,15 @@ export async function createOrgRepo(repoName: string): Promise<GiteaRepoInfo | n
     }
 
     const data = await response.json();
-    console.log(`[GiteaOrg] 仓库创建成功: ${data.full_name}`);
-    
+    logger.info(GITEA, `仓库创建成功: ${data.full_name}`);
+
     return {
       name: data.name,
       full_name: data.full_name,
       html_url: data.html_url,
     };
   } catch (error) {
-    console.error('[GiteaOrg] 创建仓库异常:', error);
+    logger.error(GITEA, '创建仓库异常', { details: { error: error instanceof Error ? error.message : String(error) } });
     throw error;
   }
 }
@@ -199,7 +202,7 @@ async function writeFilesToLocalDir(repoName: string, files: Map<string, Buffer>
     await writeFile(filePath, content);
   }
   
-  console.log(`[GiteaOrg] 本地文件写入完成: ${localPath} (${cleanedFiles.size} 个文件)`);
+  logger.info(GITEA, `本地文件写入完成: ${localPath} (${cleanedFiles.size} 个文件)`);
   return localPath;
 }
 
@@ -240,7 +243,7 @@ export async function pushToOrgRepoViaGit(
     try {
       await git.fetch('origin');
     } catch (fetchError) {
-      console.log(`[GiteaOrg] fetch 失败（可能仓库刚创建），将直接 push: ${fetchError}`);
+      logger.info(GITEA, `fetch 失败（可能仓库刚创建），将直接 push: ${fetchError}`);
     }
 
     let remoteBranch = 'main';
@@ -276,10 +279,10 @@ export async function pushToOrgRepoViaGit(
     await git.add('.');
     const status = await git.status();
     
-    console.log(`[GiteaOrg] Git status: ${localPath}, files: ${status.files.length}, staged: ${status.staged.length}`);
-    
+    logger.info(GITEA, `Git status: ${localPath}, files: ${status.files.length}, staged: ${status.staged.length}`);
+
     if (status.files.length === 0) {
-      console.log(`[GiteaOrg] 无变更需要提交: ${repoName}`);
+      logger.info(GITEA, `无变更需要提交: ${repoName}`);
       return { success: true, method: 'git' };
     }
 
@@ -288,15 +291,15 @@ export async function pushToOrgRepoViaGit(
     try {
       await git.push('origin', remoteBranch, { '--set-upstream': null });
     } catch (pushError) {
-      console.log(`[GiteaOrg] 正常 push 失败，尝试 force push: ${pushError}`);
+      logger.warn(GITEA, `正常 push 失败，尝试 force push: ${pushError}`);
       await git.push('origin', remoteBranch, { '--force': null, '--set-upstream': null });
     }
 
-    console.log(`[GiteaOrg] Git push 成功: ${repoName} (${status.files.length} 个文件)`);
+    logger.info(GITEA, `Git push 成功: ${repoName} (${status.files.length} 个文件)`);
     return { success: true, method: 'git' };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[GiteaOrg] Git push 失败: ${repoName} - ${errorMsg}`);
+    logger.error(GITEA, `Git push 失败: ${repoName}`, { details: { error: errorMsg } });
     return { success: false, method: 'git', error: errorMsg };
   }
 }
@@ -306,87 +309,58 @@ export async function uploadFilesToOrgRepo(
   files: Map<string, Buffer>
 ): Promise<FileUploadResult[]> {
   if (!isConfigured()) {
-    console.warn('[GiteaOrg] 配置不完整，无法上传文件');
+    logger.warn(GITEA, '配置不完整，无法上传文件');
     return [];
   }
 
   if (files.size === 0) {
-    console.log('[GiteaOrg] 无文件需要上传');
+    logger.info(GITEA, '无文件需要上传');
     return [];
   }
 
   const cleanedFiles = removeCommonPrefix(files);
-  const results: FileUploadResult[] = [];
   const branch = 'main';
 
-  for (const [relativePath, content] of cleanedFiles) {
-    const filePath = relativePath.replace(/^\/+/, '');
-    const apiUrl = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/contents/${filePath}`;
-    
-    const encodedContent = content.toString('base64');
-    
-    let existingFile: { sha: string } | null = null;
-    try {
-      const checkResponse = await fetchWithTimeout(`${apiUrl}?ref=${branch}`, {
-        headers: {
-          Authorization: `token ${GITEA_ORG_TOKEN}`,
-          Accept: 'application/json',
-        },
-      });
-      
-      if (checkResponse.ok) {
-        const data = await checkResponse.json();
-        existingFile = { sha: data.sha };
-      }
-    } catch {
-      existingFile = null;
+  // 使用 Gitea 1.20+ 批量文件提交 API：一次 HTTP 请求提交所有文件
+  const apiUrl = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/contents`;
+
+  const fileOperations = Array.from(cleanedFiles.entries()).map(([relativePath, content]) => ({
+    operation: 'update',
+    path: relativePath.replace(/^\/+/, ''),
+    content: content.toString('base64'),
+  }));
+
+  try {
+    const response = await fetchWithTimeout(apiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `token ${GITEA_ORG_TOKEN}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        files: fileOperations,
+        message: `Update AgentHarness: ${fileOperations.length} files`,
+        branch,
+      }),
+    }, 60000);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(GITEA, `批量上传失败 (${response.status}): ${errorText}`);
+      return [];
     }
 
-    const body = {
-      message: existingFile 
-        ? `Update ${filePath}` 
-        : `Add ${filePath}`,
-      content: encodedContent,
-      branch: branch,
-      ...(existingFile && { sha: existingFile.sha }),
-    };
-
-    const method = existingFile ? 'PUT' : 'POST';
-
-    try {
-      const response = await fetchWithTimeout(apiUrl, {
-        method,
-        headers: {
-          Authorization: `token ${GITEA_ORG_TOKEN}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[GiteaOrg] 上传文件失败: ${filePath} - ${errorText}`);
-        continue;
-      }
-
-      const data = await response.json();
-      console.log(`[GiteaOrg] 文件上传成功: ${filePath}`);
-      
-      results.push({
-        path: filePath,
-        sha: data.content?.sha || data.sha,
-        url: `${GITEA_ORG_URL}/${GITEA_ORG_NAME}/${repoName}/src/branch/${branch}/${filePath}`,
-      });
-    } catch (error) {
-      console.error(`[GiteaOrg] 上传文件异常: ${filePath}`, error);
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 100));
+    logger.info(GITEA, `批量上传成功: ${fileOperations.length} 个文件`);
+    return fileOperations.map(f => ({
+      path: f.path,
+      sha: '',
+      url: `${GITEA_ORG_URL}/${GITEA_ORG_NAME}/${repoName}/src/branch/${branch}/${f.path}`,
+    }));
+  } catch (error) {
+    logger.error(GITEA, '批量上传异常', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return [];
   }
-
-  console.log(`[GiteaOrg] 共上传 ${results.length}/${cleanedFiles.size} 个文件`);
-  return results;
 }
 
 export async function pushOrUpdateOrgRepo(
@@ -399,7 +373,7 @@ export async function pushOrUpdateOrgRepo(
     return { success: true, method: 'git' };
   }
   
-  console.log(`[GiteaOrg] Git 方式失败，回退到 API 上传: ${gitResult.error}`);
+  logger.error(GITEA, `Git push 失败，回退到 API 上传: ${gitResult.error}`);
   
   const apiResults = await uploadFilesToOrgRepo(repoName, files);
   
@@ -412,12 +386,12 @@ export async function pushOrUpdateOrgRepo(
 
 export async function deleteOrgRepo(repoName: string): Promise<boolean> {
   if (!isConfigured()) {
-    console.warn('[GiteaOrg] 配置不完整，无法删除仓库');
+    logger.warn(GITEA, '配置不完整，无法删除仓库');
     return false;
   }
 
   const url = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}`;
-  
+
   try {
     const response = await fetchWithTimeout(url, {
       method: 'DELETE',
@@ -428,7 +402,7 @@ export async function deleteOrgRepo(repoName: string): Promise<boolean> {
     });
 
     if (response.status === 404) {
-      console.log(`[GiteaOrg] 仓库不存在: ${repoName}`);
+      logger.info(GITEA, `仓库不存在: ${repoName}`);
       return true;
     }
 
@@ -437,19 +411,19 @@ export async function deleteOrgRepo(repoName: string): Promise<boolean> {
       throw new Error(`删除仓库失败: ${response.status} - ${errorText}`);
     }
 
-    console.log(`[GiteaOrg] 仓库删除成功: ${repoName}`);
-    
+    logger.info(GITEA, `仓库删除成功: ${repoName}`);
+
     const localPath = join(process.cwd(), AGENT_HARNESS_LOCAL_PATH, repoName);
     try {
       await rm(localPath, { recursive: true, force: true });
-      console.log(`[GiteaOrg] 本地目录删除成功: ${localPath}`);
+      logger.info(GITEA, `本地目录删除成功: ${localPath}`);
     } catch (rmError) {
-      console.warn(`[GiteaOrg] 本地目录删除失败: ${localPath}`, rmError);
+      logger.warn(GITEA, `本地目录删除失败: ${localPath}`, { details: { error: rmError instanceof Error ? rmError.message : String(rmError) } });
     }
     
     return true;
   } catch (error) {
-    console.error('[GiteaOrg] 删除仓库异常:', error);
+    logger.error(GITEA, '删除仓库异常', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -495,11 +469,11 @@ export async function cloneOrPullOrgRepo(
       const result = await git.pull('origin', branch);
       const changes = result.summary?.changes || 0;
 
-      console.log(`[GiteaOrg] pull 成功: ${repoName} (${changes} 个变更)`);
+      logger.info(GITEA, `pull 成功: ${repoName} (${changes} 个变更)`);
       return { success: true, method: 'pull' };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[GiteaOrg] pull 失败: ${repoName} - ${errorMsg}`);
+      logger.error(GITEA, `pull 失败: ${repoName}`, { details: { error: errorMsg } });
       return { success: false, method: 'pull', error: errorMsg };
     }
   }
@@ -510,11 +484,11 @@ export async function cloneOrPullOrgRepo(
     const git: SimpleGit = simpleGit();
     await git.clone(repoUrl, localPath, ['-b', branch]);
 
-    console.log(`[GiteaOrg] clone 成功: ${repoName} -> ${localPath}`);
+    logger.info(GITEA, `clone 成功: ${repoName} -> ${localPath}`);
     return { success: true, method: 'clone' };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[GiteaOrg] clone 失败: ${repoName} - ${errorMsg}`);
+    logger.error(GITEA, `clone 失败: ${repoName}`, { details: { error: errorMsg } });
 
     try {
       await rm(localPath, { recursive: true, force: true });
@@ -536,7 +510,7 @@ export async function syncAllAgentHarnessFromGitea(): Promise<{
   errors: Array<{ repoName: string; error: string }>;
 }> {
   if (!isConfigured()) {
-    console.warn('[GiteaOrg] 配置不完整，无法同步');
+    logger.warn(GITEA, '配置不完整，无法同步');
     return { total: 0, success: 0, failed: 0, errors: [{ repoName: '', error: 'Gitea 配置不完整' }] };
   }
 
@@ -548,18 +522,18 @@ export async function syncAllAgentHarnessFromGitea(): Promise<{
 
   const appsWithHarness = apps.filter(app => app.agentHarnessPath);
 
-  console.log(`[GiteaOrg] 开始同步 AgentHarness: ${appsWithHarness.length} 个仓库`);
+  logger.info(GITEA, `开始同步 AgentHarness: ${appsWithHarness.length} 个仓库`);
 
   const results: Array<{ repoName: string; result: { success: boolean; method: string; error?: string } }> = [];
   const errors: Array<{ repoName: string; error: string }> = [];
 
   for (const app of appsWithHarness) {
     const repoName = app.agentHarnessPath!;
-    console.log(`[GiteaOrg] 同步 ${app.name} (${repoName})...`);
+    logger.info(GITEA, `同步 ${app.name} (${repoName})...`);
 
     const repoExists = await checkOrgRepoExists(repoName);
     if (!repoExists) {
-      console.warn(`[GiteaOrg] 远端仓库不存在: ${repoName}, 跳过`);
+      logger.warn(GITEA, `远端仓库不存在: ${repoName}, 跳过`);
       errors.push({ repoName, error: '远端仓库不存在' });
       continue;
     }
@@ -574,7 +548,7 @@ export async function syncAllAgentHarnessFromGitea(): Promise<{
 
   const successCount = results.filter(r => r.result.success).length;
 
-  console.log(`[GiteaOrg] 同步完成: ${successCount}/${appsWithHarness.length} 成功`);
+  logger.info(GITEA, `同步完成: ${successCount}/${appsWithHarness.length} 成功`);
 
   return {
     total: appsWithHarness.length,

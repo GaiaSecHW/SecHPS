@@ -66,8 +66,8 @@ export async function GET(request: NextRequest) {
             COUNT(ti.id)::int AS "runCount",
             COUNT(ti.id) FILTER (WHERE ti.status = 'completed')::int AS "successCount",
             MAX(ti."completedAt") AS "lastRunAt",
-            COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE)::int AS "vulnCount",
-            COUNT(v.id) FILTER (WHERE v.vulnerable IS FALSE)::int AS "alertCount",
+            COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE AND v.status IN ('confirmed','fixed','verified'))::int AS "vulnCount",
+            COUNT(v.id)::int AS "alertCount",
             COUNT(v.id) FILTER (WHERE v.vulnerable IS TRUE AND v.status IN ('confirmed','fixed'))::int AS "confirmedVuln",
             COUNT(v.id) FILTER (WHERE v.vulnerable IS FALSE AND v.status IN ('confirmed','fixed'))::int AS "confirmedNonVuln"
           FROM "TaskInstance" ti
@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
   if (!auth.success) return authErrorResponse(auth);
 
   const { tenant, payload } = auth as AuthSuccessResult;
-  
-  console.log('[AgentApp] Creating agent app, userId:', payload.userId, 'username:', payload.username);
+
+  logger.info(LOG_MODULES.AGENT, `Creating agent app, userId: ${payload.userId}, username: ${payload.username}`);
 
   try {
     const formData = await request.formData();
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
     const defaultAgentName = (formData.get('defaultAgentName') as string) || undefined;
     const startCommand = formData.get('startCommand') as string | null;
     const inputRequirements = formData.get('inputRequirements') as string | null;
+    const requireCodedmap = formData.get('requireCodedmap') === 'true';
     const isPublic = formData.get('isPublic') === 'true';
     const frontendTenantId = formData.get('tenantId') as string | null;
     const fileType = formData.get('agentHarnessFileType') as string | null;
@@ -228,8 +229,8 @@ export async function POST(request: NextRequest) {
     }
 
     const agentHarnessPath = repoName;
-    
-    console.log('[AgentApp] Before create, userId:', payload.userId, 'appId:', appId, 'tenantId:', tenantId);
+
+    logger.info(LOG_MODULES.AGENT, `Before create, userId: ${payload.userId}, appId: ${appId}, tenantId: ${tenantId}`);
 
     const app = await prisma.agentApp.create({
       data: {
@@ -241,6 +242,7 @@ export async function POST(request: NextRequest) {
         defaultAgentName: defaultAgentName || undefined,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
+        requireCodedmap,
         status: 'active',
         tenantId,
         isPublic,
@@ -252,7 +254,7 @@ export async function POST(request: NextRequest) {
 
     // 异步同步 SKILL，不阻塞响应
     syncSkillsFromHarness(filesMap, payload.userId, tenantId).catch(err =>
-      console.error('[SkillHarnessSync] 自动同步失败:', err)
+      logger.error(LOG_MODULES.AGENT, '自动同步失败', { details: { error: err instanceof Error ? err.message : String(err) } })
     );
 
     return NextResponse.json({ app });

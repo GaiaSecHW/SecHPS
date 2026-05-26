@@ -1,6 +1,7 @@
 // src/services/ai/ccr-proxy.ts
 
 import { AIProvider, AIMessage, AIStreamCallbacks, AIProviderConfig } from './base';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export class CCRProxyProvider extends AIProvider {
   constructor(config: AIProviderConfig) {
@@ -24,9 +25,11 @@ export class CCRProxyProvider extends AIProvider {
       }
     }
 
-    console.log('[CCRProxy] 调用内部大模型:', {
-      url: baseUrl,
-      model: this.config.model,
+    logger.info(LOG_MODULES.AGENT, '调用内部大模型', {
+      details: {
+        url: baseUrl,
+        model: this.config.model,
+      }
     });
 
     await this.withRetry(async () => {

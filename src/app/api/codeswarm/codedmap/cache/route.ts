@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Minio from 'minio';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || '172.31.23.181';
 const MINIO_PORT = parseInt(process.env.MINIO_PORT || '9000', 10);
@@ -79,7 +80,7 @@ export async function GET() {
 
     return NextResponse.json({ entries });
   } catch (err) {
-    console.error('[CodedmapCache] GET error:', err);
+    logger.error(LOG_MODULES.CODESWARM, '获取缓存列表失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     return NextResponse.json({ error: '获取缓存列表失败', entries: [] }, { status: 500 });
   }
 }
@@ -109,7 +110,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ deleted: objectsToDelete.length, targetProduct });
   } catch (err) {
-    console.error('[CodedmapCache] DELETE error:', err);
+    logger.error(LOG_MODULES.CODESWARM, '删除缓存失败', { details: { error: err instanceof Error ? err.message : String(err) } });
     return NextResponse.json({ error: '删除缓存失败' }, { status: 500 });
   }
 }

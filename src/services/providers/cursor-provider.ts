@@ -11,6 +11,7 @@ import {
   NormalizedMessage,
   CursorMessage,
 } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Cursor Provider
@@ -90,7 +91,7 @@ export class CursorProvider extends BaseProvider {
 
       return sessions;
     } catch (error) {
-      console.error('[CursorProvider] 发现会话失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '发现会话失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -129,7 +130,7 @@ export class CursorProvider extends BaseProvider {
   ): Promise<NormalizedMessage[]> {
     // TODO: 实现 SQLite 数据库读取
     // 需要安装 better-sqlite3 后实现
-    console.warn('[CursorProvider] SQLite 读取功能尚未实现，请安装 better-sqlite3');
+    logger.warn(LOG_MODULES.PROVIDER, 'SQLite 读取功能尚未实现，请安装 better-sqlite3');
     return [];
   }
 

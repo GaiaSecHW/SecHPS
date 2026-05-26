@@ -11,6 +11,7 @@ import {
   ClaudeCodeJSONLEntry,
   ClaudeCodeMessage,
 } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Claude Provider
@@ -86,7 +87,7 @@ export class ClaudeProvider extends BaseProvider {
 
       return sessions;
     } catch (error) {
-      console.error('[ClaudeProvider] 发现会话失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '发现会话失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -137,7 +138,7 @@ export class ClaudeProvider extends BaseProvider {
       
       return messages.slice(start, end);
     } catch (error) {
-      console.error('[ClaudeProvider] 获取消息失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '获取消息失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -271,7 +272,7 @@ export class ClaudeProvider extends BaseProvider {
 
       return { messageCount, summary: summary || 'New Session', model, cwd };
     } catch (error) {
-      console.error('[ClaudeProvider] 解析会话文件失败:', error);
+      logger.error(LOG_MODULES.PROVIDER, '解析会话文件失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return null;
     }
   }

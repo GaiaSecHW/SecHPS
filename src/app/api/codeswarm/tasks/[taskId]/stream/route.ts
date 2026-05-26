@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +63,7 @@ export async function GET(
             clearInterval(interval);
           }
         } catch (err) {
-          console.error('[CodeSwarm SSE] Error:', err);
+          logger.error(LOG_MODULES.CODESWARM, 'SSE Error', { details: { error: err instanceof Error ? err.message : String(err) } });
         }
       }, 500);
 

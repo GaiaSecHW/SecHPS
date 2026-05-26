@@ -4,6 +4,8 @@
 // 基于 ralph-loop-agent 的核心代码，适配到项目现有的评估系统
 //
 
+import { logger, LOG_MODULES } from '@/lib/logger';
+
 /**
  * 简化的 ToolSet 类型（替代 ai 包）
  */
@@ -151,7 +153,7 @@ export function getModelPricingOrDefault(model: string): CostRates {
     return pricing;
   }
   // 对于未知模型，使用默认人民币定价
-  console.log(`[CostRates] 模型 "${model}" 未在定价表中，使用默认定价（人民币）`);
+  logger.info(LOG_MODULES.EVALUATION, `模型 "${model}" 未在定价表中，使用默认定价（人民币）`);
   return {
     inputCostPerMillionTokens: 6,   // 输入：6元/百万Token
     outputCostPerMillionTokens: 22, // 输出：22元/百万Token

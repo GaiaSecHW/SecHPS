@@ -3,6 +3,7 @@ import { writeFile, mkdir, rm, readdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import AdmZip from 'adm-zip';
+import { serverLog } from '@/lib/server-log';
 
 /**
  * 验证上传文件的目录结构是否符合 Agent 要求
@@ -70,7 +71,7 @@ ${fileTree}
       });
 
       if (!resp.ok) {
-        console.error(`[FileValidation] 模型 API 返回错误 ${resp.status}，跳过校验`);
+        serverLog.error(`[FileValidation] 模型 API 返回错误 ${resp.status}，跳过校验`);
         return { valid: true };
       }
       const data = await resp.json();
@@ -93,14 +94,14 @@ ${fileTree}
     });
 
     if (!resp.ok) {
-      console.error(`[FileValidation] 模型 API 返回错误 ${resp.status}，跳过校验`);
+      serverLog.error(`[FileValidation] 模型 API 返回错误 ${resp.status}，跳过校验`);
       return { valid: true };
     }
     const data = await resp.json();
     const text = data.choices?.[0]?.message?.content || '';
     return parseValidationResponse(stripThinkTags(text));
   } catch (error) {
-    console.error('[FileValidation] 模型调用失败，跳过校验:', error);
+    serverLog.error('[FileValidation] 模型调用失败，跳过校验:', error);
     return { valid: true }; // 模型调用失败，跳过校验
   }
 }
@@ -161,28 +162,28 @@ export async function copyAgentHarnessFromLocal(repoName: string, destDir: strin
   const sourceDir = join(process.cwd(), agentHarnessBase, repoName);
 
   if (!existsSync(sourceDir)) {
-    console.log(`[TaskCreation] 本地 AgentHarness 目录不存在: ${sourceDir}, 尝试从 Gitea 拉取`);
+    serverLog.info(`[TaskCreation] 本地 AgentHarness 目录不存在: ${sourceDir}, 尝试从 Gitea 拉取`);
     const { cloneOrPullOrgRepo, isConfigured } = await import('@/lib/gitea-org-repo');
     if (isConfigured()) {
       const syncResult = await cloneOrPullOrgRepo(repoName);
       if (syncResult.success) {
-        console.log(`[TaskCreation] 从 Gitea 拉取 AgentHarness 成功: ${repoName} (${syncResult.method})`);
+        serverLog.info(`[TaskCreation] 从 Gitea 拉取 AgentHarness 成功: ${repoName} (${syncResult.method})`);
       } else {
-        console.error(`[TaskCreation] 从 Gitea 拉取 AgentHarness 失败: ${syncResult.error}`);
+        serverLog.error(`[TaskCreation] 从 Gitea 拉取 AgentHarness 失败: ${syncResult.error}`);
         return false;
       }
     } else {
-      console.log(`[TaskCreation] Gitea 未配置，无法拉取 AgentHarness`);
+      serverLog.info(`[TaskCreation] Gitea 未配置，无法拉取 AgentHarness`);
       return false;
     }
   }
 
   try {
     await copyDirectoryRecursive(sourceDir, destDir);
-    console.log(`[TaskCreation] 从本地拷贝 AgentHarness 完成: ${repoName} -> ${destDir}`);
+    serverLog.info(`[TaskCreation] 从本地拷贝 AgentHarness 完成: ${repoName} -> ${destDir}`);
     return true;
   } catch (error) {
-    console.error(`[TaskCreation] 拷贝 AgentHarness 失败:`, error);
+    serverLog.error(`[TaskCreation] 拷贝 AgentHarness 失败:`, error);
     return false;
   }
 }
@@ -252,31 +253,18 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
     if (!validation.valid) {
       throw new Error(`文件结构校验失败: ${validation.reason || '不符合 Agent 要求'}`);
     }
-    console.log(`[TaskCreation] 文件结构校验通过`);
+    serverLog.info(`[TaskCreation] 文件结构校验通过`);
   }
 
   let filePath: string | null = null;
   let projectPath: string | null = null;
-
-  // 从本地 AgentHarness 目录拷贝 Agent 文件
-  if (agent?.agentHarnessPath) {
-    console.log(`[TaskCreation] 开始为任务 ${taskId} 从本地拷贝 AgentHarness (${agent.agentHarnessPath})`);
-    const copied = await copyAgentHarnessFromLocal(agent.agentHarnessPath, taskDir);
-    if (copied) {
-      console.log(`[TaskCreation] AgentHarness 拷贝完成`);
-    } else {
-      console.log(`[TaskCreation] AgentHarness 拷贝失败或目录不存在，继续处理上传文件`);
-    }
-  } else {
-    console.log(`[TaskCreation] Agent 未配置 agentHarnessPath，跳过拷贝`);
-  }
 
   if (files && files.length > 0) {
     for (const file of files) {
       const lowerName = file.name.toLowerCase();
 
       if (lowerName.endsWith('.zip')) {
-        console.log(`[TaskCreation] 检测到压缩文件 ${file.name}，开始解压`);
+        serverLog.info(`[TaskCreation] 检测到压缩文件 ${file.name}，开始解压`);
         const zip = new AdmZip(file.buffer);
         const zipEntries = zip.getEntries();
 
@@ -288,15 +276,15 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
               await mkdir(entryDir, { recursive: true });
             }
             await writeFile(entryPath, entry.getData());
-            console.log(`[TaskCreation] 解压文件: ${entryPath}`);
+            serverLog.info(`[TaskCreation] 解压文件: ${entryPath}`);
           }
         }
-        console.log(`[TaskCreation] 解压完成，已解压 ${zipEntries.filter(e => !e.isDirectory).length} 个文件`);
+        serverLog.info(`[TaskCreation] 解压完成，已解压 ${zipEntries.filter(e => !e.isDirectory).length} 个文件`);
       } else {
         const destPath = join(taskDir, file.name);
         await writeFile(destPath, file.buffer);
         filePath = destPath;
-        console.log(`[TaskCreation] 写入上传文件: ${destPath}`);
+        serverLog.info(`[TaskCreation] 写入上传文件: ${destPath}`);
       }
     }
   }
@@ -342,6 +330,6 @@ export async function cleanupTaskDirectory(taskId: string): Promise<void> {
   const taskDir = join(SHARED_WORKSPACE_BASE, taskId);
   if (existsSync(taskDir)) {
     await rm(taskDir, { recursive: true, force: true });
-    console.log(`[TaskCreation] 清理任务目录: ${taskDir}`);
+    serverLog.info(`[TaskCreation] 清理任务目录: ${taskDir}`);
   }
 }

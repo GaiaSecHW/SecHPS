@@ -1,6 +1,6 @@
 /**
  * Agent Team Event Broadcaster - SSE-based real-time event streaming
- * 
+ *
  * Manages SSE connections for agent team execution events.
  * Uses a pub/sub pattern where execution services emit events
  * and connected SSE clients receive them.
@@ -8,6 +8,7 @@
 
 import type { AgentTeamEvent } from '@/types/agent-team-events';
 import { formatEventForSSE, createExecutionStartedEvent, createAgentInvokedEvent, createMessageDeltaEvent, createAgentCompletedEvent, createExecutionCompletedEvent, createIterationStartedEvent, createIterationCompletedEvent, createExperienceQueriedEvent } from '@/types/agent-team-events';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============ Client Connection Types ============
 
@@ -96,7 +97,7 @@ class AgentTeamEventBroadcaster {
       timestamp: new Date(),
     });
 
-    console.log(`[AgentTeamEvents] Client ${clientId} connected for team ${teamId}`);
+    logger.info(LOG_MODULES.AGENT, `Client ${clientId} connected for team ${teamId}`);
 
     return clientId;
   }
@@ -133,7 +134,7 @@ class AgentTeamEventBroadcaster {
     // Remove client
     this.clients.delete(clientId);
 
-    console.log(`[AgentTeamEvents] Client ${clientId} disconnected`);
+    logger.info(LOG_MODULES.AGENT, `Client ${clientId} disconnected`);
   }
 
   /**
@@ -144,7 +145,7 @@ class AgentTeamEventBroadcaster {
   broadcast(event: AgentTeamEvent): void {
     const teamClientIds = this.teamClients.get(event.teamId);
     if (!teamClientIds || teamClientIds.size === 0) {
-      console.log(`[AgentTeamEvents] No clients for team ${event.teamId}`);
+      logger.info(LOG_MODULES.AGENT, `No clients for team ${event.teamId}`);
       return;
     }
 
@@ -202,7 +203,7 @@ class AgentTeamEventBroadcaster {
       client.controller.enqueue(new TextEncoder().encode(message));
     } catch (error) {
       // Client might have disconnected
-      console.error(`[AgentTeamEvents] Error sending to client ${client.id}:`, error);
+      logger.error(LOG_MODULES.AGENT, `Error sending to client ${client.id}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       this.unregisterClient(client.id);
     }
   }
@@ -232,7 +233,7 @@ class AgentTeamEventBroadcaster {
     }
 
     this.executionClients.delete(executionId);
-    console.log(`[AgentTeamEvents] Cleaned up execution ${executionId} clients`);
+    logger.info(LOG_MODULES.AGENT, `Cleaned up execution ${executionId} clients`);
   }
 
   /**
@@ -277,7 +278,7 @@ class AgentTeamEventBroadcaster {
     this.clients.clear();
     this.teamClients.clear();
     this.executionClients.clear();
-    console.log('[AgentTeamEvents] All clients closed');
+    logger.info(LOG_MODULES.AGENT, 'All clients closed');
   }
 }
 

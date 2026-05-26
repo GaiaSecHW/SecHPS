@@ -1,6 +1,7 @@
 import * as Minio from 'minio';
 import { mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================================================
 // MinIO Config
@@ -37,7 +38,7 @@ async function ensureBucket(bucket: string): Promise<void> {
   const exists = await mc.bucketExists(bucket);
   if (!exists) {
     await mc.makeBucket(bucket);
-    console.log(`[MinIO] Created bucket: ${bucket}`);
+    logger.info(LOG_MODULES.MINIO, `Created bucket: ${bucket}`);
   }
 }
 
@@ -64,10 +65,10 @@ export async function uploadAgentHarness(
     await mc.putObject(bucket, objectName, content, content.length, {
       'Content-Type': 'application/octet-stream',
     });
-    console.log(`[MinIO] Uploaded: ${objectName} (${content.length} bytes)`);
+    logger.info(LOG_MODULES.MINIO, `Uploaded: ${objectName}`, { details: { size: `${content.length} bytes` } });
   }
 
-  console.log(`[MinIO] Uploaded ${files.size} files for agent ${appId}`);
+  logger.info(LOG_MODULES.MINIO, `Uploaded ${files.size} files for agent ${appId}`);
 }
 
 /**
@@ -86,11 +87,11 @@ export async function downloadAgentHarness(
   try {
     const exists = await mc.bucketExists(bucket);
     if (!exists) {
-      console.log(`[MinIO] Bucket ${bucket} does not exist, skip download`);
+      logger.info(LOG_MODULES.MINIO, `Bucket ${bucket} does not exist, skip download`);
       return null;
     }
   } catch (err) {
-    console.error(`[MinIO] bucketExists check failed:`, err);
+    logger.error(LOG_MODULES.MINIO, 'bucketExists check failed', { details: { error: err instanceof Error ? err.message : String(err) } });
     return null;
   }
 
@@ -110,7 +111,7 @@ export async function downloadAgentHarness(
   });
 
   if (objectNames.length === 0) {
-    console.log(`[MinIO] No harness files found for agent ${appId}`);
+    logger.info(LOG_MODULES.MINIO, `No harness files found for agent ${appId}`);
     return null;
   }
 
@@ -125,14 +126,14 @@ export async function downloadAgentHarness(
     await mkdir(destPathDir, { recursive: true });
 
     await mc.fGetObject(bucket, objectName, destPath);
-    console.log(`[MinIO] Downloaded: ${relativePath}`);
+    logger.info(LOG_MODULES.MINIO, `Downloaded: ${relativePath}`);
 
     if (!rootDir && relativePath.includes('/')) {
       rootDir = relativePath.split('/')[0];
     }
   }
 
-  console.log(`[MinIO] Downloaded ${objectNames.length} files for agent ${appId}`);
+  logger.info(LOG_MODULES.MINIO, `Downloaded ${objectNames.length} files for agent ${appId}`);
   return rootDir;
 }
 
@@ -156,7 +157,7 @@ export async function deleteAgentHarness(appId: string): Promise<void> {
   });
 
   if (objectNames.length === 0) {
-    console.log(`[MinIO] No harness files to delete for agent ${appId}`);
+    logger.info(LOG_MODULES.MINIO, `No harness files to delete for agent ${appId}`);
     return;
   }
 
@@ -164,7 +165,7 @@ export async function deleteAgentHarness(appId: string): Promise<void> {
     await mc.removeObject(bucket, objectName);
   }
 
-  console.log(`[MinIO] Deleted ${objectNames.length} files for agent ${appId}`);
+  logger.info(LOG_MODULES.MINIO, `Deleted ${objectNames.length} files for agent ${appId}`);
 }
 
 /**

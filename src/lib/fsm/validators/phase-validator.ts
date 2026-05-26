@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { PhaseSchemas } from '../schemas/phase-schemas';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface ValidationResult {
   valid: boolean;
@@ -51,7 +52,7 @@ export function validatePhaseOutput(
     return { valid: errors.length === 0, errors, warnings };
 
   } catch (error) {
-    console.error('[fsm/validators/phase-validator] 操作失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.FSM, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     errors.push(`Failed to parse YAML: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return { valid: false, errors, warnings };
   }

@@ -10,27 +10,7 @@ import { updateSkillExecutionLog } from '@/services/skill-execution-log';
 import { generateId } from '@/lib/id-generator';
 import { updateContextWindowFromError, isContextOverflowError } from '@/lib/context-window-updater';
 
-// ============================================
-// 日志工具
-// ============================================
-
-const LOG_PREFIX = '[EnhancedCaller]';
-
-function logInfo(message: string, ...args: unknown[]) {
-  console.log(`${LOG_PREFIX} [INFO] ${new Date().toISOString()} - ${message}`, ...args);
-}
-
-function logWarn(message: string, ...args: unknown[]) {
-  console.warn(`${LOG_PREFIX} [WARN] ${new Date().toISOString()} - ${message}`, ...args);
-}
-
-function logError(message: string, ...args: unknown[]) {
-  console.error(`${LOG_PREFIX} [ERROR] ${new Date().toISOString()} - ${message}`, ...args);
-}
-
-function logSuccess(message: string, ...args: unknown[]) {
-  console.log(`${LOG_PREFIX} [SUCCESS] ${new Date().toISOString()} - ${message}`, ...args);
-}
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface ToolResult {
   success: boolean;
@@ -116,19 +96,18 @@ export class EnhancedEvaluationCaller {
   private aborted: boolean = false;  // 中止标志
 
   constructor(config: EnhancedEvaluationConfig) {
-    // 日志：记录从路由/配置加载的系统提示词配置
-    logInfo('初始化 EnhancedEvaluationCaller');
-    logInfo(`Provider类型: ${config.providerType}`);
-    logInfo(`模型: ${config.model}`);
-    logInfo(`工作目录: ${config.cwd || '未设置'}`);
-    logInfo(`系统提示词类型: ${typeof config.systemPrompt}`);
-    
-    console.log(`[TRACE MCP] enhanced-caller.ts: config.mcpServers=${config.mcpServers?.length || 0}个`);
+    logger.info(LOG_MODULES.EVALUATION, '初始化 EnhancedEvaluationCaller');
+    logger.info(LOG_MODULES.EVALUATION, `Provider类型: ${config.providerType}`);
+    logger.info(LOG_MODULES.EVALUATION, `模型: ${config.model}`);
+    logger.info(LOG_MODULES.EVALUATION, `工作目录: ${config.cwd || '未设置'}`);
+    logger.info(LOG_MODULES.EVALUATION, `系统提示词类型: ${typeof config.systemPrompt}`);
+
+    logger.info(LOG_MODULES.EVALUATION, `config.mcpServers=${config.mcpServers?.length || 0}个`);
     if (config.mcpServers && config.mcpServers.length > 0) {
-      console.log(`[TRACE MCP] enhanced-caller.ts: MCP服务器=${config.mcpServers.map(s => s.name).join(', ')}`);
-      console.log(`[TRACE MCP] enhanced-caller.ts: 第一个MCP详情=${JSON.stringify(config.mcpServers[0])}`);
+      logger.info(LOG_MODULES.EVALUATION, `MCP服务器=${config.mcpServers.map(s => s.name).join(', ')}`);
+      logger.info(LOG_MODULES.EVALUATION, `第一个MCP详情=${JSON.stringify(config.mcpServers[0])}`);
     } else {
-      console.log(`[TRACE MCP] enhanced-caller.ts: ⚠️ config.mcpServers 为空！`);
+      logger.warn(LOG_MODULES.EVALUATION, 'config.mcpServers 为空！');
     }
     
     // 设置 workflowNodeId（用于保存 session_id 到 NodeExecution 表）
@@ -163,11 +142,11 @@ export class EnhancedEvaluationCaller {
       skills: config.skills,  // Skills 配置
       agents: config.agents,  // 子Agent定义（SDK官方推荐方式）
     });
-    logInfo(`ClaudeAgentService 初始化完成`);
-    logInfo(`Base URL: ${agentBaseUrl}`);
-    logInfo(`权限模式: ${config.permissionMode}`);
-    logInfo(`允许跳过权限: ${config.allowDangerouslySkipPermissions}`);
-    logInfo(`allowedTools: ${config.allowedTools?.length || 8} tools`);
+    logger.info(LOG_MODULES.EVALUATION, 'ClaudeAgentService 初始化完成');
+    logger.info(LOG_MODULES.EVALUATION, `Base URL: ${agentBaseUrl}`);
+    logger.info(LOG_MODULES.EVALUATION, `权限模式: ${config.permissionMode}`);
+    logger.info(LOG_MODULES.EVALUATION, `允许跳过权限: ${config.allowDangerouslySkipPermissions}`);
+    logger.info(LOG_MODULES.EVALUATION, `allowedTools: ${config.allowedTools?.length || 8} tools`);
   }
 
   /**
@@ -240,7 +219,7 @@ export class EnhancedEvaluationCaller {
           // 支持多种参数格式: skill, skill_name, skill_id, name
           const skillName = (input as any)?.skill || (input as any)?.skill_name || (input as any)?.skill_id || (input as any)?.name;
           if (skillName) {
-            console.log(`[EnhancedCaller] 检测到 Skill 调用: ${skillName}`);
+            logger.info(LOG_MODULES.EVALUATION, `检测到 Skill 调用: ${skillName}`);
             try {
               // 查找 Skill ID
               const skill = await prisma.skill.findFirst({
@@ -274,17 +253,17 @@ export class EnhancedEvaluationCaller {
                 
                 this.currentSkillExecutionId = executionId;
                 this.currentSkillId = skill.id;
-                
+
                 // 更新 skill-execution-log.json 文件
                 const projectPath = this.getWorkingDirectory();
                 if (projectPath) {
                   await updateSkillExecutionLog(projectPath, skill.id, 'running');
                 }
-                
-                console.log(`[EnhancedCaller] Skill 执行记录已创建: ${skillName}, executionId=${executionId}`);
+
+                logger.info(LOG_MODULES.EVALUATION, `Skill 执行记录已创建: ${skillName}, executionId=${executionId}`);
               }
             } catch (error) {
-              console.error(`[EnhancedCaller] 记录 Skill 执行失败:`, error);
+              logger.error(LOG_MODULES.EVALUATION, '记录 Skill 执行失败', { error: error instanceof Error ? error.message : String(error) });
             }
           }
         }
@@ -312,10 +291,10 @@ export class EnhancedEvaluationCaller {
             if (projectPath) {
               await updateSkillExecutionLog(projectPath, this.currentSkillId, 'completed', findingsCount);
             }
-            
-            console.log(`[EnhancedCaller] Skill 执行完成: findings=${findingsCount}`);
+
+            logger.info(LOG_MODULES.EVALUATION, `Skill 执行完成: findings=${findingsCount}`);
           } catch (error) {
-            console.error(`[EnhancedCaller] 更新 Skill 执行状态失败:`, error);
+            logger.error(LOG_MODULES.EVALUATION, '更新 Skill 执行状态失败', { error: error instanceof Error ? error.message : String(error) });
           } finally {
             this.currentSkillExecutionId = null;
             this.currentSkillId = null;
@@ -332,27 +311,23 @@ export class EnhancedEvaluationCaller {
           });
         }
         // Token 使用量回调
-        console.log('='.repeat(60));
-        console.log('[EnhancedCaller] 📊 收到 Token 使用量');
-        console.log('[EnhancedCaller] usage:', JSON.stringify(usage));
-        console.log('='.repeat(60));
-        logInfo('Token 使用量:', usage);
+        logger.info(LOG_MODULES.EVALUATION, '收到 Token 使用量', { details: { usage } });
         callbacks.onUsage?.(usage);
       },
       onComplete: async (fullResponse) => {
         // 日志：单次迭代完成
-        logInfo('========================================');
-        logInfo('单次迭代完成');
-        logInfo(`评估ID: ${this.currentEvaluationId}`);
-        logInfo(`项目ID: ${this.currentProjectId}`);
-        logInfo(`响应长度: ${fullResponse.length} 字符`);
-        logInfo(`响应预览: ${fullResponse.substring(0, 500)}...`);
-        logInfo('========================================');
+        logger.info(LOG_MODULES.EVALUATION,'========================================');
+        logger.info(LOG_MODULES.EVALUATION,'单次迭代完成');
+        logger.info(LOG_MODULES.EVALUATION,`评估ID: ${this.currentEvaluationId}`);
+        logger.info(LOG_MODULES.EVALUATION,`项目ID: ${this.currentProjectId}`);
+        logger.info(LOG_MODULES.EVALUATION,`响应长度: ${fullResponse.length} 字符`);
+        logger.info(LOG_MODULES.EVALUATION,`响应预览: ${fullResponse.substring(0, 500)}...`);
+        logger.info(LOG_MODULES.EVALUATION,'========================================');
 
         // 会话结束时才保存数据
         if (this.currentEvaluationId && this.currentProjectId && fullResponse.trim()) {
           // 解析并保存分析报告
-          logInfo('开始解析分析报告...');
+          logger.info(LOG_MODULES.EVALUATION,'开始解析分析报告...');
           try {
             const analysisData = parseAnalysisFromOutput(fullResponse);
             if (analysisData) {
@@ -384,12 +359,12 @@ export class EnhancedEvaluationCaller {
                   rawContent: fullResponse,
                 },
               });
-              logSuccess('分析报告保存成功');
+              logger.info(LOG_MODULES.EVALUATION,'分析报告保存成功');
             } else {
-              logWarn('未从输出中解析到分析报告');
+              logger.warn(LOG_MODULES.EVALUATION,'未从输出中解析到分析报告');
             }
           } catch (analysisError) {
-            logError('解析保存分析报告时发生异常:', analysisError);
+            logger.error(LOG_MODULES.EVALUATION, '解析保存分析报告时发生异常', { details: { error: analysisError instanceof Error ? analysisError.message : String(analysisError) } });
           }
           
           // 漏洞入库流程已改为从 vulnerabilities.json 文件解析
@@ -407,28 +382,26 @@ export class EnhancedEvaluationCaller {
           //   logError('解析保存结果时发生异常:', parseError);
           // }
         } else {
-          logWarn('跳过漏洞解析: 评估ID、项目ID或响应为空');
+          logger.warn(LOG_MODULES.EVALUATION,'跳过漏洞解析: 评估ID、项目ID或响应为空');
         }
         callbacks.onComplete(fullResponse);
       },
       onError: (error: Error) => {
         // 自动学习：如果是 context 超限错误，尝试更新数据库
         if (this.modelConfigId && isContextOverflowError(error)) {
-          logInfo('检测到 context 超限错误，尝试自动学习 contextWindow');
+          logger.info(LOG_MODULES.EVALUATION,'检测到 context 超限错误，尝试自动学习 contextWindow');
           updateContextWindowFromError(this.modelConfigId, error).then((updated) => {
             if (updated) {
-              logInfo(`contextWindow 已自动更新为 ${updated}`);
+              logger.info(LOG_MODULES.EVALUATION,`contextWindow 已自动更新为 ${updated}`);
             }
           }).catch((e) => {
-            logWarn('自动更新 contextWindow 失败:', e);
+            logger.warn(LOG_MODULES.EVALUATION,'自动更新 contextWindow 失败:', e);
           });
         }
         callbacks.onError(error);
       },
       onSessionId: async (sessionId) => {
-        console.log('[Evaluation] 捕获 SDK 会话 ID:', sessionId);
-        console.log('[Evaluation] currentEvaluationId:', this.currentEvaluationId);
-        console.log('[Evaluation] currentWorkflowNodeId:', this.currentWorkflowNodeId);
+        logger.info(LOG_MODULES.EVALUATION, '捕获 SDK 会话 ID', { details: { sessionId, currentEvaluationId: this.currentEvaluationId, currentWorkflowNodeId: this.currentWorkflowNodeId } });
         
         // 优先保存到 NodeExecution 表（如果提供了 workflowNodeId）
         if (this.currentEvaluationId && this.currentWorkflowNodeId) {
@@ -457,9 +430,9 @@ export class EnhancedEvaluationCaller {
                 updatedAt: new Date(),
               },
             });
-            console.log('[Evaluation] opencodeSessionId 已保存到 NodeExecution 表');
+            logger.info(LOG_MODULES.EVALUATION, 'opencodeSessionId 已保存到 NodeExecution 表');
           } catch (e) {
-            console.error('[Evaluation] 保存到 NodeExecution 失败:', e);
+            logger.error(LOG_MODULES.EVALUATION, '保存到 NodeExecution 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
           }
           return;
         }
@@ -468,7 +441,7 @@ export class EnhancedEvaluationCaller {
         if (this.currentEvaluationId) {
           // 检查是否是拼接的临时 ID（节点级 ID 格式: eval-xxx-node-0）
           if (this.currentEvaluationId.includes('-node-')) {
-            console.log('[Evaluation] 跳过保存: 当前为节点级临时 ID，且未提供 workflowNodeId');
+            logger.info(LOG_MODULES.EVALUATION, '跳过保存: 当前为节点级临时 ID，且未提供 workflowNodeId');
             return;
           }
           
@@ -477,9 +450,9 @@ export class EnhancedEvaluationCaller {
               where: { id: this.currentEvaluationId },
               data: { opencodeSessionId: sessionId },
             });
-            console.log('[Evaluation] opencodeSessionId 已保存到 EvaluationSession 表');
+            logger.info(LOG_MODULES.EVALUATION, 'opencodeSessionId 已保存到 EvaluationSession 表');
           } catch (e) {
-            console.error('[Evaluation] 保存到 EvaluationSession 失败:', e);
+            logger.error(LOG_MODULES.EVALUATION, '保存到 EvaluationSession 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
           }
         }
       },
@@ -490,20 +463,6 @@ export class EnhancedEvaluationCaller {
         const prompt = promptParts.join('\n\n---\n\n');
 
         // 日志：发送给 Claude 的完整信息
-        console.log('[EnhancedEvaluationCaller] ========================================');
-        console.log('[EnhancedEvaluationCaller] 启动评估 - 发送给 Claude 的信息:');
-        console.log('[EnhancedEvaluationCaller] - 项目名称:', context.projectName);
-        console.log('[EnhancedEvaluationCaller] - 项目描述:', context.projectDescription || '无');
-        console.log('[EnhancedEvaluationCaller] - 文件数:', context.files?.length || 0);
-        console.log('[EnhancedEvaluationCaller] - 工作流名称:', context.workflowName || '无');
-        //console.log('[EnhancedEvaluationCaller] ----------------------------------------');
-        //console.log('[EnhancedEvaluationCaller] - 任务描述:', context.taskDescription?.substring(0, 200) || '无');
-        //console.log('[EnhancedEvaluationCaller] ----------------------------------------');
-        //console.log('[EnhancedEvaluationCaller] - 初始消息(用户提示词):', context.initialMessage?.substring(0, 300) || '无');
-        //console.log('[EnhancedEvaluationCaller] ----------------------------------------');
-        //console.log('[EnhancedEvaluationCaller] - 最终拼接的 prompt:', prompt.substring(0, 500) + '...');
-        //console.log('[EnhancedEvaluationCaller] ========================================');
-
         await this.agentService.sendPrompt(prompt, agentCallbacks);
       }
     } catch (error) {
@@ -571,7 +530,7 @@ export function createEnhancedEvaluationCaller(
   const providerType: 'claude' | 'openai' =
     modelConfig.providerType === 'claude' ? 'claude' : 'openai';
 
-  console.log(`[createEnhancedEvaluationCaller] providerType: ${providerType}, model: ${model}, apiBaseUrl: ${modelConfig.apiBaseUrl}`);
+  logger.info(LOG_MODULES.EVALUATION, `providerType: ${providerType}, model: ${model}, apiBaseUrl: ${modelConfig.apiBaseUrl}`);
 
   const caller = new EnhancedEvaluationCaller({
     modelConfigId: modelConfig.id,  // 传递 ModelConfig ID 用于自动更新 contextWindow

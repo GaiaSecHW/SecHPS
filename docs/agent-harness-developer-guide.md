@@ -13,7 +13,7 @@
 AgentHarness 是开发者交付给平台的 **Agent 工程包**。它是一个 ZIP 压缩包（或文件夹），包含 Agent 运行所需的全部文件：配置、Skills、脚本、提示词等。
 
 平台接收 AgentHarness 后：
-1. 将文件存储到对象存储（MinIO）
+1. 将文件存储到对象存储S3桶
 2. 自动扫描并注册其中的 Skills
 3. 在任务执行时将工程包下载到工作空间，启动 Agent 进程
 
@@ -66,7 +66,7 @@ my-agent.zip
 
 平台会自动从 `opencode.json` 中读取 `default_agent` 字段作为默认智能体名称。
 
-### 2.3 agentflow 引擎
+### 2.3 agentflow 引擎 （对接中，暂不支持）
 
 ```
 my-pipeline.zip
@@ -123,12 +123,14 @@ AgentApp.startCommand > 用户创建任务时填写的 notes
 
 ### 3.3 输入文件校验（inputRequirements）
 
-如果你的 Agent 对输入文件有特定要求，可以在 `inputRequirements` 字段填写自然语言描述。平台会在任务创建时用 LLM 自动校验用户上传的文件结构。
+如果你的 Agent 对输入文件(待扫描的文件)有特定要求，可以在 `inputRequirements` 字段填写自然语言描述。平台会在任务创建时用 LLM 自动校验用户上传的文件结构。
 
 **示例：**
+
 ```
 必须包含 pom.xml 或 build.gradle，以及 src/ 目录。
 不接受纯前端项目（仅含 package.json 无 Java 源码）。
+注意：如非必要，尽量不要在此处限制过于严格；一些校验规则优先在Harness工程中写代码实现，如文件格式过滤等，减小模型负载
 ```
 
 校验失败时，任务创建会被拒绝，并向用户返回 LLM 给出的原因。
@@ -240,7 +242,7 @@ POST /api/v1/vulnerabilities 写入漏洞数据库
 
 **关键约定：**
 
-- Agent 必须将报告文件输出到工作空间的 **`Report/`** 目录（大写 R）或 **`report/`** 目录（小写 r），平台才能发现并上传
+- Agent 必须将报告文件输出到工作空间的 **`Report/`** 目录（必须大写 R），平台才能发现并上传
 - 目录内文件格式不限，平台通过 `audit-report-parser` skill 调用 LLM 解析，支持 Markdown、JSON、纯文本等
 - 每条漏洞需包含以下字段供 LLM 提取：
 
@@ -251,7 +253,7 @@ POST /api/v1/vulnerabilities 写入漏洞数据库
 | `description` | 漏洞描述 |
 | `severity` | 严重程度：`HIGH` / `MEDIUM` / `LOW` / `INFO` |
 | `cwe` | CWE 编号，如 `CWE-89` |
-| `location` | 漏洞位置（文件名 + 行号） |
+| `location` | 漏洞所在源码位置（文件名 + 行号） |
 | `POC` | 漏洞验证代码或步骤 |
 | `fixSuggestion` | 修复建议 |
 | `rawReport` | 原始报告文件路径（分号分隔，会自动上传到 MinIO） |
@@ -259,29 +261,9 @@ POST /api/v1/vulnerabilities 写入漏洞数据库
 
 **解析容错：** 平台采用两阶段解析策略，Phase 1 使用 `audit-report-parser` skill，Phase 2 使用通用 AI 直接解析报告文件。任一阶段成功即可入库。
 
-**超时保护：** 解析流程超时时间为 600 秒，超时后强制终止。
+**超时保护：** 解析流程超时时间为 3600 秒，超时后强制终止。
 
 **注意：** 漏洞入库依赖平台配置的 `build` agent 及 `audit-report-parser` skill，如未配置则跳过此步骤。
-
-### 4.3 漏洞模式库关联（attack_pattern）
-
-SKILL 创建时可选择关联到漏洞模式库的一个叶子节点。模式库数据存储在 `attack_pattern` 表中，支持多级层级结构（最多 5 层）：
-
-```
-Level 1 (根分类)    Level 2 (子分类)    Level 3 (具体类型)    Level 4 (场景)    Level 5 (攻击模式)
-├─ OWASP Top 10     ├─ A03 注入         ├─ SQL 注入          ├─ 基于错误的     ├─ OR 1=1 绕过
-│                   │                    │                    │               └─ UNION SELECT 绕过
-│                   │                    └─ 命令注入          ├─ OS 命令注入
-│                   │                                        └─ SSTI 模板注入
-├─ MITRE ATT&CK     ├─ 初始访问          ├─ 供应链攻击        ├─ 依赖注入攻击   ├─ NPM 包投毒
-│                   │                    │                    │               └─ Maven 依赖劫持
-│                   │                    └─ 网络钓鱼          ├─ 鱼叉式钓鱼     └─ 鱼叉式钓鱼-附件
-└─ CWE 漏洞库       ├─ CWE-79 XSS       ├─ 存储型 XSS        ├─ 评论区         ├─ 恶意 HTML 注入
-                    │                    │                    └─ 用户资料       └─ SVG 事件处理器
-                    └─ CWE-89 SQL 注入  └─ Tautology SQL 注入 └─ 登录绕过
-```
-
-SKILL 必须关联到叶子节点（Level 3/4/5），非叶子节点不可选择。
 
 ---
 
@@ -304,47 +286,6 @@ SKILL 必须关联到叶子节点（Level 3/4/5），非叶子节点不可选择
 | 租户 | 管理员/ICSL 用户选择绑定租户或公开共享 |
 
 4. 点击 **创建**，平台自动解析并注册 Skills
-
-### 5.2 通过 API 上传
-
-```bash
-curl -X POST https://{platform}/api/agent-apps \
-  -H "Authorization: Bearer {token}" \
-  -F "name=java-security-auditor" \
-  -F "engine=claudecode" \
-  -F "defaultAgentName=security-auditor" \
-  -F "startCommand=/security-audit" \
-  -F "inputRequirements=必须包含 pom.xml 和 src/ 目录" \
-  -F "isPublic=false" \
-  -F "agentHarnessFileType=archive" \
-  -F "agentHarnessFile=@./my-agent.zip"
-```
-
-响应：
-```json
-{
-  "app": {
-    "id": "app-xxxx",
-    "name": "java-security-auditor",
-    "engine": "claudecode",
-    "agentHarnessPath": "app-xxxx/",
-    "createdAt": "2026-05-19T..."
-  }
-}
-```
-
-### 5.3 更新工程包
-
-```bash
-curl -X PUT https://{platform}/api/agent-apps/{appId} \
-  -H "Authorization: Bearer {token}" \
-  -F "name=java-security-auditor" \
-  -F "engine=claudecode" \
-  -F "agentHarnessFileType=archive" \
-  -F "agentHarnessFile=@./my-agent-v2.zip"
-```
-
-更新时，旧的 MinIO 文件会被删除并替换。
 
 ---
 

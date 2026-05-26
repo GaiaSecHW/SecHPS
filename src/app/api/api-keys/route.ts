@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request);
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ apiKeys });
   } catch (error) {
-    console.error('[API Keys] GET error:', error);
+    logger.error(LOG_MODULES.AUTH, 'GET error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取 API Key 列表失败' }, { status: 500 });
   }
 }
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
       keyPrefix: apiKey.keyPrefix,
     }, { status: 201 });
   } catch (error) {
-    console.error('[API Keys] POST error:', error);
+    logger.error(LOG_MODULES.AUTH, 'POST error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '创建 API Key 失败' }, { status: 500 });
   }
 }

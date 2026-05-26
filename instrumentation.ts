@@ -144,6 +144,17 @@ export async function register() {
       await initGitSkillSync();
       console.log(`${LOG_PREFIX} Git Skill 同步初始化完成`);
 
+      // Step 7: 初始化 CodeSwarm 调度器（Redis 队列 + Worker 拓扑恢复 + 离线检测）
+      console.log(`${LOG_PREFIX} 初始化 CodeSwarm 调度器...`);
+      const { codeswarmDispatcher } = await import('./src/services/codeswarm-dispatcher');
+      await codeswarmDispatcher.init();
+      console.log(`${LOG_PREFIX} CodeSwarm 调度器初始化完成`);
+
+      // Step 8: 启动日志归档调度器（每周一自动压缩上周日志）
+      const { startLogArchiveScheduler } = await import('./src/lib/log-archiver');
+      startLogArchiveScheduler();
+      console.log(`${LOG_PREFIX} 日志归档调度器已启动`);
+
     } catch (error) {
       console.error(`${LOG_PREFIX} 评估状态恢复失败:`, error);
     }

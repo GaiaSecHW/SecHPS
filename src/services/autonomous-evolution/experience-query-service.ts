@@ -5,6 +5,7 @@
 
 import { prisma } from '@/lib/prisma';
 import type { AutonomousEvolutionExperience } from '@prisma/client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 常量：最大动态查询经验数
 export const MAX_DYNAMIC_EXPERIENCES = 5;
@@ -184,15 +185,11 @@ export async function buildDynamicExperiencePrompt(
   const matches = await queryRelevantExperiences(context);
 
   if (matches.length === 0) {
-    console.log('[动态经验查询] ========== 无匹配经验 ==========');
-    console.log(`[动态经验查询] 错误分类: ${context.errorCategory || classifyError(context.errorMessage)}`);
-    console.log(`[动态经验查询] 错误消息: ${context.errorMessage.substring(0, 100)}...`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, '无匹配经验', { details: { errorCategory: context.errorCategory || classifyError(context.errorMessage), errorMessage: context.errorMessage.substring(0, 100) + '...' } });
     return { prompt: '', matches: [] };
   }
 
-  console.log(`[动态经验查询] ========== 动态查询 Top ${matches.length} 相关经验 ==========`);
-  console.log(`[动态经验查询] 错误分类: ${context.errorCategory || classifyError(context.errorMessage)}`);
-  console.log(`[动态经验查询] 错误消息: ${context.errorMessage.substring(0, 100)}...`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, '动态查询相关经验', { details: { count: matches.length, errorCategory: context.errorCategory || classifyError(context.errorMessage), errorMessage: context.errorMessage.substring(0, 100) + '...' } });
 
   const lines: string[] = [
     '## ⚠️ 相关执行经验（遇到类似错误时的解决方案）',
@@ -211,17 +208,10 @@ export async function buildDynamicExperiencePrompt(
     lines.push(`教训: ${exp.lesson}`);
     lines.push('');
 
-    console.log(`[动态经验查询] Top ${i + 1}: "${exp.title}"`);
-    console.log(`[动态经验查询]   - ID: ${exp.id}`);
-    console.log(`[动态经验查询]   - 分类: ${exp.errorCategory}`);
-    console.log(`[动态经验查询]   - 相关性评分: ${match.relevanceScore.toFixed(1)}`);
-    console.log(`[动态经验查询]   - 匹配特征: ${match.matchedPatterns.join(', ') || '无'}`);
-    console.log(`[动态经验查询]   - 命中次数: ${exp.hitCount}`);
-    console.log(`[动态经验查询]   - 直达方案: ${exp.directSolution.substring(0, 50)}...`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `Top ${i + 1}`, { details: { title: exp.title, id: exp.id, errorCategory: exp.errorCategory, relevanceScore: match.relevanceScore.toFixed(1), matchedPatterns: match.matchedPatterns.join(', ') || '无', hitCount: exp.hitCount, solutionPreview: exp.directSolution.substring(0, 50) + '...' } });
   }
 
-  console.log(`[动态经验查询] ========== 共查询 ${matches.length} 条经验 ==========`);
-  console.log(`[动态经验查询] 最高评分: ${matches[0]?.relevanceScore.toFixed(1)}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, '共查询经验', { details: { count: matches.length, maxScore: matches[0]?.relevanceScore.toFixed(1) } });
 
   const prompt = lines.join('\n');
   return { prompt, matches };

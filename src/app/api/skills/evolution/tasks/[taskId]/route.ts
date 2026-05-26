@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { getTaskDetail } from '@/services/skill-evolution/task-manager';
 import { compareEvolutionEffect } from '@/services/skill-evolution/effect-comparator';
 import type { CompactCase } from '@/services/skill-evolution/case-extractor';
@@ -53,23 +54,23 @@ export async function GET(
           falsePositiveCases = JSON.parse(improvement.falsePositiveCases);
         }
       } catch {
-        console.warn('Failed to parse falsePositiveCases');
+        logger.warn(LOG_MODULES.SKILL, 'Failed to parse falsePositiveCases');
       }
-      
+
       try {
         if (improvement.confirmedCases) {
           confirmedCases = JSON.parse(improvement.confirmedCases);
         }
       } catch {
-        console.warn('Failed to parse confirmedCases');
+        logger.warn(LOG_MODULES.SKILL, 'Failed to parse confirmedCases');
       }
-      
+
       try {
         if (improvement.analysis) {
           analysis = JSON.parse(improvement.analysis);
         }
       } catch {
-        console.warn('Failed to parse analysis');
+        logger.warn(LOG_MODULES.SKILL, 'Failed to parse analysis');
       }
     }
 
@@ -83,7 +84,7 @@ export async function GET(
           task.newVersionId // 新版本 skill ID
         );
       } catch (error) {
-        console.warn(`[TaskDetailAPI] Failed to compare evolution effect:`, error);
+        logger.warn(LOG_MODULES.SKILL, `[TaskDetailAPI] Failed to compare evolution effect`, { details: { error: error instanceof Error ? error.message : String(error) } });
         // 对比失败不影响返回任务详情
       }
     }
@@ -130,7 +131,7 @@ export async function GET(
       comparison: comparisonResult,
     });
   } catch (error) {
-    console.error('[TaskDetailAPI] Error fetching task detail:', error);
+    logger.error(LOG_MODULES.SKILL, '[TaskDetailAPI] Error fetching task detail', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: 'Failed to fetch task detail' },
       { status: 500 }

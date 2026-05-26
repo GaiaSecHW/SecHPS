@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, FileOperationConfig, replaceVariables } from './index';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 允许的基础路径（安全限制）
 const ALLOWED_BASE_PATHS = [
@@ -112,7 +113,7 @@ export async function executeFileOperation(
     };
   } catch (error) {
     logs.push(`[File] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error('[workflow-actions/file-executor] 文件操作失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, '文件操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       output: null,

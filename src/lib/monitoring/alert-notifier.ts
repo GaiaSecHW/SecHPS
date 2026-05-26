@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import type { AlertInstance, NotificationChannelType } from '@/types/monitoring';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 发送告警通知
@@ -27,7 +28,7 @@ export async function sendAlertNotification(
         notifiedChannels.push(config.name);
       }
     } catch (error) {
-      console.error(`Failed to send alert to ${config.name}:`, error);
+      logger.error(LOG_MODULES.MONITOR, `Failed to send alert to ${config.name}`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -64,7 +65,7 @@ async function sendToChannel(
     case 'wechat':
       return sendWeChat(config, alert);
     default:
-      console.warn(`Unknown notification channel type: ${type}`);
+      logger.warn(LOG_MODULES.MONITOR, `Unknown notification channel type: ${type}`);
       return false;
   }
 }
@@ -97,7 +98,7 @@ async function sendWebhook(
 
     return response.ok;
   } catch (error) {
-    console.error('Webhook notification failed:', error);
+    logger.error(LOG_MODULES.MONITOR, 'Webhook notification failed:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -110,9 +111,9 @@ async function sendEmail(
   alert: AlertInstance
 ): Promise<boolean> {
   // 邮件发送需要配置 SMTP，这里仅记录日志
-  console.log(`[EMAIL ALERT] To: ${config.recipients.join(', ')}`);
-  console.log(`[EMAIL ALERT] Subject: [${alert.severity.toUpperCase()}] ${alert.ruleName}`);
-  console.log(`[EMAIL ALERT] Body: ${alert.message}`);
+  logger.info(LOG_MODULES.MONITOR, `[EMAIL ALERT] To: ${config.recipients.join(', ')}`);
+  logger.info(LOG_MODULES.MONITOR, `[EMAIL ALERT] Subject: [${alert.severity.toUpperCase()}] ${alert.ruleName}`);
+  logger.info(LOG_MODULES.MONITOR, `[EMAIL ALERT] Body: ${alert.message}`);
 
   // TODO: 实现实际邮件发送逻辑
   // 需要配置 nodemailer 或其他邮件服务
@@ -148,7 +149,7 @@ async function sendSlack(
 
     return response.ok;
   } catch (error) {
-    console.error('Slack notification failed:', error);
+    logger.error(LOG_MODULES.MONITOR, 'Slack notification failed:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -182,7 +183,7 @@ async function sendDingTalk(
 
     return response.ok;
   } catch (error) {
-    console.error('DingTalk notification failed:', error);
+    logger.error(LOG_MODULES.MONITOR, 'DingTalk notification failed:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -213,7 +214,7 @@ async function sendWeChat(
 
     return response.ok;
   } catch (error) {
-    console.error('WeChat notification failed:', error);
+    logger.error(LOG_MODULES.MONITOR, 'WeChat notification failed:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }

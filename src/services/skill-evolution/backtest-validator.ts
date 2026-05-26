@@ -1,4 +1,5 @@
 import { routeRequestWithDefaultModel } from '@/lib/model-client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { CompactCase } from './case-extractor';
 import { getEvolutionConfig, DEFAULT_EVOLUTION_CONFIG } from './evolution-scheduler';
 import { getEvolutionPrompt } from './prompt-manager';
@@ -125,14 +126,14 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
       content = response.text;
     }
 
-    console.log('[Backtest] LLM response:', content);
+    logger.debug(LOG_MODULES.SKILL_EVOLUTION, 'LLM response:', { details: { content } });
 
     // 去掉思考标签包裹的内容（只保留标签外的 JSON）
     content = content.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, '');
     content = content.replace(/<thinking[^>]*>[\s\S]*?<\/thinking>/gi, '');
     content = content.trim();
 
-    console.log('[Backtest] After removing think tags:', content);
+    logger.debug(LOG_MODULES.SKILL_EVOLUTION, 'After removing think tags:', { details: { content } });
 
     // 尝试多种方式解析 JSON
     let parsed: { shouldReport?: boolean; reason?: string } | null = null;
@@ -143,7 +144,7 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
       try {
         parsed = JSON.parse(jsonBlockMatch[1].trim());
       } catch {
-        console.warn('[Backtest] Failed to parse json block');
+        logger.warn(LOG_MODULES.SKILL_EVOLUTION, 'Failed to parse json block');
       }
     }
 
@@ -154,7 +155,7 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
         try {
           parsed = JSON.parse(codeBlockMatch[1].trim());
         } catch {
-          console.warn('[Backtest] Failed to parse code block');
+          logger.warn(LOG_MODULES.SKILL_EVOLUTION, 'Failed to parse code block');
         }
       }
     }
@@ -191,24 +192,24 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
               .replace(/\\t/g, '\t');
             
             // 尝试修复常见的 JSON 格式问题
-            console.log('[Backtest] Original JSON string:', JSON.stringify(cleaned));
+            logger.debug(LOG_MODULES.SKILL_EVOLUTION, `Original JSON string: ${JSON.stringify(cleaned)}`);
             
             // 修复 = 为 : 并添加引号 (command = "whoami" -> "command": "whoami")
             cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*/g, '$1"$2": ');
-            console.log('[Backtest] After = replacement:', JSON.stringify(cleaned));
+            logger.debug(LOG_MODULES.SKILL_EVOLUTION, `After = replacement: ${JSON.stringify(cleaned)}`);
             
             // 移除值末尾的分号 ("whoami"; -> "whoami")
             cleaned = cleaned.replace(/"\s*;\s*([},])/g, '"$1');
-            console.log('[Backtest] After semicolon removal:', JSON.stringify(cleaned));
+            logger.debug(LOG_MODULES.SKILL_EVOLUTION, `After semicolon removal: ${JSON.stringify(cleaned)}`);
             
             // 修复未加引号的属性名 (shouldReport: -> "shouldReport":)
             cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
-            console.log('[Backtest] Final cleaned:', JSON.stringify(cleaned));
+            logger.debug(LOG_MODULES.SKILL_EVOLUTION, `Final cleaned: ${JSON.stringify(cleaned)}`);
             
             parsed = JSON.parse(cleaned);
           } catch (e) {
-            console.warn('[Backtest] Failed to parse inline JSON:', e);
-            console.warn('[Backtest] Attempted JSON string:', jsonStr.substring(0, 200));
+            logger.warn(LOG_MODULES.SKILL_EVOLUTION, 'Failed to parse inline JSON', { details: { error: e instanceof Error ? e.message : String(e) } });
+            logger.warn(LOG_MODULES.SKILL_EVOLUTION, `Attempted JSON string: ${jsonStr.substring(0, 200)}`);
           }
         }
       }
@@ -253,7 +254,7 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
 
     return { shouldReport: false, reason: `Failed to parse: ${content.substring(0, 100)}` };
   } catch (error) {
-    console.error('[Backtest] Test case failed:', error);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, 'Test case failed', { details: { error: error instanceof Error ? error.message : String(error) } });
     return { shouldReport: false, reason: `Error: ${error instanceof Error ? error.message : 'Unknown'}` };
   }
 }
@@ -315,7 +316,7 @@ export async function runBacktest(
     limitedCC = shuffleArray(confirmedCases).slice(0, maxCases);
   }
 
-  console.log(`[Backtest] Running backtest: ${limitedFP.length}/${falsePositiveCases.length} FP cases, ${limitedCC.length}/${confirmedCases.length} CC cases`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `Running backtest: ${limitedFP.length}/${falsePositiveCases.length} FP cases, ${limitedCC.length}/${confirmedCases.length} CC cases`);
 
   const falsePositiveResults: BacktestResult['falsePositiveResults'] = [];
   const confirmedResults: BacktestResult['confirmedResults'] = [];

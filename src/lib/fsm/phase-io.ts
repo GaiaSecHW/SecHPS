@@ -9,6 +9,7 @@ import path from 'path';
 import yaml from 'yaml'; // 需要安装: npm install yaml
 import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 使用 outputs/phases 替代 .claude/phases
 const OUTPUTS_PHASES_PATH = path.join(process.cwd(), 'outputs', 'phases');
@@ -64,7 +65,7 @@ export async function readPhaseOutput(
     };
 
   } catch (error) {
-    console.error('[fsm/phase-io] 操作失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.FSM, '操作失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }

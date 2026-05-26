@@ -128,7 +128,7 @@ export default function ProfilePage() {
       setNewPassword('');
       setConfirmPassword('');
       setUpdatingPassword(false);
-      
+
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('网络错误，请重试');

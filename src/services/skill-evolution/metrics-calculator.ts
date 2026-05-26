@@ -9,6 +9,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Skill 指标数据结构
@@ -146,9 +147,9 @@ export async function getLowPrecisionSkills(
   threshold: number,
   timeRange?: { start: Date; end: Date }
 ): Promise<SkillMetrics[]> {
-  // 获取所有活跃的 Skill
+  // 获取所有活跃的 Skill（排除内置基础设施 skill）
   const skills = await prisma.skill.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isBuiltin: false },
     select: {
       id: true,
       name: true,
@@ -168,7 +169,7 @@ export async function getLowPrecisionSkills(
         metricsList.push(metrics);
       }
     } catch (error) {
-      console.error(`[MetricsCalculator] 计算 Skill ${skill.id} 指标失败:`, error);
+      logger.error(LOG_MODULES.SKILL_EVOLUTION, `计算 Skill ${skill.id} 指标失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -196,7 +197,7 @@ export async function calculateBatchSkillMetrics(
       const metrics = await calculateSkillMetrics(skillId, timeRange);
       metricsList.push(metrics);
     } catch (error) {
-      console.error(`[MetricsCalculator] 计算 Skill ${skillId} 指标失败:`, error);
+      logger.error(LOG_MODULES.SKILL_EVOLUTION, `计算 Skill ${skillId} 指标失败`, { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 
@@ -212,9 +213,9 @@ export async function calculateBatchSkillMetrics(
 export async function getAllSkillMetrics(
   timeRange?: { start: Date; end: Date }
 ): Promise<SkillMetrics[]> {
-  // 获取所有活跃的 Skill
+  // 获取所有活跃的 Skill（排除内置基础设施 skill）
   const skills = await prisma.skill.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isBuiltin: false },
     select: {
       id: true,
     },

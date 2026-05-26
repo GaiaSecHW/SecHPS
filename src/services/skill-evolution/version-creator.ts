@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
 import { saveSkillToDisk } from '@/services/skill-files';
 import { getSkillOutputTemplate } from '@/lib/skill-template';
@@ -78,7 +79,7 @@ export async function applyImprovement(
   userId: string,
   reason?: string
 ): Promise<ApplyImprovementResult> {
-  console.log(`[VersionCreator] 开始应用改进: improvementId=${improvementId}, userId=${userId}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `开始应用改进: improvementId=${improvementId}, userId=${userId}`);
 
   // 1. 获取改进详情
   const improvementDetail = await getImprovementDetail(improvementId);
@@ -116,7 +117,7 @@ export async function applyImprovement(
     data: { isLatest: false },
   });
 
-  console.log(`[VersionCreator] 已将原版本标记为非最新: ${originalSkill.id}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `已将原版本标记为非最新: ${originalSkill.id}`);
 
   // 5. 创建新版本 Skill
   const newSkillId = generateId('skill');
@@ -150,7 +151,7 @@ export async function applyImprovement(
     },
   });
 
-  console.log(`[VersionCreator] 已创建新版本 Skill: ${newSkillId}, version=${newVersion}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `已创建新版本 Skill: ${newSkillId}, version=${newVersion}`);
 
   // 6. 记录进化历史
   const evolutionId = generateId('evol');
@@ -172,7 +173,7 @@ export async function applyImprovement(
     },
   });
 
-  console.log(`[VersionCreator] 已记录进化历史: ${evolutionId}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `已记录进化历史: ${evolutionId}`);
 
   // 7. 更新 SkillImprovement 状态
   await prisma.skillImprovement.update({
@@ -180,7 +181,7 @@ export async function applyImprovement(
     data: { status: 'applied' },
   });
 
-  console.log(`[VersionCreator] 已更新改进记录状态为 'applied'`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, "已更新改进记录状态为 'applied'");
 
   // 8. 更新 SkillEvolutionTask（如果存在）
   const improvement = await prisma.skillImprovement.findUnique({
@@ -198,16 +199,16 @@ export async function applyImprovement(
       },
     });
 
-    console.log(`[VersionCreator] 已更新进化任务: taskId=${improvement.taskId}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `已更新进化任务: taskId=${improvement.taskId}`);
   }
 
   // 9. 保存到磁盘
   try {
     const template = await getSkillOutputTemplate();
     await saveSkillToDisk(newSkill, template);
-    console.log(`[VersionCreator] 已保存新版本到磁盘: ${newSkill.name} v${newVersion}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `已保存新版本到磁盘: ${newSkill.name} v${newVersion}`);
   } catch (err) {
-    console.error(`[VersionCreator] 保存到磁盘失败: ${newSkill.id}`, err);
+    logger.error(LOG_MODULES.SKILL_EVOLUTION, `保存到磁盘失败: ${newSkill.id}`, { details: { error: err instanceof Error ? err.message : String(err) } });
     // 不抛出错误，磁盘保存失败不影响数据库操作
   }
 
@@ -232,7 +233,7 @@ export async function rejectImprovement(
   userId: string,
   reason: string
 ): Promise<RejectImprovementResult> {
-  console.log(`[VersionCreator] 开始拒绝改进: improvementId=${improvementId}, userId=${userId}, reason=${reason}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `开始拒绝改进: improvementId=${improvementId}, userId=${userId}, reason=${reason}`);
 
   if (!reason || reason.trim() === '') {
     throw new Error('拒绝原因不能为空');
@@ -262,7 +263,7 @@ export async function rejectImprovement(
     data: { status: 'rejected' },
   });
 
-  console.log(`[VersionCreator] 已更新改进记录状态为 'rejected'`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, "已更新改进记录状态为 'rejected'");
 
   // 3. 更新 SkillEvolutionTask（如果存在）
   if (improvement.taskId) {
@@ -274,7 +275,7 @@ export async function rejectImprovement(
       },
     });
 
-    console.log(`[VersionCreator] 已更新进化任务状态为 'rejected': taskId=${improvement.taskId}`);
+    logger.info(LOG_MODULES.SKILL_EVOLUTION, `已更新进化任务状态为 'rejected': taskId=${improvement.taskId}`);
   }
 
   return {
@@ -296,7 +297,7 @@ export async function applyImprovementsBatch(
   userId: string,
   reason?: string
 ): Promise<Array<ApplyImprovementResult | { improvementId: string; error: string }>> {
-  console.log(`[VersionCreator] 开始批量应用改进: count=${improvementIds.length}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `开始批量应用改进: count=${improvementIds.length}`);
 
   const results: Array<ApplyImprovementResult | { improvementId: string; error: string }> = [];
 
@@ -305,7 +306,7 @@ export async function applyImprovementsBatch(
       const result = await applyImprovement(improvementId, userId, reason);
       results.push(result);
     } catch (error) {
-      console.error(`[VersionCreator] 应用改进失败: ${improvementId}`, error);
+      logger.error(LOG_MODULES.SKILL_EVOLUTION, `应用改进失败: ${improvementId}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       results.push({
         improvementId,
         error: error instanceof Error ? error.message : String(error),
@@ -316,7 +317,7 @@ export async function applyImprovementsBatch(
   const successCount = results.filter((r) => 'newSkillId' in r).length;
   const failCount = results.filter((r) => 'error' in r).length;
 
-  console.log(`[VersionCreator] 批量应用完成: 成功=${successCount}, 失败=${failCount}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `批量应用完成: 成功=${successCount}, 失败=${failCount}`);
 
   return results;
 }
@@ -334,7 +335,7 @@ export async function rejectImprovementsBatch(
   userId: string,
   reason: string
 ): Promise<Array<RejectImprovementResult | { improvementId: string; error: string }>> {
-  console.log(`[VersionCreator] 开始批量拒绝改进: count=${improvementIds.length}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `开始批量拒绝改进: count=${improvementIds.length}`);
 
   if (!reason || reason.trim() === '') {
     throw new Error('拒绝原因不能为空');
@@ -347,7 +348,7 @@ export async function rejectImprovementsBatch(
       const result = await rejectImprovement(improvementId, userId, reason);
       results.push(result);
     } catch (error) {
-      console.error(`[VersionCreator] 拒绝改进失败: ${improvementId}`, error);
+      logger.error(LOG_MODULES.SKILL_EVOLUTION, `拒绝改进失败: ${improvementId}`, { details: { error: error instanceof Error ? error.message : String(error) } });
       results.push({
         improvementId,
         error: error instanceof Error ? error.message : String(error),
@@ -358,7 +359,7 @@ export async function rejectImprovementsBatch(
   const successCount = results.filter((r) => 'reason' in r).length;
   const failCount = results.filter((r) => 'error' in r).length;
 
-  console.log(`[VersionCreator] 批量拒绝完成: 成功=${successCount}, 失败=${failCount}`);
+  logger.info(LOG_MODULES.SKILL_EVOLUTION, `批量拒绝完成: 成功=${successCount}, 失败=${failCount}`);
 
   return results;
 }

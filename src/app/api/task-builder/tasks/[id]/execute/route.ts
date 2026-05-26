@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, withRetry } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import { copyAgentHarnessFromLocal } from '@/lib/task-creation';
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
+
+/** 任务执行超时（秒），默认 7天 (7*24*3600=604800)，可通过 .env TASK_TIMEOUT_SEC 配置 */
+const DEFAULT_TASK_TIMEOUT_SEC = 7 * 24 * 3600;
+const TASK_TIMEOUT_SEC = parseInt(process.env.TASK_TIMEOUT_SEC || String(DEFAULT_TASK_TIMEOUT_SEC));
+const TASK_TIMEOUT_MS = TASK_TIMEOUT_SEC * 1000;
 
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -125,12 +131,12 @@ export async function POST(
           select: { agentHarnessPath: true },
         });
         if (agentAppForHarness?.agentHarnessPath) {
-          console.log(`[Execute] Workspace missing agent harness, copying from local: ${agentAppForHarness.agentHarnessPath}`);
+          logger.info(LOG_MODULES.AGENT, `Workspace missing agent harness, copying from local: ${agentAppForHarness.agentHarnessPath}`);
           try {
             await copyAgentHarnessFromLocal(agentAppForHarness.agentHarnessPath, workspacePath);
-            console.log(`[Execute] Agent harness copied to workspace`);
+            logger.info(LOG_MODULES.AGENT, `Agent harness copied to workspace`);
           } catch (copyError) {
-            console.error(`[Execute] Failed to copy agent harness from local:`, copyError);
+            logger.error(LOG_MODULES.AGENT, `Failed to copy agent harness from local`, { details: { error: copyError instanceof Error ? copyError.message : String(copyError) } });
           }
         }
       }
@@ -147,13 +153,13 @@ export async function POST(
           model = modelsArray[0];
         }
       } catch {
-        console.warn('解析 ModelConfig.models 失败');
+        logger.warn(LOG_MODULES.AGENT, '解析 ModelConfig.models 失败');
       }
     }
 
     const apiKey = task.ModelConfig?.apiKey || undefined;
     const apiBaseUrl = task.ModelConfig?.apiBaseUrl || undefined;
-    const timeoutSec = 18000;
+    const timeoutSec = TASK_TIMEOUT_SEC;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
     const instruction = agentApp?.startCommand || task.notes || null;
@@ -253,7 +259,7 @@ export async function POST(
 
     // 异步轮询任务结果
     pollCodeswarmTask(id, codeswarmTaskId).catch(async (error) => {
-      console.error('CodeSwarm 任务轮询失败:', error);
+      logger.error(LOG_MODULES.AGENT, 'CodeSwarm 任务轮询失败', { details: { error: error instanceof Error ? error.message : String(error) } });
 
       eventBus.emit(`task:${id}`, {
         type: 'error',
@@ -283,7 +289,7 @@ export async function POST(
       mergedScripts: parseJsonArray(mergedScripts),
     });
   } catch (error) {
-    console.error('执行任务失败:', error);
+    logger.error(LOG_MODULES.AGENT, '执行任务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     // 回滚 TaskInstance 状态，防止卡在 running
     try {
       await prisma.taskInstance.updateMany({
@@ -296,7 +302,7 @@ export async function POST(
         },
       });
     } catch (rollbackErr) {
-      console.error('回滚 TaskInstance 状态失败:', rollbackErr);
+      logger.error(LOG_MODULES.AGENT, '回滚 TaskInstance 状态失败', { details: { error: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr) } });
     }
     return NextResponse.json({ error: '执行任务失败' }, { status: 500 });
   }
@@ -321,8 +327,8 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       subscriber.disconnect();
-      reject(new Error('任务执行超时（超过5小时）'));
-    }, 5 * 60 * 60 * 1000);
+      reject(new Error(`任务执行超时（超过${TASK_TIMEOUT_SEC / 3600}小时）`));
+    }, TASK_TIMEOUT_MS);
 
     subscriber.subscribe(channel);
     subscriber.on('message', async (_ch: string, data: string) => {
@@ -376,8 +382,8 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
 }
 
 async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<void> {
-  // 总超时 5 小时，与 CodeswarmTask.timeoutSec (18000s) 和 Redis 模式对齐
-  const TIMEOUT_MS = 5 * 60 * 60 * 1000;
+  // 总超时与 TASK_TIMEOUT_SEC 对齐，可通过 .env TASK_TIMEOUT_SEC 配置
+  const TIMEOUT_MS = TASK_TIMEOUT_MS;
   const startTime = Date.now();
   // 渐进退避：2s → 4s → 8s → 10s（上限），减少长时间轮询的 DB 压力
   let interval = 2000;
@@ -420,5 +426,5 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
     interval = Math.min(interval * 2, MAX_INTERVAL);
   }
 
-  throw new Error('任务执行超时（超过5小时）');
+  throw new Error(`任务执行超时（超过${TASK_TIMEOUT_SEC / 3600}小时）`);
 }

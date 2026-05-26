@@ -6,6 +6,7 @@
 import { prisma } from '@/lib/prisma';
 import * as path from 'path';
 import * as fs from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type {
   PluginResponse,
   PluginType,
@@ -47,7 +48,7 @@ export class PluginRunner {
       });
     }
 
-    console.log(`[PluginRunner] Initialized with ${enabledPlugins.length} enabled plugins`);
+    logger.info(LOG_MODULES.PLUGIN, 'Initialized with enabled plugins', { details: { count: enabledPlugins.length } });
   }
 
   /**
@@ -82,7 +83,7 @@ export class PluginRunner {
         state.status = 'idle';
       }
 
-      console.log(`[PluginRunner] Loaded plugin: ${plugin.name}`);
+      logger.info(LOG_MODULES.PLUGIN, 'Loaded plugin', { details: { name: plugin.name } });
     } catch (error) {
       if (state) {
         state.status = 'error';
@@ -106,9 +107,9 @@ export class PluginRunner {
         state.status = 'unloaded';
       }
 
-      console.log(`[PluginRunner] Unloaded plugin: ${plugin.name}`);
+      logger.info(LOG_MODULES.PLUGIN, 'Unloaded plugin', { details: { name: plugin.name } });
     } catch (error) {
-      console.error(`[PluginRunner] Failed to unload plugin ${plugin.name}:`, error);
+      logger.error(LOG_MODULES.PLUGIN, 'Failed to unload plugin', { details: { name: plugin.name, error: error instanceof Error ? error.message : String(error) } });
       throw error;
     }
   }
@@ -231,11 +232,11 @@ class ToolPluginExecutor implements PluginExecutor {
   type: PluginType = 'tool';
 
   async load(plugin: PluginResponse): Promise<void> {
-    console.log(`[ToolExecutor] Loading tool plugin: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Loading tool plugin', { details: { name: plugin.name } });
   }
 
   async unload(plugin: PluginResponse): Promise<void> {
-    console.log(`[ToolExecutor] Unloading tool plugin: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Unloading tool plugin', { details: { name: plugin.name } });
   }
 
   async validate(plugin: PluginResponse): Promise<boolean> {
@@ -249,7 +250,7 @@ class ToolPluginExecutor implements PluginExecutor {
     const startTime = Date.now();
 
     try {
-      console.log(`[ToolExecutor] Executing tool: ${plugin.name}`, context);
+      logger.info(LOG_MODULES.PLUGIN, 'Executing tool', { details: { name: plugin.name, context } });
 
       return {
         success: true,
@@ -273,11 +274,11 @@ class BackendServiceExecutor implements PluginExecutor {
   type: PluginType = 'backend-service';
 
   async load(plugin: PluginResponse): Promise<void> {
-    console.log(`[BackendExecutor] Loading backend service: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Loading backend service', { details: { name: plugin.name } });
   }
 
   async unload(plugin: PluginResponse): Promise<void> {
-    console.log(`[BackendExecutor] Unloading backend service: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Unloading backend service', { details: { name: plugin.name } });
   }
 
   async validate(plugin: PluginResponse): Promise<boolean> {
@@ -291,7 +292,7 @@ class BackendServiceExecutor implements PluginExecutor {
     const startTime = Date.now();
 
     try {
-      console.log(`[BackendExecutor] Executing service: ${plugin.name}`, context);
+      logger.info(LOG_MODULES.PLUGIN, 'Executing service', { details: { name: plugin.name, context } });
 
       return {
         success: true,
@@ -315,11 +316,11 @@ class IntegrationExecutor implements PluginExecutor {
   type: PluginType = 'integration';
 
   async load(plugin: PluginResponse): Promise<void> {
-    console.log(`[IntegrationExecutor] Loading integration: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Loading integration', { details: { name: plugin.name } });
   }
 
   async unload(plugin: PluginResponse): Promise<void> {
-    console.log(`[IntegrationExecutor] Unloading integration: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Unloading integration', { details: { name: plugin.name } });
   }
 
   async validate(plugin: PluginResponse): Promise<boolean> {
@@ -333,7 +334,7 @@ class IntegrationExecutor implements PluginExecutor {
     const startTime = Date.now();
 
     try {
-      console.log(`[IntegrationExecutor] Executing integration: ${plugin.name}`, context);
+      logger.info(LOG_MODULES.PLUGIN, 'Executing integration', { details: { name: plugin.name, context } });
 
       return {
         success: true,
@@ -357,11 +358,11 @@ class UITabExecutor implements PluginExecutor {
   type: PluginType = 'ui-tab';
 
   async load(plugin: PluginResponse): Promise<void> {
-    console.log(`[UITabExecutor] Loading UI tab: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Loading UI tab', { details: { name: plugin.name } });
   }
 
   async unload(plugin: PluginResponse): Promise<void> {
-    console.log(`[UITabExecutor] Unloading UI tab: ${plugin.name}`);
+    logger.info(LOG_MODULES.PLUGIN, 'Unloading UI tab', { details: { name: plugin.name } });
   }
 
   async validate(plugin: PluginResponse): Promise<boolean> {
@@ -375,7 +376,7 @@ class UITabExecutor implements PluginExecutor {
     const startTime = Date.now();
 
     try {
-      console.log(`[UITabExecutor] Rendering UI tab: ${plugin.name}`, context);
+      logger.info(LOG_MODULES.PLUGIN, 'Rendering UI tab', { details: { name: plugin.name, context } });
 
       // UI 标签页插件返回渲染信息
       return {

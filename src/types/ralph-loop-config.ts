@@ -5,6 +5,7 @@
 //
 
 import type { ExperienceMatch } from '@/services/autonomous-evolution/experience-query-service';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Ralph Loop 配置
@@ -291,7 +292,7 @@ export function parseRalphConfig(json: string | null | undefined): RalphLoopConf
       ...parsed,
     };
   } catch (error) {
-    console.warn('[RalphLoopConfig] Failed to parse config JSON:', error);
+    logger.warn(LOG_MODULES.CONFIG, 'Failed to parse config JSON', { details: { error: error instanceof Error ? error.message : String(error) } });
     return DEFAULT_RALPH_LOOP_CONFIG;
   }
 }

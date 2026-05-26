@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface DirEntry {
   name: string;
@@ -200,7 +201,7 @@ export async function GET(request: Request) {
       platform: isWindows ? 'windows' : 'linux',
     });
   } catch (error) {
-    console.error('[BrowseDirs] Error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'BrowseDirs Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error', entries: [], platform: isWindows ? 'windows' : 'linux' },
       { status: 500 }

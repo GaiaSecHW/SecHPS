@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { terminalManager } from '@/services/terminal-manager';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 let wss: WebSocketServer | null = null;
 
@@ -31,7 +32,7 @@ function parseQueryParams(url: string): TerminalWebSocketQuery | null {
       sessionId: sessionId || crypto.randomUUID(),
     };
   } catch (error) {
-    console.error('[WebSocket] Error parsing query params:', error);
+    logger.error(LOG_MODULES.WEBSOCKET, 'Error parsing query params', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }
@@ -42,7 +43,7 @@ function parseQueryParams(url: string): TerminalWebSocketQuery | null {
 function validateConnection(query: TerminalWebSocketQuery): boolean {
   const payload = verifyToken(query.token);
   if (!payload) {
-    console.warn('[WebSocket] Invalid or expired token');
+    logger.warn(LOG_MODULES.WEBSOCKET, 'Invalid or expired token');
     return false;
   }
   return true;
@@ -91,10 +92,10 @@ export function initWebSocketServer(server: import('http').Server): WebSocketSer
   });
 
   wss.on('error', (error) => {
-    console.error('[WebSocket] Server error:', error);
+    logger.error(LOG_MODULES.WEBSOCKET, 'Server error', { details: { error: error instanceof Error ? error.message : String(error) } });
   });
 
-  console.log('[WebSocket] Server initialized at /ws/terminal');
+  logger.info(LOG_MODULES.WEBSOCKET, 'Server initialized at /ws/terminal');
   return wss;
 }
 
@@ -120,11 +121,11 @@ export function closeWebSocketServer(): Promise<void> {
 
     wss.close((error) => {
       if (error) {
-        console.error('[WebSocket] Error closing server:', error);
+        logger.error(LOG_MODULES.WEBSOCKET, 'Error closing server', { details: { error: error instanceof Error ? error.message : String(error) } });
         reject(error);
       } else {
         wss = null;
-        console.log('[WebSocket] Server closed');
+        logger.info(LOG_MODULES.WEBSOCKET, 'Server closed');
         resolve();
       }
     });

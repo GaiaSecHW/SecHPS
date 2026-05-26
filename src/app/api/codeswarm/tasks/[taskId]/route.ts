@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma, Prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -62,7 +63,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('[CodeSwarm] Get task error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Get task error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to fetch task' }, { status: 500 });
   }
 }
@@ -99,11 +100,11 @@ export async function DELETE(
               signal: AbortSignal.timeout(5000),
             });
             if (resp.ok) {
-              console.log(`[CodeSwarm] Task ${taskId} cancelled on worker ${worker.nodeId}`);
+              logger.info(LOG_MODULES.CODESWARM, `Task ${taskId} cancelled on worker ${worker.nodeId}`);
               break;
             }
           } catch (err) {
-            console.warn(`[CodeSwarm] Failed to cancel on ${addr}:`, err);
+            logger.warn(LOG_MODULES.CODESWARM, `Failed to cancel on ${addr}`, { details: { error: err instanceof Error ? err.message : String(err) } });
           }
         }
       }
@@ -132,7 +133,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[CodeSwarm] Delete task error:', error);
+    logger.error(LOG_MODULES.CODESWARM, 'Delete task error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to delete task' }, { status: 500 });
   }
 }

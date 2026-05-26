@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { downloadSingleFileFromGitea } from '@/lib/gitea';
 import { parsePipelinePy, type PipelineData } from '@/lib/agentflow-parser';
@@ -24,7 +25,7 @@ export async function GET(
 ) {
   const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
-    console.log('[agent-apps pipeline GET] Auth failed:', auth.error);
+    logger.info(LOG_MODULES.AGENT, `[agent-apps pipeline GET] Auth failed: ${auth.error}`);
     return authErrorResponse(auth);
   }
 
@@ -34,7 +35,7 @@ export async function GET(
     const params = await context.params;
     const appId = params.id;
 
-    console.log('[agent-apps pipeline GET] Fetch request:', { appId, userId: payload.userId });
+    logger.info(LOG_MODULES.AGENT, `[agent-apps pipeline GET] Fetch request: appId=${appId}, userId=${payload.userId}`);
 
     // 1. 查询 AgentApp
     const app = await prisma.agentApp.findUnique({
@@ -75,7 +76,7 @@ export async function GET(
       }
     }
 
-    console.log('[agent-apps pipeline GET] Extracted pipeline file name:', pipelineFileName);
+    logger.info(LOG_MODULES.AGENT, `[agent-apps pipeline GET] Extracted pipeline file name: ${pipelineFileName}`);
 
     // 4. 从 Gitea 下载 .py 文件
     const fileContent = await downloadSingleFileFromGitea(appId, pipelineFileName);
@@ -88,7 +89,7 @@ export async function GET(
     }
 
     const rawSource = fileContent.toString('utf-8');
-    console.log('[agent-apps pipeline GET] Downloaded file size:', rawSource.length);
+    logger.info(LOG_MODULES.AGENT, `[agent-apps pipeline GET] Downloaded file size: ${rawSource.length}`);
 
     // 5. 解析 pipeline.py
     const pipeline = parsePipelinePy(rawSource);
@@ -103,16 +104,12 @@ export async function GET(
       );
     }
 
-    console.log('[agent-apps pipeline GET] Parsed pipeline:', {
-      name: pipeline.name,
-      nodeCount: pipeline.nodes.length,
-      fanoutCount: Object.keys(pipeline.fanouts).length,
-    });
+    logger.info(LOG_MODULES.AGENT, `[agent-apps pipeline GET] Parsed pipeline: name=${pipeline.name}, nodeCount=${pipeline.nodes.length}, fanoutCount=${Object.keys(pipeline.fanouts).length}`);
 
     // 6. 返回解析结果
     return NextResponse.json({ pipeline, rawSource });
   } catch (error) {
-    console.error('[agent-apps pipeline GET] Error:', error);
+    logger.error(LOG_MODULES.AGENT, '[agent-apps pipeline GET] Error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       {
         error: '获取 pipeline 失败',

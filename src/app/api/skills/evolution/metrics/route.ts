@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { getAllSkillMetrics } from '@/services/skill-evolution/metrics-calculator';
 import { getEvolutionTaskStats, getEvolutionConfig } from '@/services/skill-evolution/evolution-scheduler';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(request: Request) {
   const auth = authenticateRequest(request);
@@ -95,7 +96,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('[EvolutionMetricsAPI] Error fetching metrics:', error);
+    logger.error(LOG_MODULES.SKILL, 'Error fetching metrics', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: 'Failed to fetch evolution metrics' },
       { status: 500 }

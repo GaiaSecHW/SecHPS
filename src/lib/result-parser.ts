@@ -2,6 +2,8 @@
  * 解析 AI 响应中的结构化信息
  */
 
+import { logger, LOG_MODULES } from '@/lib/logger';
+
 export interface ParsedVulnerability {
   vulnerable?: boolean;       // 是否为真实漏洞
   title: string;
@@ -129,7 +131,7 @@ function parseToolCall(block: string): ParsedToolCall | null {
       parameters,
     };
   } catch (error) {
-    console.error('[ResultParser] 解析工具调用失败:', error);
+    logger.error(LOG_MODULES.CODE, '解析工具调用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }
@@ -193,7 +195,7 @@ function parseVulnerability(block: string): ParsedVulnerability | null {
       confidence: confidenceMatch ? parseInt(confidenceMatch[1], 10) : 80,
     };
   } catch (error) {
-    console.error('[ResultParser] 解析漏洞失败:', error);
+    logger.error(LOG_MODULES.CODE, '解析漏洞失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return null;
   }
 }

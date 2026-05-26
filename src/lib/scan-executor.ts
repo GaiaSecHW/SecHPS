@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { AgentExecutor, AgentExecutionContext, AgentExecutionCallbacks, AgentExecutionResult } from '@/lib/agent-executor';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface ScanProgress {
   taskId: string;
@@ -185,10 +186,10 @@ export class ScanExecutor {
       const callbacks: AgentExecutionCallbacks = {
         onChunk: () => {},
         onToolCall: (tool, params) => {
-          console.log(`[ScanExecutor] Tool call: ${tool}`, params);
+          logger.info(LOG_MODULES.CODE, `Tool call: ${tool}`, { details: { params } });
         },
         onVulnerability: (vuln) => {
-          console.log(`[ScanExecutor] Found vulnerability: ${vuln.title}`);
+          logger.info(LOG_MODULES.CODE, `Found vulnerability: ${vuln.title}`);
         },
         onComplete: (r) => {
           result = r;
@@ -225,7 +226,7 @@ export class ScanExecutor {
       };
 
     } catch (error) {
-      console.error('[scan-executor] 执行失败:', error instanceof Error ? error.message : String(error));
+      logger.error(LOG_MODULES.CODE, '执行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         skillId: skill.id,
         skillName: skill.displayName,

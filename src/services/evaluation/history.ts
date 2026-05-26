@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { AIMessage } from '@/services/ai';
 import { EvaluationMessageStore, createEvaluationMessageStore } from '@/services/evaluation-message-store';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface ConversationMessage {
   id: string;
@@ -33,22 +34,25 @@ export class ConversationHistory {
         where: { id: evaluationId },
         select: { projectId: true },
       });
-      
+
       if (!session) {
-        console.error(`[ConversationHistory] 未找到评估会话: ${evaluationId}`);
+        logger.error(LOG_MODULES.EVALUATION, `[ConversationHistory] 未找到评估会话`, { evaluationId });
         return null;
       }
-      
+
       // 创建并初始化消息存储
       const store = createEvaluationMessageStore(session.projectId, evaluationId);
       await store.initialize();
       
       // 缓存
       this.messageStoreCache.set(evaluationId, store);
-      
+
       return store;
     } catch (error) {
-      console.error(`[ConversationHistory] 获取消息存储失败:`, error);
+      logger.error(LOG_MODULES.EVALUATION, `[ConversationHistory] 获取消息存储失败`, {
+        evaluationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       return null;
     }
   }
@@ -90,7 +94,9 @@ export class ConversationHistory {
           agentCallMsgId: null,
         });
       } catch (jsonlError) {
-        console.error('[ConversationHistory] JSONL 写入失败:', jsonlError);
+        logger.error(LOG_MODULES.EVALUATION, '[ConversationHistory] JSONL 写入失败', {
+          error: jsonlError instanceof Error ? jsonlError.message : String(jsonlError)
+        });
       }
     }
     
@@ -135,7 +141,9 @@ export class ConversationHistory {
           agentCallMsgId: null,
         });
       } catch (jsonlError) {
-        console.error('[ConversationHistory] JSONL 写入失败:', jsonlError);
+        logger.error(LOG_MODULES.EVALUATION, '[ConversationHistory] JSONL 写入失败', {
+          error: jsonlError instanceof Error ? jsonlError.message : String(jsonlError)
+        });
       }
     }
     
@@ -177,7 +185,10 @@ export class ConversationHistory {
         },
       });
     } catch (error) {
-      console.error('更新消息计数失败:', error);
+      logger.error(LOG_MODULES.EVALUATION, '更新消息计数失败', {
+        evaluationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 

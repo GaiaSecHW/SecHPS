@@ -1,6 +1,7 @@
 // src/lib/audit/logger.ts
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { AuditAction, AuditCategory } from '@/types/audit';
 import { ACTION_CATEGORIES, SENSITIVE_ACTIONS } from '@/types/audit';
 
@@ -62,7 +63,7 @@ export class AuditLogger {
       });
     } catch (error) {
       // 审计日志记录失败不应该影响主流程
-      console.error('Failed to create audit log:', error);
+      logger.error(LOG_MODULES.AUDIT, 'Failed to create audit log', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
   }
 

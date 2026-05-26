@@ -6,6 +6,7 @@
 
 import { prisma } from '@/lib/prisma';
 import type { UnifiedNodeDefinition } from './types';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Parse node data field (JSON string) to extract label
@@ -258,7 +259,7 @@ export async function isValidDAG(workflowId: string): Promise<boolean> {
     await topologicalSortDAG(workflowId);
     return true;
   } catch (error) {
-    console.error('[topology-sort] DAG验证失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, 'DAG验证失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     if (error instanceof Error && error.message.includes('Cycle detected')) {
       return false;
     }

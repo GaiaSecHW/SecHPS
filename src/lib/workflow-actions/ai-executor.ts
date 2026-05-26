@@ -3,6 +3,7 @@
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, AiProcessConfig, replaceVariables, getNestedValue, safeJsonParse } from './index';
 import { createClaudeAgentService } from '@/services/ai';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 执行 AI 处理
@@ -90,7 +91,7 @@ export async function executeAiProcess(
     };
   } catch (error) {
     logs.push(`[AI] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error('[workflow-actions/ai-executor] AI处理失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, 'AI处理失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       output: null,

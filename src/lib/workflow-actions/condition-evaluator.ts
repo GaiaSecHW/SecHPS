@@ -2,6 +2,7 @@
 
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, ConditionEvaluateConfig, getNestedValue } from './index';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 安全的条件表达式评估器
@@ -17,7 +18,7 @@ export function evaluateCondition(
     // 安全评估表达式
     return safeEvaluate(processedExpression);
   } catch (error) {
-    console.error('[Condition] Evaluation error:', error);
+    logger.error(LOG_MODULES.WORKFLOW, '条件评估错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return false;
   }
 }
@@ -50,7 +51,7 @@ export async function executeConditionEvaluate(
     };
   } catch (error) {
     logs.push(`[Condition] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error('[workflow-actions/condition-evaluator] 条件评估失败:', error instanceof Error ? error.message : String(error));
+    logger.error(LOG_MODULES.WORKFLOW, '条件评估失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return {
       success: false,
       output: { result: false },

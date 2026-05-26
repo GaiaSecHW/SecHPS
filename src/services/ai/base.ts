@@ -1,5 +1,7 @@
 // src/services/ai/base.ts
 
+import { logger, LOG_MODULES } from '@/lib/logger';
+
 export interface AIMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -86,7 +88,7 @@ export abstract class AIProvider {
 
         // 最后一次尝试不等待
         if (attempt < config.maxAttempts) {
-          console.log(`[AIProvider] 重试 ${attempt}/${config.maxAttempts}，等待 ${delay}ms`);
+          logger.info(LOG_MODULES.AGENT, `重试 ${attempt}/${config.maxAttempts}，等待 ${delay}ms`);
           await this.sleep(delay);
           delay = Math.min(delay * config.multiplier, config.maxDelay);
         }

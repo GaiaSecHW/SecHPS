@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { getEvolutionTaskStats } from '@/services/skill-evolution/evolution-scheduler';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(request: Request) {
   const auth = authenticateRequest(request);
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
       stats,
     });
   } catch (error) {
-    console.error('[EvolutionTasksAPI] Error fetching tasks:', error);
+    logger.error(LOG_MODULES.SKILL, 'Error fetching tasks', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: 'Failed to fetch evolution tasks' },
       { status: 500 }

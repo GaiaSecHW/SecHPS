@@ -68,6 +68,7 @@ export async function GET(request: Request) {
             },
           },
           OpencodeConfig: true,
+          Tenant: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
       avatar: user.avatar,
       isActive: user.isActive,
       tenantId: user.tenantId,
+      tenantName: user.Tenant?.name ?? null,
       createdAt: user.createdAt,
       roles: user.UserRole.map(ur => ({
         id: ur.Role.id,
@@ -140,21 +142,24 @@ export async function POST(request: Request) {
     const payload = auth.payload;
 
     const body = await request.json();
-    const { email, username, password, name, roles, tenantId } = body;
+    const { username, name, roles: roleIds, tenantId } = body;
+    const email = body.email || `${username}@sechps.local`;
+
+    // 根据 ID 查找角色，过滤掉 admin
+    const adminRole = await prisma.role.findUnique({ where: { name: 'admin' } });
+    const safeRoleIds = (roleIds || []).filter((id: string) => id !== adminRole?.id);
 
     // 验证输入
-    if (!email || !username || !password) {
+    if (!username) {
       return NextResponse.json(
         { details: { error: '缺少必填字段' } },
         { status: 400 }
       );
     }
 
-    // 验证密码复杂度
-    const passwordValidation = validatePassword(password);
-    if (!passwordValidation.valid) {
-      return NextResponse.json({ details: { error: passwordValidation.error } }, { status: 400 });
-    }
+    // 自动生成初始密码
+    const crypto = await import('crypto');
+    const password = crypto.randomBytes(6).toString('base64url').slice(0, 12) + 'Aa1';
 
     // 检查邮箱是否已存在
     const existingUser = await prisma.user.findUnique({
@@ -195,15 +200,15 @@ export async function POST(request: Request) {
           passwordHash,
           name: name || username,
           tenantId: tenantId || null,
+          mustChangePassword: true,
           updatedAt: new Date(),
         },
       });
 
       // 分配角色
-      if (roles && roles.length > 0) {
-        // 获取所有角色
+      if (safeRoleIds.length > 0) {
         const roleRecords = await tx.role.findMany({
-          where: { name: { in: roles } },
+          where: { id: { in: safeRoleIds } },
         });
 
         if (roleRecords.length > 0) {
@@ -216,7 +221,7 @@ export async function POST(request: Request) {
           });
         }
       } else {
-        // 分配默认角色
+        // 分配默认 user 角色
         const defaultRole = await tx.role.findUnique({
           where: { name: 'user' },
         });
@@ -242,16 +247,17 @@ export async function POST(request: Request) {
             userId: payload.userId,
             action: 'user_create',
             resource: user.id,
-            details: JSON.stringify({ email, username, roles }),
+            details: JSON.stringify({ email, username, roleIds }),
           },
         });
 
     // 记录创建日志 - 管理员创建新用户（跨用户操作）
-    logger.create(LOG_MODULES.USER, payload, user.id, { targetEmail: email, targetUsername: username, roles });
+    logger.create(LOG_MODULES.USER, payload, user.id, { targetEmail: email, targetUsername: username, roleIds });
 
     return NextResponse.json(
       {
         message: '用户创建成功',
+        initialPassword: password,
         user: {
           id: user.id,
           email: user.email,

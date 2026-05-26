@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
@@ -46,7 +47,7 @@ export async function POST(
           workerNodeId = csWorker?.nodeId ?? null;
         }
       } catch (e) {
-        console.error('[Stop] 查询 Worker 信息失败:', e);
+        logger.error(LOG_MODULES.AGENT, '[Stop] 查询 Worker 信息失败', { details: { error: e instanceof Error ? e.message : String(e) } });
       }
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
@@ -55,15 +56,10 @@ export async function POST(
           method: 'DELETE',
         });
       } catch (deleteError) {
-        console.error('删除 CodeSwarm 任务失败:', deleteError);
+        logger.error(LOG_MODULES.AGENT, '删除 CodeSwarm 任务失败', { details: { error: deleteError instanceof Error ? deleteError.message : String(deleteError) } });
       }
 
-      // 释放 Worker 负载（幂等，即使 DELETE 已释放也安全）
-      if (workerNodeId) {
-        codeswarmDispatcher.onTaskCompleted(workerNodeId).catch(e =>
-          console.error('[Stop] 释放 Worker 负载失败:', e)
-        );
-      }
+// DELETE 端点内部已调 onTaskCompleted 释放 Worker 负载，此处不再重复调用
     }
 
     await prisma.taskInstance.update({
@@ -88,7 +84,7 @@ export async function POST(
 
     return NextResponse.json({ message: '任务已停止', taskId: id });
   } catch (error) {
-    console.error('停止任务失败:', error);
+    logger.error(LOG_MODULES.AGENT, '停止任务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '停止任务失败' }, { status: 500 });
   }
 }

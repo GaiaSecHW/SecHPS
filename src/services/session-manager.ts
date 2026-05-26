@@ -13,6 +13,7 @@ import path from 'path';
 import os from 'os';
 import readline from 'readline';
 import crypto from 'crypto';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================
 // 类型定义
@@ -355,7 +356,7 @@ export class SessionManager {
 
           await fileStream.close();
         } catch (error) {
-          console.error(`Error reading session file ${file}:`, error);
+          logger.error(LOG_MODULES.SESSION, 'Error reading session file', { details: { file, error: error instanceof Error ? error.message : String(error) } });
         }
       }
 
@@ -387,7 +388,7 @@ export class SessionManager {
         limit,
       };
     } catch (error) {
-      console.error('Error getting sessions:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error getting sessions', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         sessions: [],
         hasMore: false,
@@ -474,7 +475,7 @@ export class SessionManager {
         limit,
       };
     } catch (error) {
-      console.error('Error getting session messages:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error getting session messages', { details: { error: error instanceof Error ? error.message : String(error) } });
       return {
         messages: [],
         total: 0,
@@ -499,7 +500,7 @@ export class SessionManager {
 
       return true;
     } catch (error) {
-      console.error('Error deleting session:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error deleting session', { details: { error: error instanceof Error ? error.message : String(error) } });
       return false;
     }
   }
@@ -648,7 +649,7 @@ export class SessionManager {
             results.set(sessionId, sessionMatches);
           }
         } catch (error) {
-          console.error(`Error searching session file ${file}:`, error);
+          logger.error(LOG_MODULES.SESSION, 'Error searching session file', { details: { file, error: error instanceof Error ? error.message : String(error) } });
         }
       }
 
@@ -657,7 +658,7 @@ export class SessionManager {
         matches,
       }));
     } catch (error) {
-      console.error('Error searching messages:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error searching messages', { details: { error: error instanceof Error ? error.message : String(error) } });
       return [];
     }
   }
@@ -798,7 +799,7 @@ export class ProjectDiscovery {
         this.projectDirectoryCache.set(projectName, fallbackPath);
         return fallbackPath;
       }
-      console.error(`Error extracting project directory for ${projectName}:`, error);
+      logger.error(LOG_MODULES.SESSION, 'Error extracting project directory', { details: { projectName, error: error instanceof Error ? error.message : String(error) } });
       return projectName.replace(/-/g, '/');
     }
   }
@@ -922,7 +923,7 @@ export class ProjectDiscovery {
       sessions.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 
     } catch (error) {
-      console.error('Error scanning Cursor sessions:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error scanning Cursor sessions', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
 
     return sessions;
@@ -1009,7 +1010,7 @@ export class ProjectDiscovery {
       sessions.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 
     } catch (error) {
-      console.error('Error scanning Codex sessions:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error scanning Codex sessions', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
 
     return sessions;
@@ -1096,7 +1097,7 @@ export class ProjectDiscovery {
       sessions.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 
     } catch (error) {
-      console.error('Error scanning Gemini CLI sessions:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error scanning Gemini CLI sessions', { details: { error: error instanceof Error ? error.message : String(error) } });
     }
 
     return sessions;
@@ -1166,7 +1167,7 @@ export class ProjectDiscovery {
 
       return projects;
     } catch (error) {
-      console.error('Error discovering projects:', error);
+      logger.error(LOG_MODULES.SESSION, 'Error discovering projects', { details: { error: error instanceof Error ? error.message : String(error) } });
       // 发生错误时，仍返回多源会话
       return [{
         name: 'multi-source-sessions',
@@ -1275,7 +1276,7 @@ export class ProjectDiscovery {
 
       return true;
     } catch (error) {
-      console.error(`Error deleting project ${projectName}:`, error);
+      logger.error(LOG_MODULES.SESSION, 'Error deleting project', { details: { projectName, error: error instanceof Error ? error.message : String(error) } });
       return false;
     }
   }
