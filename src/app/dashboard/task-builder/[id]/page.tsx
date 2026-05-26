@@ -77,6 +77,7 @@ export default function TaskDetailPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [eventSourceRef, setEventSourceRef] = useState<EventSource | null>(null);
   const [executing, setExecuting] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [codeswarmStatus, setCodeswarmStatus] = useState<CodeswarmStatus | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [vulnStats, setVulnStats] = useState<{ total: number; bySeverity: Record<string, number>; byStatus: Record<string, number> } | null>(null);
@@ -246,6 +247,36 @@ export default function TaskDetailPage() {
       toast.error(error instanceof Error ? error.message : '执行失败');
     } finally {
       setExecuting(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (stopping) return;
+    setStopping(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/task-builder/tasks/${taskId}/stop`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '停止失败');
+      }
+
+      toast.success('任务已停止');
+      if (eventSourceRef) {
+        eventSourceRef.close();
+        setEventSourceRef(null);
+        setIsStreaming(false);
+      }
+      fetchTaskDetail(taskId, false);
+    } catch (error) {
+      console.error('停止失败:', error);
+      toast.error(error instanceof Error ? error.message : '停止失败');
+    } finally {
+      setStopping(false);
     }
   };
 
@@ -424,11 +455,21 @@ export default function TaskDetailPage() {
                </button>
              )}
 {task.status === 'running' && (
-               <span className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md">
-                 <Loader2 size={16} className="animate-spin" />
-                 执行中...
-               </span>
-             )}
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md">
+                    <Loader2 size={16} className="animate-spin" />
+                    执行中...
+                  </span>
+                  <button
+                    onClick={handleStop}
+                    disabled={stopping}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {stopping ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
+                    {stopping ? '停止中...' : '停止任务'}
+                  </button>
+                </div>
+              )}
             {task.status === 'completed' && reportFiles?.hasReport && (
               <button
                 onClick={handleDownloadAllReports}
