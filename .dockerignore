@@ -45,6 +45,7 @@ scripts/*
 
 # === Dev/test artifacts ===
 docs/
+!docs/agent-harness-developer-guide.md
 test-*.js
 test-*.ts
 test-*.py
