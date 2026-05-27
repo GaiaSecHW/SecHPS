@@ -309,178 +309,183 @@ export default function AgentAppsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push('/dashboard/agent-apps/developer-guide')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border transition-colors"
-          >
-            <BookOpen size={14} />
-            开发者指南
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            刷新
-          </button>
-          {isAdmin && (
-            <button
-              onClick={handleSyncFromGitea}
-              disabled={syncing}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border disabled:opacity-50 transition-colors"
-            >
-              {syncing ? <RefreshCw size={14} className="animate-spin" /> : <GitPullRequest size={14} />}
-              同步仓库
-            </button>
-          )}
-        </div>
-        <button
-          onClick={handleCreateApp}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
-        >
-          <Plus size={14} />
-          创建新应用
-        </button>
-      </div>
-
-      {/* Card Grid */}
-      {loading ? (
-        <div className="bg-dark-surface border border-dark-border rounded-xl p-12 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-dark-text-muted" />
-        </div>
-      ) : apps.length === 0 ? (
-        <div className="bg-dark-surface border border-dark-border rounded-xl p-12">
-          <div className="text-center">
-            <Box className="mx-auto h-16 w-16 text-dark-text-muted opacity-60" />
-            <h3 className="mt-4 text-lg font-medium text-dark-text">暂无 Agent</h3>
-            <p className="mt-2 text-sm text-dark-text-muted">
-              点击右上角"创建新 Agent"开始
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-dark-surface border border-dark-border rounded-xl p-5">
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-            {apps.map((app) => {
-              const engineColors: Record<string, string> = {
-                opencode: 'from-teal-400 to-teal-600',
-                claudecode: 'from-purple-400 to-purple-600',
-                agentflow: 'from-cyan-400 to-cyan-600',
-              };
-              const gradient = engineColors[app.engine] || 'from-gray-400 to-gray-600';
-
-              return (
-                <div
-                  key={app.id}
-                  className="group relative flex flex-col rounded-xl border border-dark-border bg-dark-surface-hover/30 hover:bg-dark-surface-hover/60 hover:border-dark-border transition-all cursor-pointer"
-                  onClick={() => handleEdit(app)}
+      {/* Toolbar + Cards container */}
+      <div className="bg-dark-surface border border-dark-border/40 rounded-xl">
+        {/* Toolbar */}
+        <div className="px-5 py-4 border-b border-dark-border/40">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/dashboard/agent-apps/developer-guide')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border transition-colors"
+              >
+                <BookOpen size={14} />
+                开发者指南
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                刷新
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleSyncFromGitea}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border disabled:opacity-50 transition-colors"
                 >
-                  {/* Header */}
-                  <div className="px-4 pt-4 pb-3 flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-lg`}>
-                      <Bot size={18} className="text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-semibold text-dark-text truncate pr-6">{app.name}</h4>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-[11px] bg-dark-bg/80 text-dark-text-muted px-1.5 py-0.5 rounded font-mono border border-dark-border">
-                          {app.engine === 'opencode' ? 'OpenCode' : app.engine === 'claudecode' ? 'Claude Code' : app.engine}
-                        </span>
-                        {app.isPublic
-                          ? <span title="已共享"><Globe size={11} className="text-green-400" /></span>
-                          : <span title="私有"><Lock size={11} className="text-dark-text-muted" /></span>}
-                      </div>
-                    </div>
-                    {/* Edit + Delete + View icons */}
-                    <div className="shrink-0 flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                      {app.engine === 'agentflow' && (
-                        <button
-                          onClick={() => setViewingApp(app)}
-                          className="p-1.5 rounded-lg text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                          title="查看流程"
-                        >
-                          <Eye size={13} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleEdit(app)}
-                        className="p-1.5 rounded-lg text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                        title="编辑"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(app)}
-                        disabled={deletingId === app.id}
-                        className="p-1.5 rounded-lg text-dark-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                        title="删除"
-                      >
-                        {deletingId === app.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="mx-4 border-t border-dark-border/40" />
-
-                  {/* Metrics — 3 cols top row, 3 cols bottom row */}
-                  <div className="px-4 py-3 grid grid-cols-3 gap-1.5">
-                    {[
-                      { icon: <Play size={12} />, value: app._metrics?.runCount ?? 0, label: '运行次数', color: 'text-blue-400', show: true },
-                      { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '发现漏洞', color: 'text-red-400', show: true },
-                      { icon: <Bell size={12} />, value: app._metrics?.alertCount ?? 0, label: '告警数量', color: 'text-yellow-400', show: true },
-                      {
-                        icon: <CheckCircle size={12} />,
-                        value: app._metrics?.successRate != null ? `${(app._metrics.successRate * 100).toFixed(0)}%` : '-',
-                        label: '成功率',
-                        color: 'text-green-400',
-                        show: isAdmin,
-                      },
-                      {
-                        icon: <Percent size={12} />,
-                        value: app._metrics?.falsePositiveRate != null
-                          ? `${((1 - app._metrics.falsePositiveRate) * 100).toFixed(0)}%`
-                          : '-',
-                        label: '误报率',
-                        color: 'text-purple-400',
-                        show: isAdmin,
-                      },
-                      {
-                        icon: <Clock size={12} />,
-                        value: app._metrics?.lastRunAt
-                          ? new Date(app._metrics.lastRunAt).toLocaleDateString('zh-CN')
-                          : '-',
-                        label: '最近运行',
-                        color: 'text-dark-text-muted',
-                        show: true,
-                      },
-                    ].filter(m => m.show).map(({ icon, value, label, color }) => (
-                      <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-dark-bg/40">
-                        <span className={color}>{icon}</span>
-                        <span className="text-sm font-bold text-dark-text leading-tight">{value}</span>
-                        <span className="text-[10px] text-dark-text-muted">{label}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Divider */}
-                  <div className="mx-4 border-t border-dark-border/40" />
-
-                  {/* Meta info */}
-                  <div className="px-4 py-3 flex items-center justify-between text-xs text-dark-text-muted">
-                    <span><span className="text-dark-text-muted">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
-                    <span><span className="text-dark-text-muted">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
-                  </div>
-                </div>
-              );
-            })}
+                  {syncing ? <RefreshCw size={14} className="animate-spin" /> : <GitPullRequest size={14} />}
+                  同步仓库
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleCreateApp}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+            >
+              <Plus size={14} />
+              创建新应用
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Card Grid */}
+        {loading ? (
+          <div className="p-12 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-dark-text-muted" />
+          </div>
+        ) : apps.length === 0 ? (
+          <div className="p-12">
+            <div className="text-center">
+              <Box className="mx-auto h-16 w-16 text-dark-text-muted opacity-60" />
+              <h3 className="mt-4 text-lg font-medium text-dark-text">暂无 Agent</h3>
+              <p className="mt-2 text-sm text-dark-text-muted">
+                点击右上角"创建新 Agent"开始
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-5">
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+              {apps.map((app) => {
+                const engineColors: Record<string, string> = {
+                  opencode: 'from-teal-400 to-teal-600',
+                  claudecode: 'from-purple-400 to-purple-600',
+                  agentflow: 'from-cyan-400 to-cyan-600',
+                };
+                const gradient = engineColors[app.engine] || 'from-gray-400 to-gray-600';
+
+                return (
+                  <div
+                    key={app.id}
+                    className="group relative flex flex-col rounded-xl border border-dark-border bg-dark-surface-hover/30 hover:bg-dark-surface-hover/60 hover:border-dark-border transition-all cursor-pointer"
+                    onClick={() => handleEdit(app)}
+                  >
+                    {/* Header */}
+                    <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-lg`}>
+                        <Bot size={18} className="text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-semibold text-dark-text truncate pr-6">{app.name}</h4>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[11px] bg-dark-bg/80 text-dark-text-muted px-1.5 py-0.5 rounded font-mono border border-dark-border">
+                            {app.engine === 'opencode' ? 'OpenCode' : app.engine === 'claudecode' ? 'Claude Code' : app.engine}
+                          </span>
+                          {app.isPublic
+                            ? <span title="已共享"><Globe size={11} className="text-green-400" /></span>
+                            : <span title="私有"><Lock size={11} className="text-dark-text-muted" /></span>}
+                        </div>
+                      </div>
+                      {/* Edit + Delete + View icons */}
+                      <div className="shrink-0 flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                        {app.engine === 'agentflow' && (
+                          <button
+                            onClick={() => setViewingApp(app)}
+                            className="p-1.5 rounded-lg text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                            title="查看流程"
+                          >
+                            <Eye size={13} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleEdit(app)}
+                          className="p-1.5 rounded-lg text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                          title="编辑"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(app)}
+                          disabled={deletingId === app.id}
+                          className="p-1.5 rounded-lg text-dark-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                          title="删除"
+                        >
+                          {deletingId === app.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="mx-4 border-t border-dark-border/40" />
+
+                    {/* Metrics — 3 cols top row, 3 cols bottom row */}
+                    <div className="px-4 py-3 grid grid-cols-3 gap-1.5">
+                      {[
+                        { icon: <Play size={12} />, value: app._metrics?.runCount ?? 0, label: '运行次数', color: 'text-blue-400', show: true },
+                        { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '发现漏洞', color: 'text-red-400', show: true },
+                        { icon: <Bell size={12} />, value: app._metrics?.alertCount ?? 0, label: '告警数量', color: 'text-yellow-400', show: true },
+                        {
+                          icon: <CheckCircle size={12} />,
+                          value: app._metrics?.successRate != null ? `${(app._metrics.successRate * 100).toFixed(0)}%` : '-',
+                          label: '成功率',
+                          color: 'text-green-400',
+                          show: isAdmin,
+                        },
+                        {
+                          icon: <Percent size={12} />,
+                          value: app._metrics?.falsePositiveRate != null
+                            ? `${((1 - app._metrics.falsePositiveRate) * 100).toFixed(0)}%`
+                            : '-',
+                          label: '误报率',
+                          color: 'text-purple-400',
+                          show: isAdmin,
+                        },
+                        {
+                          icon: <Clock size={12} />,
+                          value: app._metrics?.lastRunAt
+                            ? new Date(app._metrics.lastRunAt).toLocaleDateString('zh-CN')
+                            : '-',
+                          label: '最近运行',
+                          color: 'text-dark-text-muted',
+                          show: true,
+                        },
+                      ].filter(m => m.show).map(({ icon, value, label, color }) => (
+                        <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-dark-bg/40">
+                          <span className={color}>{icon}</span>
+                          <span className="text-sm font-bold text-dark-text leading-tight">{value}</span>
+                          <span className="text-[10px] text-dark-text-muted">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="mx-4 border-t border-dark-border/40" />
+
+                    {/* Meta info */}
+                    <div className="px-4 py-3 flex items-center justify-between text-xs text-dark-text-muted">
+                      <span><span className="text-dark-text-muted">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
+                      <span><span className="text-dark-text-muted">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       <CreateAgentAppModal
         isOpen={isCreateModalOpen}
