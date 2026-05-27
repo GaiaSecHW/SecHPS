@@ -202,7 +202,7 @@ export class CodedmapManager {
       workspacePath,
       '--joern-home', JOERN_HOME,
       '--workspace', workspaceDir,
-    ], workspacePath, 3600_000, buildEnv);
+    ], workspacePath, buildEnv);
 
     if (!fs.existsSync(graphDbPath)) {
       throw new Error(`build_map.py completed but graph.db not found at ${graphDbPath}\nstderr: ${stderr}\nstdout: ${stdout}`);
@@ -233,28 +233,22 @@ export class CodedmapManager {
   }
 
   /**
-   * 执行命令，带超时和自定义环境变量
+   * 执行命令，带自定义环境变量（无超时限制）
    */
   private runCommand(
     command: string,
     args: string[],
     cwd: string,
-    timeout = 300_000,
     env?: NodeJS.ProcessEnv,
   ): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
       const child = execFile(command, args, {
         cwd,
-        timeout,
         maxBuffer: 50 * 1024 * 1024,
         env: env || { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       }, (error, stdout, stderr) => {
         if (error) {
-          if ((error as any).killed) {
-            reject(new Error(`Command timed out after ${timeout / 1000}s: ${command} ${args.join(' ')}`));
-          } else {
-            reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${stderr || error.message}`));
-          }
+          reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${stderr || error.message}`));
         } else {
           resolve({ stdout: stdout || '', stderr: stderr || '' });
         }

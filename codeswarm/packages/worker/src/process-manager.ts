@@ -144,14 +144,14 @@ export class ProcessManager {
     let stderr = '';
     let client: ACPClient | null = null;
     let currentSkill: string | null = null;
-    const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '600000'); // 10 min default
+    const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '0'); // 0 = disabled, set e.g. 600000 for 10min
     let inactivityTimer: NodeJS.Timeout | null = null;
     let inactivityTimeoutReject: ((reason: Error) => void) | null = null;
     let inactivityTimeoutTriggered = false;
 
     const handleInactivityTimeout = () => {
-      // Guard: if race already resolved, do nothing
-      if (!inactivityTimeoutReject) return;
+      // Guard: disabled (INACTIVITY_TIMEOUT_MS === 0) or race already resolved
+      if (INACTIVITY_TIMEOUT_MS <= 0 || !inactivityTimeoutReject) return;
 
       const timeoutSecs = INACTIVITY_TIMEOUT_MS / 1000;
       console.log(`[ProcessMgr] Inactivity timeout detected (no events for ${timeoutSecs}s), terminating session`);
@@ -246,8 +246,10 @@ export class ProcessManager {
       client.on({
         text: (content: string) => {
           console.log(`[ProcessMgr] EVENT text: "${content.substring(0, 50)}..."`);
-          if (inactivityTimer) clearTimeout(inactivityTimer);
-          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          if (INACTIVITY_TIMEOUT_MS > 0) {
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          }
           stdout += content;
           if (onEvent) {
             onEvent({
@@ -258,8 +260,10 @@ export class ProcessManager {
           }
         },
         toolCall: (tool: string, input: unknown, title?: string) => {
-          if (inactivityTimer) clearTimeout(inactivityTimer);
-          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          if (INACTIVITY_TIMEOUT_MS > 0) {
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          }
           const actualToolName = (title || tool).toLowerCase();
           console.log(`[ProcessMgr] EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
           console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
@@ -330,8 +334,10 @@ export class ProcessManager {
           }
         },
         toolCallUpdate: (output: string) => {
-          if (inactivityTimer) clearTimeout(inactivityTimer);
-          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          if (INACTIVITY_TIMEOUT_MS > 0) {
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          }
           console.log(`[ProcessMgr] EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
 
           // Secondary skill name extraction from tool output (e.g., "Launching skill: review")
@@ -360,8 +366,10 @@ export class ProcessManager {
           }
         },
         error: (message: string) => {
-if (inactivityTimer) clearTimeout(inactivityTimer);
-          inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+if (INACTIVITY_TIMEOUT_MS > 0) {
+            if (inactivityTimer) clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          }
           const classified = classifyAcpError(message);
           console.log(`[ProcessMgr] EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
           stderr += message;
@@ -445,10 +453,12 @@ if (inactivityTimer) clearTimeout(inactivityTimer);
         setTimeout(() => reject(new Error(`Task timed out after ${effectiveTimeoutMs / 1000}s`)), effectiveTimeoutMs);
       });
 
-      inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
-      const inactivityTimeoutPromise = new Promise<never>((_, reject) => {
-        inactivityTimeoutReject = reject;
-      });
+      if (INACTIVITY_TIMEOUT_MS > 0) {
+        inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+      }
+      const inactivityTimeoutPromise = INACTIVITY_TIMEOUT_MS > 0
+        ? new Promise<never>((_, reject) => { inactivityTimeoutReject = reject; })
+        : new Promise<never>(() => {});
 
       const stopReason = await Promise.race([
         client.sendPrompt(promptContent),
