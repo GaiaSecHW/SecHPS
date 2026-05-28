@@ -159,25 +159,21 @@ export async function POST(request: Request) {
       const zip = new AdmZip(buffer);
       const zipEntries = zip.getEntries();
       
-      const skillMdEntries = zipEntries.filter(e => !e.isDirectory && e.entryName.endsWith('SKILL.md'));
+      const skillMdEntries = zipEntries.filter(e => !e.isDirectory && e.entryName.endsWith('SKILL.md') && e.entryName.split('/').length <= 2);
       
       if (skillMdEntries.length === 0) {
         return NextResponse.json({ 
-          details: { error: 'ZIP 压缩包中未找到 SKILL.md 文件，请确保压缩包包含 SKILL.md' } 
+          details: { error: 'ZIP 压缩包中未找到 SKILL.md 文件（仅支持根目录或单层子目录内的 SKILL.md）' } 
         }, { status: 400 });
       }
 
       if (skillMdEntries.length > 1) {
-        const minDepth = Math.min(...skillMdEntries.map(e => e.entryName.split('/').length));
-        const shallowest = skillMdEntries.filter(e => e.entryName.split('/').length === minDepth);
-        if (shallowest.length > 1) {
-          return NextResponse.json({ 
-            details: { error: 'ZIP 包含多个 Skill 目录（同级存在多个 SKILL.md），请逐个上传' } 
-          }, { status: 400 });
-        }
+        return NextResponse.json({ 
+          details: { error: 'ZIP 包含多个 SKILL.md，请逐个上传' } 
+        }, { status: 400 });
       }
 
-      const skillMdEntry = skillMdEntries.sort((a, b) => a.entryName.split('/').length - b.entryName.split('/').length)[0];
+      const skillMdEntry = skillMdEntries[0];
       skillContent = skillMdEntry.getData().toString('utf-8');
       
       const skillMdPath = skillMdEntry.entryName;
@@ -187,14 +183,14 @@ export async function POST(request: Request) {
       for (const entry of zipEntries) {
         if (!entry.isDirectory) {
           const entryPath = entry.entryName;
-          if (skillDirPrefix && entryPath.startsWith(skillDirPrefix)) {
+          if (!skillDirPrefix) {
+            if (!entryPath.startsWith('__MACOSX') && !entryPath.includes('.DS_Store')) {
+              zipFiles.set(entryPath, entry.getData());
+            }
+          } else if (entryPath.startsWith(skillDirPrefix)) {
             const relativePath = entryPath.substring(skillDirPrefix.length);
             if (relativePath && !relativePath.startsWith('__MACOSX') && !relativePath.includes('.DS_Store')) {
               zipFiles.set(relativePath, entry.getData());
-            }
-          } else if (!skillDirPrefix) {
-            if (!entryPath.startsWith('__MACOSX') && !entryPath.includes('.DS_Store')) {
-              zipFiles.set(entryPath, entry.getData());
             }
           }
         }

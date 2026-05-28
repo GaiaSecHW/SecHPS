@@ -75,26 +75,20 @@ export async function POST(
       const arrayBuffer = await file.arrayBuffer();
       const zip = await import('jszip').then(jszip => jszip.loadAsync(arrayBuffer));
 
-      const skillMdPaths: string[] = [];
+const skillMdPaths: string[] = [];
       zip.forEach((relativePath, zipEntry) => {
-        if (!zipEntry.dir && relativePath.endsWith('SKILL.md')) {
+        if (!zipEntry.dir && relativePath.endsWith('SKILL.md') && relativePath.split('/').length <= 2) {
           skillMdPaths.push(relativePath);
         }
       });
 
       if (skillMdPaths.length === 0) {
-        return NextResponse.json({ error: 'ZIP 中未找到 SKILL.md 文件' }, { status: 400 });
+        return NextResponse.json({ error: 'ZIP 中未找到 SKILL.md 文件（仅支持根目录或单层子目录内的 SKILL.md）' }, { status: 400 });
       }
-
       if (skillMdPaths.length > 1) {
-        const minDepth = Math.min(...skillMdPaths.map(p => p.split('/').length));
-        const shallowest = skillMdPaths.filter(p => p.split('/').length === minDepth);
-        if (shallowest.length > 1) {
-          return NextResponse.json({ error: 'ZIP 包含多个 Skill 目录（同级存在多个 SKILL.md），请逐个上传' }, { status: 400 });
-        }
+        return NextResponse.json({ error: 'ZIP 包含多个 SKILL.md，请逐个上传' }, { status: 400 });
       }
-
-      const skillMdPath = skillMdPaths.sort((a, b) => a.split('/').length - b.split('/').length)[0];
+      const skillMdPath = skillMdPaths[0];
       const skillFile = zip.file(skillMdPath);
       if (!skillFile) {
         return NextResponse.json({ error: 'ZIP 中未找到 SKILL.md 文件' }, { status: 400 });

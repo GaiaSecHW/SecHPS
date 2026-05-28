@@ -208,7 +208,10 @@ export default function ImportCreateSkillPage() {
           const skillMdPaths: string[] = [];
           zip.forEach((relativePath, zipEntry) => {
             if (!zipEntry.dir && relativePath.endsWith('SKILL.md')) {
-              skillMdPaths.push(relativePath);
+              const depth = relativePath.split('/').length;
+              if (depth <= 2) {
+                skillMdPaths.push(relativePath);
+              }
             }
           });
 
@@ -217,7 +220,7 @@ export default function ImportCreateSkillPage() {
               id: `item-${Date.now()}-${Math.random()}`,
               file,
               parsed: null,
-              error: 'ZIP 中未找到 SKILL.md 文件',
+              error: 'ZIP 中未找到 SKILL.md 文件（仅支持根目录或单层子目录内的 SKILL.md）',
               skillName: '',
               skillDisplayName: '',
               skillDescription: '',
@@ -230,29 +233,23 @@ export default function ImportCreateSkillPage() {
           }
 
           if (skillMdPaths.length > 1) {
-            const shallowestPaths = skillMdPaths.filter(p => {
-              const depth = p.split('/').length;
-              return depth === Math.min(...skillMdPaths.map(sp => sp.split('/').length));
+            newItems.push({
+              id: `item-${Date.now()}-${Math.random()}`,
+              file,
+              parsed: null,
+              error: 'ZIP 包含多个 SKILL.md，请逐个上传',
+              skillName: '',
+              skillDisplayName: '',
+              skillDescription: '',
+              categoryId: VULNERABILITY_CATEGORY_ID,
+              vulnerabilityTreeId: null,
+              productTagIds: [],
+              status: 'pending',
             });
-            if (shallowestPaths.length > 1) {
-              newItems.push({
-                id: `item-${Date.now()}-${Math.random()}`,
-                file,
-                parsed: null,
-                error: 'ZIP 包含多个 Skill 目录（同级存在多个 SKILL.md），请逐个上传',
-                skillName: '',
-                skillDisplayName: '',
-                skillDescription: '',
-                categoryId: VULNERABILITY_CATEGORY_ID,
-                vulnerabilityTreeId: null,
-                productTagIds: [],
-                status: 'pending',
-              });
-              continue;
-            }
+            continue;
           }
 
-          const skillMdPath = skillMdPaths.sort((a, b) => a.split('/').length - b.split('/').length)[0];
+          const skillMdPath = skillMdPaths[0];
           const skillFile = zip.file(skillMdPath);
           if (!skillFile) continue;
 
