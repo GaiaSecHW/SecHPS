@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { readFile, stat } from 'fs/promises';
 import { join, extname, basename } from 'path';
@@ -138,10 +139,9 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // 检查项目权限
+    // 检查项目权限：非所有者需要 FILE_READ 或 admin 角色
     if (project.userId !== payload.userId) {
-      const userRoles = payload.roles;
-      if (!userRoles.includes('admin') && !userRoles.includes('manager')) {
+      if (!hasPermission(payload.permissions, PERMISSIONS.FILE_READ) && !payload.roles.includes('admin')) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
