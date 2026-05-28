@@ -191,10 +191,16 @@ export class WorkerDaemon {
       this.server.log.warn({ error: err }, 'MinIO bucket check failed (non-fatal)');
     });
     this.server.log.info({ config: this.config }, 'Worker daemon started');
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`  Worker Node: ${this.config.nodeId}`);
+    console.log(`  Port: ${this.config.port}`);
+    console.log(`  Max Concurrent: ${this.config.maxConcurrent}`);
+    console.log(`  Orchestrator: ${this.config.orchestratorUrl}`);
+    console.log(`${'='.repeat(50)}\n`);
   }
 
   async stop(): Promise<void> {
-    console.log(`[Daemon] Graceful shutdown initiated, active tasks: ${this.activeTasks.size}`);
+    console.log(`[Daemon:${this.config.nodeId}] Graceful shutdown initiated, active tasks: ${this.activeTasks.size}`);
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
@@ -206,7 +212,7 @@ export class WorkerDaemon {
 
     // Notify platform for all active tasks before terminating
     for (const [taskId, payload] of this.activeTasks) {
-      console.log(`[Daemon] Notifying platform of interrupted task: ${taskId}`);
+      console.log(`[Daemon:${this.config.nodeId}] Notifying platform of interrupted task: ${taskId}`);
       try {
         await this.postResult(payload, {
           taskId,
@@ -227,7 +233,7 @@ export class WorkerDaemon {
     }
 
     await this.server.close();
-    console.log(`[Daemon] Graceful shutdown complete`);
+    console.log(`[Daemon:${this.config.nodeId}] Graceful shutdown complete`);
   }
 
   private startHeartbeat(): void {
@@ -336,7 +342,11 @@ export class WorkerDaemon {
       });
       
       if (resp.ok) {
-        this.server.log.debug('Heartbeat 成功');
+        const activeTaskIds = [...this.activeTasks.keys()];
+        this.server.log.info(
+          { activeTaskIds, count: activeTaskIds.length },
+          `Heartbeat OK | nodeId=${this.config.nodeId} | active: [${activeTaskIds.join(', ')}]`
+        );
         return true;
       }
       
@@ -361,8 +371,8 @@ export class WorkerDaemon {
     let codedmapPromise: Promise<void> | null = null;
 
     try {
-      console.log(`[Daemon] ========== TASK START ==========`);
-      console.log(`[Daemon] taskId: ${taskId}`);
+      console.log(`[Daemon] ========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
+      console.log(`[Daemon] [${this.config.nodeId}] taskId: ${taskId}`);
       console.log(`[Daemon] payload.engine: ${payloadEngine}`);
       console.log(`[Daemon] payload.agent: ${agent}`);
       console.log(`[Daemon] payload.model: ${model}`);
