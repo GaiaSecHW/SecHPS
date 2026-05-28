@@ -204,9 +204,15 @@ export default function ImportCreateSkillPage() {
 
         if (isZip) {
           const zip = await JSZip.loadAsync(file);
-          const skillFile = zip.file('SKILL.md');
 
-          if (!skillFile) {
+          const skillMdPaths: string[] = [];
+          zip.forEach((relativePath, zipEntry) => {
+            if (!zipEntry.dir && relativePath.endsWith('SKILL.md')) {
+              skillMdPaths.push(relativePath);
+            }
+          });
+
+          if (skillMdPaths.length === 0) {
             newItems.push({
               id: `item-${Date.now()}-${Math.random()}`,
               file,
@@ -222,6 +228,33 @@ export default function ImportCreateSkillPage() {
             });
             continue;
           }
+
+          if (skillMdPaths.length > 1) {
+            const shallowestPaths = skillMdPaths.filter(p => {
+              const depth = p.split('/').length;
+              return depth === Math.min(...skillMdPaths.map(sp => sp.split('/').length));
+            });
+            if (shallowestPaths.length > 1) {
+              newItems.push({
+                id: `item-${Date.now()}-${Math.random()}`,
+                file,
+                parsed: null,
+                error: 'ZIP 包含多个 Skill 目录（同级存在多个 SKILL.md），请逐个上传',
+                skillName: '',
+                skillDisplayName: '',
+                skillDescription: '',
+                categoryId: VULNERABILITY_CATEGORY_ID,
+                vulnerabilityTreeId: null,
+                productTagIds: [],
+                status: 'pending',
+              });
+              continue;
+            }
+          }
+
+          const skillMdPath = skillMdPaths.sort((a, b) => a.split('/').length - b.split('/').length)[0];
+          const skillFile = zip.file(skillMdPath);
+          if (!skillFile) continue;
 
           content = await skillFile.async('string');
         } else {
