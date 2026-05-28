@@ -39,9 +39,11 @@
 
 ```json
 {
-  "acpx": "^0.10.0"
+  "acpx": "0.10.0"
 }
 ```
+
+> 版本锁定为精确版本，避免 minor 更新引入不兼容变更。升级时显式修改。
 
 ### 2.3 保留不变的包
 
@@ -129,27 +131,35 @@ function resolveAgentName(engine: string): string {
 }
 ```
 
-未知的 engine 值直接透传给 acpx，支持未来扩展。acpx 会尝试用传入的名称作为 ACP 适配器命令（escape hatch）。
+**未知 Agent 处理**：未知 engine 值直接透传给 acpx 的 `resolveAgentCommand()`，acpx 会将其作为原始 shell 命令尝试执行（escape hatch）。如果 Worker PATH 上不存在该命令，`ensureSession()` 会抛出 `ACP_BACKEND_UNAVAILABLE` 错误，任务标记为失败。这是预期行为——不支持盲目尝试不存在的 Agent。
 
 ### 3.3 API Key 注入
 
-acpx 的 AcpClient 从环境变量读取 API Key。保持与当前 payload 传递方式的兼容：
+acpx 的 AcpClient 从环境变量读取 API Key。保留当前 ProcessManager 的 provider 动态推断逻辑，适配多 provider 场景：
 
 ```typescript
-function buildEnvVars(engine: string, apiKey?: string, apiBaseUrl?: string): Record<string, string> {
+function buildEnvVars(engine: string, apiKey?: string, apiBaseUrl?: string, model?: string): Record<string, string> {
   const env: Record<string, string> = { ...process.env as Record<string, string> };
   if (apiKey) {
     const agent = resolveAgentName(engine);
+    // 优先按 agent 类型注入
     if (agent === 'claude') {
       env.ANTHROPIC_API_KEY = apiKey;
     } else if (agent === 'codex') {
       env.OPENAI_API_KEY = apiKey;
-    } else {
-      env.ANTHROPIC_API_KEY = apiKey; // 默认
+    } else if (agent === 'gemini') {
+      env.GOOGLE_API_KEY = apiKey;
+    } else if (model) {
+      // 回退：从 model 名称推断 provider（如 "anthropic/claude-4" → ANTHROPIC_API_KEY）
+      const providerId = model.split('/')[0]?.toUpperCase();
+      if (providerId) env[`${providerId}_API_KEY`] = apiKey;
+    }
+    if (!env.ANTHROPIC_API_KEY && !env.OPENAI_API_KEY && !env.GOOGLE_API_KEY) {
+      env.ANTHROPIC_API_KEY = apiKey; // 最终默认
     }
   }
   if (apiBaseUrl) {
-    env.ANTHROPIC_BASE_URL = apiBaseUrl;
+    env.ANTHROPIC_BASE_URL = apiBaseUrl; // 主要用于 Anthropic 兼容 API
   }
   return env;
 }
@@ -191,10 +201,13 @@ runAgent(taskId, workspace, engine, agent, apiKey?, model?, ..., onEvent)
 │     ├── result.status === 'completed' → break（成功）
 │     │
 │     ├── 不活跃超时触发 →
-│     │   Strategy A: turn.cancel() → await turn.result
+│     │   Strategy A: turn.cancel() →
+│     │     result = Promise.race([turn.result, timeout(CANCEL_WAIT_MS)])
 │     │     如果 result.status === 'cancelled' → 重置计数，继续循环
+│     │     如果 result.status === 'completed' → 任务实际完成，exitCode 0
 │     │     如果超时 → fall through to Strategy B
-│     │   Strategy B: runtime.close({ handle }) → ensureSession 重建
+│     │   Strategy B: runtime.close({ handle, reason: 'continuation-fallback' })
+│     │     → ensureSession 重建
 │     │
 │     └── 超过 MAX_ATTEMPTS → break（失败）
 │   }
@@ -211,19 +224,19 @@ runAgent(taskId, workspace, engine, agent, apiKey?, model?, ..., onEvent)
 | 当前 ACPClient 操作 | acpx/runtime 等价操作 |
 |---------------------|----------------------|
 | `client.cancel()` | `turn.cancel()` |
-| `client.waitForCurrentPrompt(10s)` | `await turn.result`（cancel 后 result 自动 resolve） |
-| Strategy B: `client.destroy()` | `runtime.close({ handle })` |
+| `client.waitForCurrentPrompt(10s)` | `Promise.race([turn.result, setTimeout(CANCEL_WAIT_MS)])` — 显式超时竞争，cancel 后 Agent 可能不响应 |
+| Strategy B: `client.destroy()` | `runtime.close({ handle, reason: 'continuation-fallback' })` |
 | Strategy B: `new ACPClient()` + `start()` | `runtime.ensureSession({ mode: 'oneshot' })` |
-| `client.isAlive` | `turn.result` pending 状态判断 |
+| `client.isAlive` | 维护 `turnActive: boolean` 标志，事件流结束后置 false |
 | `client.exitCode` | `result.status === 'completed' ? 0 : 1` |
-| `client.getTextBuffer()` | 自维护 `textChunks: string[]`（事件消费时 append） |
+| `client.getTextBuffer()` | 自维护 `textChunks: string[]`（事件消费时 append，保留最近 5 条） |
 
 ### 3.6 关键差异处理
 
 | 问题 | 方案 |
 |------|------|
 | acpx 没有暴露 `getTextBuffer()` | 在事件流消费时自行维护 `textChunks: string[]`（最近 5 条），逻辑不变 |
-| acpx 没有暴露 `isAlive` / `exitCode` | 用 `turn.result` 的 pending/resolved 状态判断进程存活，用 `result.status` 推导 exitCode |
+| acpx 没有暴露 `isAlive` / `exitCode` | 维护 `turnActive` 标志位（startTurn 时 true，事件流结束/result resolve 时 false）。用 `result.status` 推导 exitCode |
 | acpx 管理进程生命周期 | 不再由 ProcessManager 直接 spawn/kill，由 acpx 的 AcpClient 内部管理。`close()` 会终止底层进程 |
 | `onEvent` 回调不变 | WorkerDaemon 的 `onEvent` 回调签名完全不变，ProcessManager 内部做事件转换 |
 
@@ -231,15 +244,19 @@ runAgent(taskId, workspace, engine, agent, apiKey?, model?, ..., onEvent)
 
 ### 4.1 acpx 事件 → CodeSwarm AgentEvent
 
-| acpx 事件 | 条件 | → CodeSwarm AgentEvent | 转换逻辑 |
-|-----------|------|------------------------|---------|
+acpx 的 `tool_call` 事件同时用于初始调用和完成更新，通过 `tag` 字段区分（不是 `status` 字段）。
+
+| acpx 事件 | 区分条件 | → CodeSwarm AgentEvent | 转换逻辑 |
+|-----------|---------|------------------------|---------|
 | `text_delta` | `stream='output'` | `{ type: 'agent_message_chunk', content }` | 直接映射 |
 | `text_delta` | `stream='thought'` | `{ type: 'agent_message_chunk', content }` | 统一为 message_chunk |
-| `tool_call` | `status` 无值 | `{ type: 'tool_call', tool, input }` | `tool = title ?? kind` |
-| `tool_call` | `status` 有值 | `{ type: 'tool_call_update', output }` | 判断 completed/failed |
-| `status` | `tag='usage_update'` | 不发送事件 | 仅重置不活跃计时器 |
-| `status` | `tag='available_commands_update'` | 不发送事件 | 仅重置不活跃计时器 |
+| `tool_call` | `tag='tool_call'`（初始调用） | `{ type: 'tool_call', tool, input }` | `tool = title ?? kind`，status 通常为 in_progress |
+| `tool_call` | `tag='tool_call_update'`（完成/失败） | `{ type: 'tool_call_update', output }` | `status='completed'` 或 `'failed'`，output 来自 rawOutput |
+| `status` | `tag='usage_update'` | 不发送事件 | 仅重置不活跃计时器（alive 信号） |
+| `status` | `tag='available_commands_update'` | 不发送事件 | 仅重置不活跃计时器（alive 信号） |
 | `status` | 其他 tag | `{ type: 'log_chunk', content, level: 'info' }` | 日志信息 |
+
+**关键**：acpx 的 `tool_call` 类型事件通过 `event.tag` 区分是初始调用还是更新，而非通过 `event.status` 是否存在。`tag='tool_call'` 表示工具开始执行，`tag='tool_call_update'` 表示工具执行完成。
 
 ### 4.2 技能（Skill）追踪保留
 
@@ -250,18 +267,21 @@ function mapToolCallEvent(event: AcpRuntimeEvent, ctx: EventContext): void {
   if (event.type !== 'tool_call') return;
 
   const toolName = event.title ?? event.kind ?? 'unknown';
+  const isUpdate = event.tag === 'tool_call_update';
 
-  // 复用现有技能推断
-  const skillName = extractSkillName(toolName, event.rawInput)
-    ?? inferSkillNameFromContext(ctx.textChunks);
+  // 初始调用时进行技能推断
+  if (!isUpdate) {
+    const skillName = extractSkillName(toolName, event.rawInput)
+      ?? inferSkillNameFromContext(ctx.textChunks);
 
-  if (skillName && skillName !== ctx.currentSkill) {
-    if (ctx.currentSkill) emitSkillComplete(ctx.currentSkill);
-    ctx.currentSkill = skillName;
-    onEvent({ type: 'skill_start', skill: skillName, content: '' });
+    if (skillName && skillName !== ctx.currentSkill) {
+      if (ctx.currentSkill) emitSkillComplete(ctx.currentSkill);
+      ctx.currentSkill = skillName;
+      onEvent({ type: 'skill_start', skill: skillName, content: '' });
+    }
   }
 
-  if (event.status) {
+  if (isUpdate) {
     onEvent({ type: 'tool_call_update', output: String(event.rawOutput ?? '') });
   } else {
     onEvent({ type: 'tool_call', tool: toolName, input: event.rawInput });
@@ -315,7 +335,7 @@ function handleTurnError(
 
 ### 5.4 hasSubstantialOutput 保留
 
-保留现有的 `hasSubstantialOutput()` 逻辑（stdout > 100 字符视为有实质输出），用于判断是否容忍非关键错误。
+保留现有的 `hasSubstantialOutput()` 逻辑（stdout 去空白后 ≥ 100 字符视为有实质输出），用于判断是否容忍非关键错误。
 
 ## 6. 环境配置 & 部署
 
@@ -360,7 +380,23 @@ function handleTurnError(
 | **总新增** | **~150** |
 | **净减少** | **~580** |
 
-## 8. 风险与缓解
+## 8. 会话文件清理
+
+acpx 使用 `oneshot` 模式，每次 `ensureSession` 创建唯一 session ID（`taskId:oneshot:<uuid>`），任务完成后通过 `runtime.close()` 释放底层进程。
+
+**文件清理策略**：
+- `SESSION_DIR` 下的会话文件由 Worker 的定时清理任务管理
+- Worker 启动时清理超过 24 小时的旧会话文件
+- 每次任务完成后立即删除对应会话文件（`runtime.close()` 后删除）
+- acpx 的 persistent session pooling 在 `oneshot` 模式下不生效（oneshot 不复用），不影响资源管理
+
+## 9. MCP Server 传递
+
+acpx 的 `AcpRuntimeOptions` 支持 `mcpServers?: McpServer[]`。当前 TaskPayload 的 `mcps` 字段（JSON 字符串）包含 MCP 服务配置。
+
+**集成方式**：在 `createAcpRuntime` 时传入 MCP 配置，或在 `ensureSession` 时通过 `sessionOptions` 传入。具体格式转换在实现阶段处理，当前设计预留了接口。
+
+## 10. 风险与缓解
 
 | 风险 | 缓解措施 |
 |------|---------|
