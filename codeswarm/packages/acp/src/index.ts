@@ -10,6 +10,7 @@ import type {
   RequestPermissionRequest,
   RequestPermissionResponse,
   SessionNotification,
+  CancelNotification,
   Client,
   Agent,
   StopReason,
@@ -70,6 +71,8 @@ export class ACPClient {
   private _maxTextBuffer = 5;
   // Abort controller for sendPrompt
   private _abortController: AbortController | null = null;
+  // Current prompt promise (saved for cancel + waitForCurrentPrompt)
+  private _currentPromptPromise: Promise<any> | null = null;
 
   constructor() {
     this.exitCodePromise = new Promise(resolve => {
@@ -245,11 +248,12 @@ export class ACPClient {
     this._abortController = new AbortController();
     
     try {
+      this._currentPromptPromise = this.connection.prompt({
+        sessionId: this.sessionId,
+        prompt: [{ type: 'text', text: prompt }],
+      });
       const result = await Promise.race([
-        this.connection.prompt({
-          sessionId: this.sessionId,
-          prompt: [{ type: 'text', text: prompt }],
-        }),
+        this._currentPromptPromise,
         new Promise<never>((_, reject) => {
           // Reject when destroyed
           const checkDestroyed = setInterval(() => {
@@ -268,6 +272,31 @@ export class ACPClient {
       return result.stopReason;
     } finally {
       this._abortController = null;
+      this._currentPromptPromise = null;
+    }
+  }
+
+  /** Send session/cancel notification to abort current prompt */
+  async cancel(): Promise<void> {
+    if (!this.sessionId || !this.connection) {
+      console.log('[ACP] Cannot cancel: no active session');
+      return;
+    }
+    console.log(`[ACP] Sending session/cancel for session ${this.sessionId}`);
+    await this.connection.cancel({ sessionId: this.sessionId });
+  }
+
+  /** Wait for current prompt to complete (used after cancel to wait for SDK resolve) */
+  async waitForCurrentPrompt(timeoutMs: number): Promise<StopReason | null> {
+    if (!this._currentPromptPromise) return null;
+    try {
+      const result = await Promise.race([
+        this._currentPromptPromise,
+        new Promise<null>(resolve => setTimeout(() => resolve(null), timeoutMs)),
+      ]);
+      return result?.stopReason ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -279,6 +308,11 @@ export class ACPClient {
   /** Get exit code promise */
   get exitCode(): Promise<number | null> {
     return this.exitCodePromise;
+  }
+
+  /** Check if the underlying process is still running */
+  get isAlive(): boolean {
+    return this.process !== null && this.process.exitCode === null && !this.destroyed;
   }
 
   /** Get recent text buffer for skill name inference */
@@ -361,7 +395,9 @@ export class ACPClient {
       }
       case 'usage_update':
       case 'available_commands_update':
-        // Ignore non-text updates
+        // 不发射业务事件，但触发存活信号（用于续推机制的不活跃检测）
+        console.log(`[ACP] Received ${updateType}, triggering alive signal`);
+        this.eventHandlers.raw?.('__alive__');
         break;
       default:
         // Log unknown update types for debugging
