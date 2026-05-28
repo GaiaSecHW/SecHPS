@@ -606,7 +606,7 @@ function ResetPasswordModal({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ newPassword: 'huawei@123', mustChangePassword: true }),
+        body: JSON.stringify({ newPassword: 'Huawei@123', mustChangePassword: true }),
       });
 
       if (!response.ok) {
@@ -616,7 +616,7 @@ function ResetPasswordModal({
         return;
       }
 
-      toast.success(`用户 ${user.username} 的密码已重置为 huawei@123，用户下次登录需自行修改密码`);
+      toast.success(`用户 ${user.username} 的密码已重置为 Huawei@123，用户下次登录需自行修改密码`);
       onSuccess();
     } catch (err) {
       setError('网络错误，请重试');
@@ -644,7 +644,7 @@ function ResetPasswordModal({
           )}
 
           <div className="bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 px-4 py-3 rounded text-sm">
-            将用户 <strong>{user.username}</strong> 的密码重置为默认密码 <code className="bg-yellow-900/40 px-1.5 py-0.5 rounded text-yellow-300">huawei@123</code>，用户下次登录后必须自行修改密码。
+            将用户 <strong>{user.username}</strong> 的密码重置为默认密码 <code className="bg-yellow-900/40 px-1.5 py-0.5 rounded text-yellow-300">Huawei@123</code>，用户下次登录后必须自行修改密码。
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">
