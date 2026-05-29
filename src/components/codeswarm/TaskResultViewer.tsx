@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 interface Task {
   id: string;
   taskId: string;
+  taskName: string | null;
   state: string;
   instruction: string;
   projectPath: string | null;
@@ -315,7 +316,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
                         <span className="text-sm font-medium text-gray-100 truncate">
-                          {task.taskId}
+                          {task.taskName || task.taskId}
                         </span>
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                           task.state === 'completed' ? 'bg-green-500/15 text-green-400' :

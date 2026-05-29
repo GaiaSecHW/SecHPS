@@ -11,9 +11,11 @@ export async function GET() {
              t."projectPath", t."workspacePath", t."gitUrl", t."gitRef",
              t.skills, t.mcps, t.model, t."apiKey", t."timeoutSec", t.agent,
              t.engine, t.error, t."startedAt", t."completedAt", t."createdAt", t."updatedAt",
-             w."nodeId" as "workerNodeId", w."address" as "workerAddress", w."status" as "workerStatus"
+             w."nodeId" as "workerNodeId", w."address" as "workerAddress", w."status" as "workerStatus",
+             ti.name as "taskName"
       FROM "CodeswarmTask" t
       LEFT JOIN "CodeswarmWorker" w ON t."workerId" = w.id
+      LEFT JOIN "TaskInstance" ti ON t."platformTaskId" = ti.id
       ORDER BY t."createdAt" DESC
       LIMIT 100
     ` as any[];
@@ -21,6 +23,7 @@ export async function GET() {
     return NextResponse.json({
       tasks: tasks.map(t => ({
         ...t,
+        taskName: t.taskName || null,
         skills: t.skills ? JSON.parse(t.skills) : null,
         mcps: t.mcps ? JSON.parse(t.mcps) : null,
         CodeswarmWorker: t.workerNodeId ? { nodeId: t.workerNodeId, address: t.workerAddress, status: t.workerStatus } : null,
