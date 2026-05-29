@@ -168,6 +168,16 @@ export async function POST(
     const agentName = agentApp?.defaultAgentName || undefined;
     const instruction = agentApp?.startCommand || task.notes || null;
 
+    // 清理旧的 CodeswarmTask + CodeswarmEvent（重试前）
+    if (task.codeswarmTaskId) {
+      try {
+        await prisma.codeswarmEvent.deleteMany({ where: { taskId: task.codeswarmTaskId } });
+        await prisma.codeswarmTask.deleteMany({ where: { taskId: task.codeswarmTaskId } });
+      } catch (e) {
+        logger.warn(LOG_MODULES.AGENT, '清理旧 CodeswarmTask 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+      }
+    }
+
     // 直接在数据库创建 CodeSwarm 任务，使用 $executeRaw 避免 Prisma ORM 连接问题
     const codeswarmTaskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const codeswarmDbId = `db-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
