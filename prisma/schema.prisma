@@ -1665,6 +1665,7 @@ model TaskInstance {
   executionResult  String?
   reportPath       String?
   codeswarmTaskId  String?
+  filesCleanedAt   DateTime?          @db.Timestamptz
   createdAt        DateTime           @default(now()) @db.Timestamptz
   updatedAt        DateTime @db.Timestamptz
   TaskExecutionLog TaskExecutionLog[]
@@ -1677,6 +1678,7 @@ model TaskInstance {
   @@index([modelId])
   @@index([agentId])
   @@index([status])
+  @@index([status, completedAt, filesCleanedAt])
   @@index([tenantId])
   @@index([userId])
 }

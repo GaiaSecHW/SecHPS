@@ -36,6 +36,7 @@ class CodeswarmDispatcher {
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
       logger.warn(LOG_MODULES.CODESWARM, 'REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
+      this.startCleanupScheduler();
       return;
     }
 
@@ -105,6 +106,7 @@ class CodeswarmDispatcher {
       logger.warn(LOG_MODULES.CODESWARM, '错误详情', { details: { error: e instanceof Error ? e.message : String(e) } });
       logger.warn(LOG_MODULES.CODESWARM, 'REDIS_URL', { details: { redisUrl } });
       this.teardownRedis();
+      this.startCleanupScheduler();
     }
   }
 
@@ -565,6 +567,8 @@ const taskPayload = JSON.stringify({
 
   private lastDbErrorTaskId: string | null = null;
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
+  private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+  private cleanupSchedulerActive = false;
 
   private isDbConnectionError(dbTaskId: string): boolean {
     if (this.lastDbErrorTaskId === dbTaskId) {
@@ -684,6 +688,42 @@ const taskPayload = JSON.stringify({
     }, INTERVAL_MS);
   }
 
+  private startCleanupScheduler() {
+    if (this.cleanupSchedulerActive) return;
+
+    const parsedHour = parseInt(process.env.TASK_CLEANUP_HOUR || '3', 10);
+    const hour = Number.isFinite(parsedHour) && parsedHour >= 0 && parsedHour <= 23 ? parsedHour : 3;
+    this.cleanupSchedulerActive = true;
+
+    const scheduleAt = (baseTime: Date): number => {
+      const target = new Date(baseTime);
+      target.setHours(hour, 5, 0, 0); // HH:05:00 避开整点
+      if (target <= baseTime) target.setDate(target.getDate() + 1);
+      return target.getTime() - baseTime.getTime();
+    };
+
+    const scheduleNext = () => {
+      if (!this.cleanupSchedulerActive) return null;
+      return setTimeout(runCleanup, scheduleAt(new Date()));
+    };
+
+    const runCleanup = async () => {
+      try {
+        const { cleanupExpiredTasks } = await import('@/lib/task-cleanup');
+        await cleanupExpiredTasks();
+      } catch (e) {
+        logger.error(LOG_MODULES.CODESWARM, '[TaskCleanup] 定时清理异常', { details: { error: e instanceof Error ? e.message : String(e) } });
+      }
+
+      if (!this.cleanupSchedulerActive) return;
+      this.cleanupTimer = scheduleNext();
+    };
+
+    const initialDelay = scheduleAt(new Date());
+    logger.info(LOG_MODULES.CODESWARM, `[TaskCleanup] 首次清理将在 ${Math.round(initialDelay / 60000)} 分钟后执行（每天 ${hour}:05）`);
+    this.cleanupTimer = setTimeout(runCleanup, initialDelay);
+  }
+
   // 启动定时任务：掉线检测 + 超时扫描
   private startHealthChecks() {
     // 启动兜底轮询：每 5 分钟尝试分发队列中的任务（防止事件回调丢失）
@@ -696,6 +736,8 @@ const taskPayload = JSON.stringify({
     this.pendingRetryTimer = setInterval(() => this.recoverPendingMessages(), 30_000);
     // 每 5 分钟清理死消费者和过期 pending 消息
     this.streamCleanupTimer = setInterval(() => this.cleanupStaleConsumers(), 300_000);
+    // 每日清理过期任务文件
+    this.startCleanupScheduler();
   }
 
   // 3.1 Worker 掉线检测 + 任务重调度
@@ -955,11 +997,13 @@ const taskPayload = JSON.stringify({
   // 优雅关闭
   async shutdown() {
     this.running = false;
+    this.cleanupSchedulerActive = false;
     if (this.offlineCheckTimer) clearInterval(this.offlineCheckTimer);
     if (this.timeoutCheckTimer) clearInterval(this.timeoutCheckTimer);
     if (this.pendingRetryTimer) clearInterval(this.pendingRetryTimer);
     if (this.streamCleanupTimer) clearInterval(this.streamCleanupTimer);
     if (this.fallbackPollTimer) clearInterval(this.fallbackPollTimer);
+    if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
     this.teardownRedis();
   }
 }

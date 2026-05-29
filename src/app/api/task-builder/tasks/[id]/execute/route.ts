@@ -79,6 +79,10 @@ export async function POST(
       return NextResponse.json({ error: '任务状态不允许执行' }, { status: 400 });
     }
 
+    if (task.filesCleanedAt) {
+      return NextResponse.json({ error: '任务文件已被清理，请重新创建任务并上传文件' }, { status: 400 });
+    }
+
     const agentApp = await prisma.agentApp.findUnique({
       where: { id: task.agentId },
       select: {
@@ -93,7 +97,7 @@ export async function POST(
     const mergedScripts = task.mergedScripts || task.scripts || undefined;
 
     const updateResult = await prisma.taskInstance.updateMany({
-      where: { id, status: { in: ['pending', 'completed', 'failed'] } },
+      where: { id, status: { in: ['pending', 'completed', 'failed'] }, filesCleanedAt: null },
       data: {
         status: 'running',
         startedAt: new Date(),
