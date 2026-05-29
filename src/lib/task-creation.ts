@@ -168,7 +168,7 @@ export async function copyAgentHarnessFromLocal(repoName: string, destDir: strin
     if (syncResult.success) {
       serverLog.info(`[TaskCreation] AgentHarness 同步成功: ${repoName} (${syncResult.method})`);
     } else if (existsSync(sourceDir)) {
-      serverLog.warn(`[TaskCreation] AgentHarness 拉取失败，降级使用本地缓存: ${syncResult.error}`);
+      serverLog.error(`[TaskCreation] AgentHarness 拉取失败，降级使用本地缓存: ${syncResult.error}`);
     } else {
       serverLog.error(`[TaskCreation] AgentHarness 拉取失败且无本地缓存: ${syncResult.error}`);
       return false;
