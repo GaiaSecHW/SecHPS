@@ -39,7 +39,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
           {endpoint.method}
         </span>
         <code className="text-sm text-gray-200 font-mono flex-1 text-left">{endpoint.path}</code>
-        <span className="text-sm text-gray-500">{endpoint.desc}</span>
+        <span className="text-sm text-dark-text-muted">{endpoint.desc}</span>
         {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
       </button>
 
@@ -47,22 +47,22 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
         <div className="p-4 space-y-4 border-t">
           {endpoint.requestParams && endpoint.requestParams.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">URL 参数</h5>
+              <h5 className="text-xs font-medium text-dark-text-muted uppercase mb-2">URL 参数</h5>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-dark-text-muted">
                     <th className="pb-1">参数</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">必填</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-dark-text-secondary">
                   {endpoint.requestParams.map((p) => (
                     <tr key={p.name} className="border-t">
                       <td className="py-2 font-mono text-blue-400">{p.name}</td>
-                      <td className="py-2 text-gray-500">{p.type}</td>
-                      <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className="py-2 text-dark-text-muted">{p.type}</td>
+                      <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-dark-text-muted">否</span>}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
                   ))}
@@ -73,7 +73,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
           {endpoint.requestBody && endpoint.requestBody.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">请求体 (JSON)</h5>
+              <h5 className="text-xs font-medium text-dark-text-muted uppercase mb-2">请求体 (JSON)</h5>
               <pre className="bg-gray-900 text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-gray-700">
 {JSON.stringify(
   endpoint.requestBody.reduce((acc, p) => ({ ...acc, [p.name]: p.type }), {}),
@@ -82,19 +82,19 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               </pre>
               <table className="w-full text-sm mt-2">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-dark-text-muted">
                     <th className="pb-1">字段</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">必填</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-dark-text-secondary">
                   {endpoint.requestBody.map((p) => (
                     <tr key={p.name} className="border-t">
                       <td className="py-2 font-mono text-blue-400">{p.name}</td>
-                      <td className="py-2 text-gray-500">{p.type}</td>
-                      <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-gray-400">否</span>}</td>
+                      <td className="py-2 text-dark-text-muted">{p.type}</td>
+                      <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-dark-text-muted">否</span>}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
                   ))}
@@ -105,7 +105,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
           {endpoint.response && endpoint.response.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">响应示例</h5>
+              <h5 className="text-xs font-medium text-dark-text-muted uppercase mb-2">响应示例</h5>
               <pre className="bg-gray-900 text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-gray-700">
 {JSON.stringify(
   endpoint.response.reduce((acc, p) => ({ ...acc, [p.name]: p.type }), {}),
@@ -114,17 +114,17 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               </pre>
               <table className="w-full text-sm mt-2">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-dark-text-muted">
                     <th className="pb-1">字段</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-dark-text-secondary">
                   {endpoint.response.map((p) => (
                     <tr key={p.name} className="border-t">
                       <td className="py-2 font-mono text-blue-400">{p.name}</td>
-                      <td className="py-2 text-gray-500">{p.type}</td>
+                      <td className="py-2 text-dark-text-muted">{p.type}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
                   ))}
@@ -299,7 +299,7 @@ export default function SdkPage() {
           {section.description ? (
             <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg p-4">
               <h3 className="text-sm font-medium text-blue-400 mb-2">{section.category}</h3>
-              <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">{section.description}</pre>
+              <pre className="text-sm text-dark-text-secondary whitespace-pre-wrap font-mono">{section.description}</pre>
             </div>
           ) : (
             <>
@@ -315,17 +315,17 @@ export default function SdkPage() {
       ))}
 
       {/* 错误码说明 */}
-      <div className="bg-dark-surface rounded-lg p-6 border border-gray-700/50">
+      <div className="bg-dark-surface rounded-lg p-6 border border-dark-border">
         <h3 className="text-lg font-medium text-gray-200 mb-3">错误码说明</h3>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-700">
+            <tr className="text-left text-dark-text-muted border-b border-gray-700">
               <th className="pb-2">HTTP 状态码</th>
               <th className="pb-2">错误码</th>
               <th className="pb-2">说明</th>
             </tr>
           </thead>
-          <tbody className="text-gray-300">
+          <tbody className="text-dark-text-secondary">
             <tr className="border-t border-gray-800">
               <td className="py-2 font-mono text-yellow-400">400</td>
               <td className="py-2 font-mono">INVALID_REQUEST</td>
@@ -342,7 +342,7 @@ export default function SdkPage() {
               <td className="py-2">权限不足（租户不匹配或无权访问指定资源）</td>
             </tr>
             <tr className="border-t border-gray-800">
-              <td className="py-2 font-mono text-gray-400">404</td>
+              <td className="py-2 font-mono text-dark-text-muted">404</td>
               <td className="py-2 font-mono">NOT_FOUND</td>
               <td className="py-2">资源不存在</td>
             </tr>
@@ -361,15 +361,15 @@ export default function SdkPage() {
       </div>
 
       {/* 任务状态流转 */}
-      <div className="bg-dark-surface rounded-lg p-6 border border-gray-700/50">
+      <div className="bg-dark-surface rounded-lg p-6 border border-dark-border">
         <h3 className="text-lg font-medium text-gray-200 mb-3">任务状态流转</h3>
         <div className="flex items-center space-x-2 text-sm flex-wrap gap-y-2">
           <span className="px-2 py-1 bg-yellow-500/15 text-yellow-400 rounded">pending</span>
-          <span className="text-gray-500">→</span>
+          <span className="text-dark-text-muted">→</span>
           <span className="px-2 py-1 bg-blue-500/15 text-blue-400 rounded">running</span>
-          <span className="text-gray-500">→</span>
+          <span className="text-dark-text-muted">→</span>
           <span className="px-2 py-1 bg-green-500/15 text-green-400 rounded">completed</span>
-          <span className="text-gray-400 mx-2">|</span>
+          <span className="text-dark-text-muted mx-2">|</span>
           <span className="px-2 py-1 bg-red-500/15 text-red-400 rounded">failed</span>
         </div>
       </div>

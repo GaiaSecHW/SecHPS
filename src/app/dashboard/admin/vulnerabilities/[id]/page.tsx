@@ -74,14 +74,14 @@ const severityConfig: Record<string, { color: string; bg: string; text: string; 
   high: { color: '#EA580C', bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'HIGH' },
   medium: { color: '#CA8A04', bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'MEDIUM' },
   low: { color: '#2563EB', bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'LOW' },
-  info: { color: '#6B728B', bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'INFO' },
+  info: { color: '#6B728B', bg: 'bg-gray-500/20', text: 'text-dark-text-muted', label: 'INFO' },
 };
 
 const statusConfig: Record<string, { color: string; bg: string; text: string; label: string }> = {
   new: { color: '#8B5CF6', bg: 'bg-violet-500/15', text: 'text-violet-400', label: '新建' },
   confirmed: { color: '#F59E0B', bg: 'bg-amber-500/15', text: 'text-amber-400', label: '已确认' },
-  'false-positive': { color: '#64748B', bg: 'bg-gray-500/15', text: 'text-gray-400', label: '误报' },
-  false_positive: { color: '#64748B', bg: 'bg-gray-500/15', text: 'text-gray-400', label: '误报' },
+  'false-positive': { color: '#64748B', bg: 'bg-gray-500/15', text: 'text-dark-text-muted', label: '误报' },
+  false_positive: { color: '#64748B', bg: 'bg-gray-500/15', text: 'text-dark-text-muted', label: '误报' },
   fixed: { color: '#10B981', bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: '已修复' },
   verified: { color: '#06B6D4', bg: 'bg-cyan-500/15', text: 'text-cyan-400', label: '已验证' },
 };
@@ -107,14 +107,14 @@ function InfoCard({
     return (
       <a
         href={href}
-        className="group block bg-dark-bg rounded-lg p-3 border border-blue-500/30 bg-blue-500/5 hover:border-blue-500/60 hover:bg-blue-500/10 transition-all cursor-pointer"
+        className="group block bg-dark-bg rounded-lg p-3 border border-blue-500/30 bg-blue-500/5 hover:border-blue-500/60 hover:bg-indigo-500/10 transition-all cursor-pointer"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
             {icon}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-gray-500">{label}</div>
+            <div className="text-xs text-dark-text-muted">{label}</div>
             <div className="text-sm text-blue-400 truncate mt-0.5 flex items-center gap-1.5">
               <span className="truncate">{value}</span>
               <ExternalLink size={12} className="flex-shrink-0" />
@@ -127,11 +127,11 @@ function InfoCard({
   
   return (
     <div className="bg-dark-bg rounded-lg p-3 border border-gray-700/30 flex items-center gap-3">
-      <div className="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center text-gray-400">
+      <div className="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center text-dark-text-muted">
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-gray-500">{label}</div>
+        <div className="text-xs text-dark-text-muted">{label}</div>
         <div className="text-sm text-white truncate mt-0.5" style={color ? { color } : {}}>
           {value}
         </div>
@@ -156,7 +156,7 @@ function CodeBlock({ code, label = '代码' }: { code: string; label?: string })
 
   return (
     <div className="relative group">
-      <pre className="text-sm bg-[#0B1120] text-gray-100 p-4 rounded-lg overflow-x-auto whitespace-pre-wrap border border-gray-700/30 font-mono">
+      <pre className="text-sm bg-[#0B1120] text-dark-text p-4 rounded-lg overflow-x-auto whitespace-pre-wrap border border-gray-700/30 font-mono">
         {code}
       </pre>
       <button
@@ -164,7 +164,7 @@ function CodeBlock({ code, label = '代码' }: { code: string; label?: string })
         className="absolute top-2 right-2 p-2 bg-gray-700/80 hover:bg-gray-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
         title={`复制${label}`}
       >
-        {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-gray-300" />}
+        {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-dark-text-secondary" />}
       </button>
     </div>
   );
@@ -177,7 +177,7 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
   }
 
   return (
-    <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
+    <div className="bg-dark-surface rounded-xl border border-dark-border p-5">
       <div className="flex items-center gap-2 mb-4">
         <Clock size={18} className="text-cyan-400" />
         <h2 className="text-base font-semibold text-white">处理流程</h2>
@@ -195,7 +195,7 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   isActive 
                     ? '' 
-                    : 'bg-gray-700/30 text-gray-500'
+                    : 'bg-gray-700/30 text-dark-text-muted'
                 }`}
                 style={isActive ? { backgroundColor: `${config.color}20`, color: config.color } : {}}
               >
@@ -211,28 +211,28 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
 
       {vulnerability.status === 'false-positive' || vulnerability.status === 'false_positive' ? (
         <div className="mt-4 p-3 bg-gray-500/10 rounded-lg border border-gray-500/30">
-          <div className="flex items-center gap-2 text-gray-400">
+          <div className="flex items-center gap-2 text-dark-text-muted">
             <XCircle size={16} />
             <span className="text-sm font-medium">已标记为误报</span>
           </div>
           {vulnerability.falsePositiveReason && (
-            <p className="text-xs text-gray-500 mt-2">{vulnerability.falsePositiveReason}</p>
+            <p className="text-xs text-dark-text-muted mt-2">{vulnerability.falsePositiveReason}</p>
           )}
         </div>
       ) : (
         <div className="space-y-3 mt-4">
           <div className="flex items-center gap-3 text-sm">
             <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-gray-500">创建于</span>
+            <span className="text-dark-text-muted">创建于</span>
             <span className="text-white">{new Date(vulnerability.createdAt).toLocaleString()}</span>
           </div>
           {vulnerability.confirmedAt && (
             <div className="flex items-center gap-3 text-sm">
               <div className="w-2 h-2 rounded-full bg-amber-500" />
-              <span className="text-gray-500">确认于</span>
+              <span className="text-dark-text-muted">确认于</span>
               <span className="text-white">{new Date(vulnerability.confirmedAt).toLocaleString()}</span>
               {vulnerability.confirmedBy && (
-                <span className="text-gray-400 flex items-center gap-1">
+                <span className="text-dark-text-muted flex items-center gap-1">
                   <User size={12} />
                   {vulnerability.confirmedBy}
                 </span>
@@ -242,10 +242,10 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
           {vulnerability.fixedAt && (
             <div className="flex items-center gap-3 text-sm">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-gray-500">修复于</span>
+              <span className="text-dark-text-muted">修复于</span>
               <span className="text-white">{new Date(vulnerability.fixedAt).toLocaleString()}</span>
               {vulnerability.fixedBy && (
-                <span className="text-gray-400 flex items-center gap-1">
+                <span className="text-dark-text-muted flex items-center gap-1">
                   <User size={12} />
                   {vulnerability.fixedBy}
                 </span>
@@ -255,10 +255,10 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
           {vulnerability.verifiedAt && (
             <div className="flex items-center gap-3 text-sm">
               <div className="w-2 h-2 rounded-full bg-cyan-500" />
-              <span className="text-gray-500">验证于</span>
+              <span className="text-dark-text-muted">验证于</span>
               <span className="text-white">{new Date(vulnerability.verifiedAt).toLocaleString()}</span>
               {vulnerability.verifiedBy && (
-                <span className="text-gray-400 flex items-center gap-1">
+                <span className="text-dark-text-muted flex items-center gap-1">
                   <User size={12} />
                   {vulnerability.verifiedBy}
                 </span>
@@ -382,7 +382,7 @@ function VulnerabilityDetailContent() {
         </div>
         <button
           onClick={() => router.push('/dashboard/admin/vulnerabilities')}
-          className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+          className="inline-flex items-center px-4 py-2 bg-gray-700 text-dark-text-secondary rounded-lg hover:bg-gray-600 transition-colors"
         >
           <ArrowLeft size={16} className="mr-2" />
           返回列表
@@ -410,7 +410,7 @@ function VulnerabilityDetailContent() {
           <button
             onClick={() => handleAction('false-positive')}
             disabled={actionLoading === 'false-positive'}
-            className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-gray-700 text-dark-text-secondary rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
           >
             <XCircle size={16} className="mr-2" />
             标记误报
@@ -433,7 +433,7 @@ function VulnerabilityDetailContent() {
           <button
             onClick={() => handleAction('false-positive')}
             disabled={actionLoading === 'false-positive'}
-            className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-gray-700 text-dark-text-secondary rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
           >
             <XCircle size={16} className="mr-2" />
             标记误报
@@ -460,14 +460,14 @@ function VulnerabilityDetailContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <header className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+      <header className="bg-dark-surface border border-dark-border rounded-xl px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard/admin/vulnerabilities')}
               className="p-2 hover:bg-dark-bg rounded-lg transition-colors"
             >
-              <ArrowLeft size={18} className="text-gray-400" />
+              <ArrowLeft size={18} className="text-dark-text-muted" />
             </button>
             <div className="flex items-center gap-3">
               <div
@@ -492,12 +492,12 @@ function VulnerabilityDetailContent() {
                     {statConfig.label}
                   </span>
                   {vulnerability.cwe && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-gray-700/50 text-gray-400">
+                    <span className="px-2 py-0.5 rounded text-xs bg-gray-700/50 text-dark-text-muted">
                       {vulnerability.cwe}
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500 mt-1">{vulnerability.type}</p>
+                <p className="text-sm text-dark-text-muted mt-1">{vulnerability.type}</p>
               </div>
             </div>
           </div>
@@ -541,7 +541,7 @@ function VulnerabilityDetailContent() {
                     toast.error(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`);
                   }
                 }}
-                className="inline-flex items-center px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+                className="inline-flex items-center px-3 py-2 bg-gray-700 text-dark-text-secondary rounded-lg hover:bg-gray-600 transition-colors"
               >
                 <Download size={16} className="mr-2" />
                 下载报告
@@ -594,19 +594,19 @@ function VulnerabilityDetailContent() {
         {/* Left Column - Content (2/3) */}
         <div className="lg:col-span-2 space-y-5">
           {/* Description */}
-          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
+          <div className="bg-dark-surface rounded-xl border border-dark-border p-5">
             <div className="flex items-center gap-2 mb-4">
               <MessageSquare size={18} className="text-purple-400" />
               <h2 className="text-base font-semibold text-white">漏洞概述</h2>
             </div>
-            <div className="text-gray-300 leading-relaxed whitespace-pre-wrap text-sm">
+            <div className="text-dark-text-secondary leading-relaxed whitespace-pre-wrap text-sm">
               {vulnerability.description}
             </div>
           </div>
 
           {/* Location */}
           {vulnerability.location && (
-            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-dark-border p-5">
               <div className="flex items-center gap-2 mb-4">
                 <MapPin size={18} className="text-rose-400" />
                 <h2 className="text-base font-semibold text-white">代码位置</h2>
@@ -617,7 +617,7 @@ function VulnerabilityDetailContent() {
 
           {/* POC */}
           {vulnerability.POC && (
-            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-dark-border p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Code size={18} className="text-cyan-400" />
                 <h2 className="text-base font-semibold text-white">PoC 验证</h2>
@@ -628,12 +628,12 @@ function VulnerabilityDetailContent() {
 
           {/* Fix Suggestion */}
           {vulnerability.fixSuggestion && (
-            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-dark-border p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Wrench size={18} className="text-emerald-400" />
                 <h2 className="text-base font-semibold text-white">修复建议</h2>
               </div>
-              <div className="text-gray-300 leading-relaxed whitespace-pre-wrap text-sm">
+              <div className="text-dark-text-secondary leading-relaxed whitespace-pre-wrap text-sm">
                 {vulnerability.fixSuggestion}
               </div>
             </div>
@@ -645,12 +645,12 @@ function VulnerabilityDetailContent() {
           <StatusTimeline vulnerability={vulnerability} />
 
           {vulnerability.notes && (
-            <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5">
+            <div className="bg-dark-surface rounded-xl border border-dark-border p-5">
               <div className="flex items-center gap-2 mb-4">
-                <MessageSquare size={18} className="text-gray-400" />
+                <MessageSquare size={18} className="text-dark-text-muted" />
                 <h2 className="text-base font-semibold text-white">备注</h2>
               </div>
-              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
+              <div className="text-sm text-dark-text-secondary leading-relaxed whitespace-pre-wrap">
                 {vulnerability.notes}
               </div>
             </div>
@@ -661,10 +661,10 @@ function VulnerabilityDetailContent() {
       {/* False Positive Modal */}
       {showFalsePositiveModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 max-w-md w-full mx-4">
+          <div className="bg-dark-surface rounded-xl border border-dark-border p-5 max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <XCircle size={18} className="text-gray-400" />
+                <XCircle size={18} className="text-dark-text-muted" />
                 <h3 className="text-base font-semibold text-white">标记为误报</h3>
               </div>
               <button
@@ -672,19 +672,19 @@ function VulnerabilityDetailContent() {
                   setShowFalsePositiveModal(false);
                   setFalsePositiveReasonInput('');
                 }}
-                className="p-1.5 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 hover:bg-dark-surface-hover rounded-lg text-dark-text-muted hover:text-white transition-colors"
               >
                 <X size={16} />
               </button>
             </div>
-            <p className="text-sm text-gray-400 mb-3">
+            <p className="text-sm text-dark-text-muted mb-3">
               请输入误报原因（可选）
             </p>
             <textarea
               value={falsePositiveReasonInput}
               onChange={(e) => setFalsePositiveReasonInput(e.target.value)}
               placeholder="例如：该代码已进行输入验证，不存在漏洞..."
-              className="w-full px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-white resize-none"
+              className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-white resize-none"
               rows={4}
             />
             <div className="mt-4 flex justify-end gap-3">
@@ -693,7 +693,7 @@ function VulnerabilityDetailContent() {
                   setShowFalsePositiveModal(false);
                   setFalsePositiveReasonInput('');
                 }}
-                className="px-4 py-2 text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 text-dark-text-secondary bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
               >
                 取消
               </button>

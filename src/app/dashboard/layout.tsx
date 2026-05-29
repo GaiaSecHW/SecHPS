@@ -1,52 +1,85 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
-  Home,
   LayoutDashboard,
   Users,
-  Settings,
-  MessageSquare,
   LogOut,
-  Cog,
   ClipboardCheck,
   User,
-  Clock,
   Award,
   Bug,
   TrendingUp,
   Brain,
   Zap,
-  Code,
   Activity,
-  Shield,
-  Search,
   Terminal,
-  Puzzle,
   Server,
-  Tags,
   Layers,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Coins,
   GitBranch,
-  Megaphone,
   ClipboardList,
   Box,
   Key,
   Network,
+  X,
+  ArrowLeft,
+  Home,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+import type { ReactNode } from 'react';
+
+const PAGE_META: Record<string, { title: string; icon: ReactNode }> = {
+  '/dashboard': { title: '首页', icon: <Home size={20} /> },
+  '/dashboard/overview': { title: '仪表盘', icon: <LayoutDashboard size={20} /> },
+  '/dashboard/task-builder': { title: '我的任务', icon: <ClipboardList size={20} /> },
+  '/dashboard/skills': { title: 'Skill 市场', icon: <Award size={20} /> },
+  '/dashboard/skills/create': { title: '快速创建', icon: <Award size={20} /> },
+  '/dashboard/skills/create-wizard': { title: '引导创建', icon: <Award size={20} /> },
+  '/dashboard/skills/import-create': { title: '导入创建', icon: <Award size={20} /> },
+  '/dashboard/mcp-servers': { title: 'MCP 市场', icon: <Server size={20} /> },
+  '/dashboard/agent-apps': { title: 'Agent 市场', icon: <Box size={20} /> },
+  '/dashboard/agent-apps/developer-guide': { title: '开发者指南', icon: <Box size={20} /> },
+  '/dashboard/agentflow-pipelines': { title: '工作流编排', icon: <Layers size={20} /> },
+  '/dashboard/evolution': { title: '智能体进化', icon: <TrendingUp size={20} /> },
+  '/dashboard/knowledge-graph': { title: '知识图谱', icon: <Network size={20} /> },
+  '/dashboard/data-feedback': { title: '数据回流', icon: <GitBranch size={20} /> },
+  '/dashboard/evaluation': { title: '测评基准', icon: <ClipboardCheck size={20} /> },
+  '/dashboard/users': { title: '用户管理', icon: <Users size={20} /> },
+  '/dashboard/models': { title: '模型管理', icon: <Zap size={20} /> },
+  '/dashboard/admin/tenants': { title: '租户管理', icon: <Layers size={20} /> },
+  '/dashboard/admin/api-keys': { title: 'API Key 管理', icon: <Key size={20} /> },
+  '/dashboard/admin/sdk': { title: '系统 SDK', icon: <Terminal size={20} /> },
+  '/dashboard/admin/monitoring': { title: '系统监控', icon: <Activity size={20} /> },
+  '/dashboard/admin/vulnerabilities': { title: '漏洞管理', icon: <Bug size={20} /> },
+  '/dashboard/codeswarm': { title: '智能体集群', icon: <Server size={20} /> },
+  '/dashboard/profile': { title: '个人中心', icon: <User size={20} /> },
+  '/dashboard/token-stats': { title: 'Token 统计', icon: <Coins size={20} /> },
+  '/dashboard/plugins': { title: '插件管理', icon: <Box size={20} /> },
+  '/dashboard/config': { title: '系统配置', icon: <Activity size={20} /> },
+};
+
+function getPageMeta(pathname: string): { title: string; icon: ReactNode } | null {
+  if (PAGE_META[pathname]) return PAGE_META[pathname];
+  return null;
+}
+
+function getParentMeta(pathname: string): { path: string; title: string; icon: ReactNode } | null {
+  const match = Object.keys(PAGE_META)
+    .filter(k => k !== pathname && k !== '/dashboard' && pathname.startsWith(k + '/'))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ? { path: match, ...PAGE_META[match] } : null;
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <DashboardLayoutContent>{children}</DashboardLayoutContent>
@@ -54,19 +87,17 @@ export default function DashboardLayout({
   );
 }
 
-function DashboardLayoutContent({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
   const [sidebarCollapsed, setSidebarCollapsed] = useState(searchParams.get('sidebar') === 'collapsed');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [banner, setBanner] = useState<{ content: string; color: string } | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -82,16 +113,13 @@ function DashboardLayoutContent({
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-
     if (!token || !userData) {
       router.push('/login');
       return;
     }
-
     try {
-      const parsedUser = JSON.parse(userData);
-      setUser(parsedUser);
-    } catch (e) {
+      setUser(JSON.parse(userData));
+    } catch {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       document.cookie = 'auth-token=; path=/; max-age=0';
@@ -101,7 +129,20 @@ function DashboardLayoutContent({
     setLoading(false);
   }, [router]);
 
-  // 强制改密模态框状态
+  useEffect(() => {
+    fetch('/api/broadcast')
+      .then(res => res.json())
+      .then(data => {
+        if (data.config?.enabled && data.config?.content) {
+          const key = `banner-dismissed-${btoa(data.config.content).slice(0, 16)}`;
+          if (!sessionStorage.getItem(key)) {
+            setBanner({ content: data.config.content, color: data.config.color || 'blue' });
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [forceChangePassword, setForceChangePassword] = useState(false);
   const [fcNewPassword, setFcNewPassword] = useState('');
   const [fcConfirmPassword, setFcConfirmPassword] = useState('');
@@ -117,36 +158,22 @@ function DashboardLayoutContent({
   const handleForceChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setFcError('');
-
-    if (fcNewPassword.length < 6) {
-      setFcError('新密码长度至少为 6 位');
-      return;
-    }
-    if (fcNewPassword !== fcConfirmPassword) {
-      setFcError('两次输入的密码不一致');
-      return;
-    }
-
+    if (fcNewPassword.length < 6) { setFcError('新密码长度至少为 6 位'); return; }
+    if (fcNewPassword !== fcConfirmPassword) { setFcError('两次输入的密码不一致'); return; }
     setFcLoading(true);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('/api/users/password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ newPassword: fcNewPassword, forceChange: true }),
       });
-
       if (!response.ok) {
         const data = await response.json();
         setFcError(data.details?.error || data.error || '修改密码失败');
         setFcLoading(false);
         return;
       }
-
-      // 强制注销
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       document.cookie = 'auth-token=; path=/; max-age=0';
@@ -164,55 +191,69 @@ function DashboardLayoutContent({
     router.push('/login');
   }, [router]);
 
+  const dismissBanner = useCallback(() => {
+    if (banner) {
+      const key = `banner-dismissed-${btoa(banner.content).slice(0, 16)}`;
+      sessionStorage.setItem(key, '1');
+    }
+    setBannerDismissed(true);
+  }, [banner]);
+
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed(prev => !prev);
   }, []);
 
   const sidebarWidth = sidebarCollapsed ? 64 : 240;
+  const pageMeta = getPageMeta(pathname);
+  const parentMeta = getParentMeta(pathname);
+  const isSubPage = parentMeta !== null;
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-zinc-950">
+      <div className="h-screen w-screen flex items-center justify-center bg-dark-bg">
         <LoadingSpinner size="xl" />
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-zinc-950">
+    <div className="h-screen w-screen overflow-hidden bg-dark-bg">
       <div className="flex h-full">
         <aside
-          className={`fixed left-0 top-0 h-screen bg-zinc-900 border-r border-zinc-800 flex flex-col transition-all duration-300 ease-in-out z-30`}
+          className="fixed left-0 top-0 h-screen bg-dark-surface border-r border-dark-border flex flex-col transition-all duration-300 ease-in-out z-30"
           style={{ width: sidebarWidth }}
         >
           <button
             onClick={toggleSidebar}
-            className="absolute -right-3 top-6 z-40 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 hover:bg-cyan-600 hover:text-white transition-colors shadow-lg border border-zinc-700"
+            className="absolute -right-3 top-6 z-40 flex h-6 w-6 items-center justify-center rounded-full bg-dark-surface-hover text-dark-text-secondary hover:bg-indigo-600 hover:text-white transition-colors shadow-lg border border-dark-border"
             title={sidebarCollapsed ? '展开菜单' : '收起菜单'}
           >
             {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
           </button>
 
-          <div className={`border-b border-zinc-800/60 overflow-hidden ${sidebarCollapsed ? 'p-3 flex justify-center' : 'px-5 py-5'}`}>
+          <div className={`border-b border-dark-border overflow-hidden flex items-center ${sidebarCollapsed ? 'h-14 justify-center px-3' : 'h-14 px-5'}`}>
             {sidebarCollapsed ? (
-              <Brain size={22} className="text-cyan-400" />
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                <span className="text-white text-xs font-bold">S</span>
+              </div>
             ) : (
-              <>
-                <p className="text-xs text-zinc-500 mt-1 truncate">
-                  {user?.name || user?.username}
-                </p>
-              </>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xs font-bold">S</span>
+                </div>
+                <span className="text-lg font-semibold text-dark-text">SecHPS</span>
+              </div>
             )}
           </div>
 
           <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5 custom-scrollbar sidebar-scrollbar">
             {!sidebarCollapsed && (
               <div className="pt-3 pb-1 px-4">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">使用者视图</p>
+                <p className="text-[10px] text-dark-text-muted uppercase tracking-widest font-medium">使用者视图</p>
               </div>
             )}
-            {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
-            
+            {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
+
             <NavLink href="/dashboard" icon={<Home size={18} />} collapsed={sidebarCollapsed} exact pathname={pathname}>
               首页
             </NavLink>
@@ -227,10 +268,10 @@ function DashboardLayoutContent({
               <>
                 {!sidebarCollapsed && (
                   <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">开发者视图</p>
+                    <p className="text-[10px] text-dark-text-muted uppercase tracking-widest font-medium">开发者视图</p>
                   </div>
                 )}
-                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
+                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
 
                 <NavLink href="/dashboard/skills" icon={<Award size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   Skill市场
@@ -242,22 +283,22 @@ function DashboardLayoutContent({
                   Agent市场
                 </NavLink>
                 <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  工作流编排<span className="text-[10px] text-blue-400 ml-1">(建设中)</span>
+                  工作流编排
                 </NavLink>
               </>
             )}
 
-            {user?.roles?.includes('admin') && (
+            {(user?.isIcsTenant || user?.roles?.includes('admin')) && (
               <>
                 {!sidebarCollapsed && (
                   <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">数据与进化</p>
+                    <p className="text-[10px] text-dark-text-muted uppercase tracking-widest font-medium">数据与进化</p>
                   </div>
                 )}
-                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
+                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
 
                 <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  智能体进化<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
+                  智能体进化<span className="text-[10px] text-indigo-400 ml-1">(对接中)</span>
                 </NavLink>
                 <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   知识图谱
@@ -266,7 +307,7 @@ function DashboardLayoutContent({
                   数据回流
                 </NavLink>
                 <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  测评基准<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
+                  测评基准<span className="text-[10px] text-indigo-400 ml-1">(对接中)</span>
                 </NavLink>
               </>
             )}
@@ -275,11 +316,11 @@ function DashboardLayoutContent({
               <>
                 {!sidebarCollapsed && (
                   <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">管理员视图</p>
+                    <p className="text-[10px] text-dark-text-muted uppercase tracking-widest font-medium">管理员视图</p>
                   </div>
                 )}
-                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
-                
+                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-dark-border" />}
+
                 <NavLink href="/dashboard/users" icon={<Users size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   用户管理
                 </NavLink>
@@ -308,124 +349,117 @@ function DashboardLayoutContent({
             )}
           </nav>
 
-          <div className={`border-t border-zinc-800/60 flex-shrink-0 ${sidebarCollapsed ? 'p-2' : 'p-3'}`}>
+          <div className="border-t border-dark-border flex-shrink-0 relative" ref={userMenuRef}>
             <button
-              onClick={handleLogout}
-              className={`flex items-center text-zinc-500 hover:text-zinc-200 transition-colors w-full rounded-lg px-2 py-2 hover:bg-zinc-800 ${sidebarCollapsed ? 'justify-center' : 'gap-2'}`}
-              title={sidebarCollapsed ? '退出登录' : undefined}
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className={`flex items-center w-full transition-colors hover:bg-dark-surface-hover ${sidebarCollapsed ? 'justify-center p-3' : 'gap-2.5 px-4 py-3'}`}
             >
-              <LogOut size={18} className="flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm truncate">退出登录</span>}
+              {user?.avatar ? (
+                <img src={user.avatar} alt={user.name || user.username} className="w-8 h-8 rounded-full ring-2 ring-indigo-500/30 flex-shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-indigo-600/80 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                  {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                </div>
+              )}
+              {!sidebarCollapsed && (
+                <>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-dark-text truncate">{user?.name || user?.username}</p>
+                      {user?.roles?.includes('admin') && !user?.tenantId && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20 whitespace-nowrap">
+                          平台管理员
+                        </span>
+                      )}
+                      {user?.isIcsTenant && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20 whitespace-nowrap">
+                          ICSL
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-dark-text-muted truncate">{user?.email}</p>
+                    {user?.tenantId && (
+                      <p className="text-[10px] text-indigo-400 truncate">租户: {user?.tenantName || user?.tenantId}</p>
+                    )}
+                  </div>
+                  <ChevronUp size={14} className={`text-dark-text-muted transition-transform ${showUserMenu ? '' : 'rotate-180'}`} />
+                </>
+              )}
             </button>
+
+            {showUserMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                <div className={`absolute bottom-full mb-1 bg-dark-surface-hover border border-dark-border rounded-lg shadow-xl z-50 py-1 ${sidebarCollapsed ? 'left-2 w-48' : 'left-2 right-2'}`}>
+                  <Link
+                    href="/dashboard/profile"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-dark-text-secondary hover:bg-dark-border hover:text-dark-text transition-colors"
+                  >
+                    <User size={15} />
+                    个人中心
+                  </Link>
+                  <Link
+                    href="/dashboard/models"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-dark-text-secondary hover:bg-dark-border hover:text-dark-text transition-colors"
+                  >
+                    <Brain size={15} />
+                    我的模型
+                  </Link>
+                  <Link
+                    href="/dashboard/token-stats"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-dark-text-secondary hover:bg-dark-border hover:text-dark-text transition-colors"
+                  >
+                    <Coins size={15} />
+                    Token 统计
+                  </Link>
+                  <div className="my-1 border-t border-dark-border" />
+                  <button
+                    onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-dark-text-secondary hover:bg-red-500/10 hover:text-red-400 transition-colors w-full"
+                  >
+                    <LogOut size={15} />
+                    退出登录
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </aside>
 
-        <div 
-          className="fixed right-0 top-0 h-screen flex flex-col transition-all duration-300 ease-in-out"
+        <div
+          className="fixed right-0 top-0 h-screen flex flex-col transition-all duration-300 ease-in-out z-20"
           style={{ left: sidebarWidth }}
         >
-          <header className="h-14 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0 relative z-50">
-            <div className="h-full flex items-center justify-between px-4 md:px-6 lg:px-8 gap-4">
-              <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
-              </div>
-
-              <div className="flex items-center flex-shrink-0">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 bg-zinc-950/50 rounded-lg px-3 py-2 border border-zinc-700/30 hover:border-zinc-600/50 transition-colors max-w-xs md:max-w-sm lg:max-w-md"
-                  >
-                    {user?.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name || user.username}
-                        className="h-8 w-8 rounded-full ring-2 ring-cyan-500/30 flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-cyan-600 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm">
-                        {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-0.5 text-left overflow-hidden min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-zinc-100 text-sm truncate">{user?.name || user?.username}</span>
-                        {user?.roles?.includes('admin') && !user?.tenantId && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20 whitespace-nowrap">
-                            平台管理员
-                          </span>
-                        )}
-                        {user?.isIcsTenant && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20 whitespace-nowrap">
-                            ICSL
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
-                    </div>
-
-                    {user?.tenantId && (
-                      <>
-                        <div className="w-px h-6 bg-zinc-700/50 flex-shrink-0 hidden md:block" />
-                        <div className="flex flex-col gap-0.5 flex-shrink-0 hidden md:flex">
-                          <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded bg-blue-500/20 flex items-center justify-center">
-                              <span className="text-blue-400 text-[10px]">🏢</span>
-                            </div>
-                            <span className="text-zinc-400 text-[10px]">租户</span>
-                          </div>
-                          <span className="font-medium text-blue-400 text-xs truncate max-w-[80px]">{user?.tenantName || user?.tenantId}</span>
-                        </div>
-                      </>
-                    )}
+          <header className="h-14 bg-dark-surface/80 backdrop-blur-sm border-b border-dark-border flex-shrink-0 px-[3.5rem] md:px-[4rem]">
+            <div className="h-full flex items-center gap-2.5 w-full max-w-screen-2xl mx-auto">
+              {isSubPage ? (
+                <>
+                  <button onClick={() => router.back()} className="p-1 -ml-1 mr-1 text-dark-text-muted hover:text-dark-text rounded-md hover:bg-dark-surface-hover transition-colors">
+                    <ArrowLeft size={18} />
                   </button>
-
-                  {showUserMenu && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-30 py-1">
-                        <Link
-                          href="/dashboard/profile"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                        >
-                          <User size={15} />
-                          个人中心
-                        </Link>
-                        <Link
-                          href="/dashboard/models"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                        >
-                          <Brain size={15} />
-                          我的模型
-                        </Link>
-                        <Link
-                          href="/dashboard/token-stats"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                        >
-                          <Coins size={15} />
-                          Token 统计
-                        </Link>
-                        <div className="my-1 border-t border-zinc-800" />
-                        <button
-                          onClick={() => { setShowUserMenu(false); handleLogout(); }}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-400 hover:bg-red-500/10 hover:text-red-400 transition-colors w-full"
-                        >
-                          <LogOut size={15} />
-                          退出登录
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+                  <Link href={parentMeta!.path} className="flex items-center gap-2 text-dark-text-muted hover:text-dark-text-secondary transition-colors">
+                    <span className="text-dark-text-muted">{parentMeta!.icon}</span>
+                    <span className="text-sm">{parentMeta!.title}</span>
+                  </Link>
+                  <span className="text-dark-text-muted text-sm">/</span>
+                  <span className="text-sm font-medium text-dark-text">{pageMeta?.title || '详情'}</span>
+                </>
+              ) : (
+                <>
+                  {pageMeta && <span className="text-dark-text-secondary">{pageMeta.icon}</span>}
+                  <h1 className="text-lg font-semibold text-dark-text">{pageMeta?.title || ''}</h1>
+                </>
+              )}
             </div>
           </header>
 
-          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-zinc-950 custom-scrollbar content-scrollbar">
-            <div className="w-full min-h-full p-4 md:p-6 lg:p-6">
+          {banner && !bannerDismissed && <NotificationBanner content={banner.content} color={banner.color} onDismiss={dismissBanner} />}
+
+          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-dark-bg custom-scrollbar content-scrollbar">
+            <div className="w-full min-h-full p-4 md:p-6">
               <div className="w-full max-w-screen-2xl mx-auto">
                 <ErrorBoundary>
                   {children}
@@ -436,57 +470,57 @@ function DashboardLayoutContent({
         </div>
       </div>
 
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#18181B',
-            color: '#FAFAFA',
-            border: '1px solid #27272A',
-          },
-          success: {
-            style: {
-              background: '#065F46',
-              border: '1px solid #059669',
-            },
-          },
-          error: {
-            style: {
-              background: '#7F1D1D',
-              border: '1px solid #DC2626',
-            },
-          },
-        }}
-      />
-
-      {/* 强制改密遮罩 */}
       {forceChangePassword && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100]">
-          <div className="bg-dark-surface rounded-xl shadow-2xl border border-gray-700/50 w-full max-w-md mx-4">
-            <div className="px-6 py-4 border-b border-gray-700/50">
-              <h3 className="text-lg font-semibold text-white">首次登录 — 修改初始密码</h3>
-              <p className="text-sm text-gray-400 mt-1">请修改初始密码后方可使用系统</p>
-            </div>
-            <form className="p-6 space-y-4" onSubmit={handleForceChangePassword}>
-              {fcError && (
-                <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">{fcError}</div>
-              )}
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
+          <div className="bg-dark-surface border border-dark-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h2 className="text-lg font-semibold text-dark-text mb-2">修改密码</h2>
+            <p className="text-sm text-dark-text-muted mb-4">首次登录需要修改密码后才能继续使用</p>
+            <form onSubmit={handleForceChangePassword} className="space-y-4">
+              {fcError && <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm">{fcError}</div>}
               <div>
-                <label className="block text-sm font-medium text-gray-300">新密码 <span className="text-red-400">*</span></label>
-                <input type="password" required value={fcNewPassword} onChange={(e) => setFcNewPassword(e.target.value)} minLength={6} className="mt-1 block w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100" placeholder="至少 6 位" />
+                <label className="block text-sm text-dark-text-secondary mb-1">新密码</label>
+                <input type="password" value={fcNewPassword} onChange={e => setFcNewPassword(e.target.value)} className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-sm text-dark-text focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="至少 6 位" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300">确认新密码 <span className="text-red-400">*</span></label>
-                <input type="password" required value={fcConfirmPassword} onChange={(e) => setFcConfirmPassword(e.target.value)} minLength={6} className="mt-1 block w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100" placeholder="再次输入新密码" />
+                <label className="block text-sm text-dark-text-secondary mb-1">确认密码</label>
+                <input type="password" value={fcConfirmPassword} onChange={e => setFcConfirmPassword(e.target.value)} className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-sm text-dark-text focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="再次输入新密码" required />
               </div>
-              <button type="submit" disabled={fcLoading} className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-md hover:bg-primary-400 font-medium disabled:opacity-50">
-                {fcLoading ? '提交中...' : '确认修改并重新登录'}
+              <button type="submit" disabled={fcLoading} className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm font-medium disabled:opacity-50">
+                {fcLoading ? '提交中...' : '确认修改'}
               </button>
             </form>
           </div>
         </div>
       )}
+
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: { background: '#2c2c2e', color: '#e5e5e5', border: '1px solid #3a3a3c' },
+          success: { style: { background: '#064e3b', border: '1px solid #059669' } },
+          error: { style: { background: '#7f1d1d', border: '1px solid #dc2626' } },
+        }}
+      />
+    </div>
+  );
+}
+
+function NotificationBanner({ content, color, onDismiss }: { content: string; color: string; onDismiss: () => void }) {
+  const colorStyles: Record<string, string> = {
+    blue: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-200',
+    yellow: 'bg-amber-500/10 border-amber-500/30 text-amber-200',
+    red: 'bg-red-500/10 border-red-500/30 text-red-200',
+    green: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200',
+  };
+  const style = colorStyles[color] || colorStyles.blue;
+
+  return (
+    <div className={`flex items-center justify-between px-4 py-2 border-b text-sm ${style}`}>
+      <span>{content}</span>
+      <button onClick={onDismiss} className="ml-3 p-0.5 rounded hover:bg-white/10 transition-colors flex-shrink-0">
+        <X size={14} />
+      </button>
     </div>
   );
 }
@@ -498,6 +532,7 @@ function NavLink({
   collapsed,
   exact,
   pathname,
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
@@ -505,6 +540,7 @@ function NavLink({
   collapsed?: boolean;
   exact?: boolean;
   pathname: string;
+  badge?: string;
 }) {
   const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
 
@@ -513,13 +549,18 @@ function NavLink({
       href={href}
       className={`flex items-center px-3 py-2 mx-2 rounded-lg transition-colors text-sm ${
         isActive
-          ? 'bg-cyan-500/15 text-cyan-400 border-l-2 border-cyan-500'
-          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+          ? 'bg-indigo-500/10 text-indigo-400 font-medium'
+          : 'text-dark-text-secondary hover:bg-dark-surface-hover hover:text-dark-text'
       } ${collapsed ? 'justify-center' : 'gap-3'}`}
       title={collapsed ? String(children) : undefined}
     >
       <span className="flex-shrink-0 w-[18px] h-[18px]">{icon}</span>
-      {!collapsed && <span className="truncate min-w-0">{children}</span>}
+      {!collapsed && (
+        <>
+          <span className="truncate min-w-0">{children}</span>
+          {badge && <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-dark-surface-hover text-dark-text-muted">{badge}</span>}
+        </>
+      )}
     </Link>
   );
 }

@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
   Save,
   X,
   Loader2,
@@ -231,25 +230,25 @@ export default function CreateSkillPage() {
   };
 
   return (
-    <div className="bg-[#0F172A]">
+    <div>
       {aiGenerating && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-dark-surface rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center animate-pulse">
-              <Sparkles size={32} className="text-white" />
+          <div className="bg-dark-surface border border-dark-border rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
+            <div className="w-14 h-14 rounded-full bg-indigo-600 flex items-center justify-center animate-pulse">
+              <Sparkles size={28} className="text-white" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-100">AI 正在生成 Skill</h3>
-            <p className="text-sm text-gray-500 text-center">
+            <h3 className="text-base font-semibold text-dark-text">AI 正在生成 Skill</h3>
+            <p className="text-sm text-dark-text-muted text-center">
               大模型内容生成中，请勿关闭页面或进行其他操作...
             </p>
-            <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-dark-surface-hover rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"
+                className="h-full bg-indigo-500 rounded-full"
                 style={{ width: `${Math.max(5, 100 - (aiCountdown / 300) * 100)}%`, transition: 'width 1s linear' }}
               />
             </div>
             {aiCountdown > 0 && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-dark-text-muted">
                 最长等待 {Math.floor(aiCountdown / 60)}:{String(aiCountdown % 60).padStart(2, '0')}，超时将自动解锁
               </p>
             )}
@@ -257,58 +256,38 @@ export default function CreateSkillPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-dark-surface border-b border-gray-700/50">
-        <div className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-1.5 text-gray-400 hover:text-gray-100 hover:bg-gray-700/30 rounded transition-colors"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold text-white">快速创建 Skill</h1>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="p-5">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="max-w-2xl mx-auto">
+        <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg text-sm">
                 {error}
               </div>
             )}
 
-            <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-4">
-              {/* 基本信息 */}
+            <div className="bg-dark-surface border border-dark-border rounded-xl p-5 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Skill 名称 <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-dark-text-secondary mb-1.5">
+                    Skill 名称 <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="例如：SQL注入检测"
-                    className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
+                    className="w-full px-3 py-2 text-sm bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text placeholder-dark-text-muted"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    分类 <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-dark-text-secondary mb-1.5">
+                    分类 <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
+                    className="w-full px-3 py-2 text-sm bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-dark-text"
                     disabled={loadingCategories}
                   >
                     <option value="">{loadingCategories ? '加载中...' : '请选择分类'}</option>
@@ -320,9 +299,9 @@ export default function CreateSkillPage() {
               </div>
 
               {selectedCategory?.hasSubDimension && (
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    漏洞模式 <span className="text-red-500">*</span>
+                <div>
+                  <label className="block text-sm font-medium text-dark-text-secondary mb-1.5">
+                    漏洞模式 <span className="text-red-400">*</span>
                   </label>
                   <VulnerabilityTreeSelector
                     value={vulnerabilityTreeId}
@@ -332,11 +311,10 @@ export default function CreateSkillPage() {
                 </div>
               )}
 
-              <div className="mt-3">
-                <div className="flex items-center gap-6">
+              <div className="flex items-center gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                      适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
+                    <label className="block text-sm font-medium text-dark-text-secondary mb-1.5">
+                      适用产品 <span className="text-xs text-dark-text-muted">（不选则适用于所有产品）</span>
                     </label>
                     <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
                   </div>
@@ -346,28 +324,26 @@ export default function CreateSkillPage() {
                         type="checkbox"
                         checked={isPublic}
                         onChange={(e) => setIsPublic(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-600 text-blue-400 focus:ring-primary-500 bg-dark-bg"
+                        className="w-4 h-4 rounded border-dark-border text-blue-400 focus:ring-indigo-500 bg-dark-bg"
                       />
-                      <span className="ml-2 text-sm text-gray-300">
+                      <span className="ml-2 text-sm text-dark-text-secondary">
                         公开 Skill
                       </span>
                     </label>
                   )}
                 </div>
-              </div>
 
-              {/* Skill 内容 */}
-              <div className="mt-4 pt-4 border-t border-gray-700/50">
+              <div className="pt-5 border-t border-dark-border">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-300">
-                    Skill 内容（Markdown 格式）<span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-dark-text-secondary">
+                    Skill 内容（Markdown 格式）<span className="text-red-400">*</span>
                   </label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={handleAiGenerate}
                       disabled={aiGenerating}
-                      className="inline-flex items-center px-3 py-1 text-xs bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center px-3 py-1 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       title="根据填写的名称和分类，使用大模型 AI 自动生成完整的 Skill 内容"
                     >
                       {aiGenerating ? (
@@ -421,18 +397,17 @@ export default function CreateSkillPage() {
                   </div>
                 )}
 
-                {/* 格式建议 - 折叠 */}
-                <div className="mb-2 border border-gray-700/50 rounded-md overflow-hidden">
+                <div className="mb-2 border border-dark-border rounded-lg overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setShowFormatHint(!showFormatHint)}
-                    className="w-full flex items-center justify-between px-3 py-2 bg-dark-bg hover:bg-gray-800 transition-colors text-xs text-gray-400"
+                    className="w-full flex items-center justify-between px-3 py-2 bg-dark-bg hover:bg-dark-surface-hover transition-colors text-xs text-dark-text-muted"
                   >
                     <span>格式建议</span>
                     {showFormatHint ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                   </button>
                   {showFormatHint && (
-                    <div className="px-3 py-2 bg-dark-bg border-t border-gray-700/50 text-xs text-gray-400 space-y-3 max-h-[200px] overflow-auto">
+                    <div className="px-3 py-2 bg-dark-bg border-t border-dark-border text-xs text-dark-text-muted space-y-3 max-h-[200px] overflow-auto">
                       <div>
                         <h4 className="font-medium text-gray-200 mb-1">核心结构（YAML Frontmatter + Markdown 正文）</h4>
                         <div className="bg-gray-800/50 rounded p-2 font-mono text-xs leading-relaxed overflow-auto">
@@ -466,26 +441,25 @@ export default function CreateSkillPage() {
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full h-[285px] px-3 py-2 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-gray-200"
+                  className="w-full h-[285px] px-3 py-2 text-sm bg-dark-bg border border-dark-border rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-dark-text placeholder-dark-text-muted"
                   placeholder="输入 Markdown 格式的 Skill 定义，或点击上方「AI 生成」按钮自动生成..."
                   required
                 />
               </div>
             </div>
 
-            {/* 底部按钮 */}
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-md hover:bg-dark-bg transition-colors"
+                className="px-4 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border transition-colors"
               >
                 取消
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex items-center px-4 py-2 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>
@@ -501,7 +475,6 @@ export default function CreateSkillPage() {
               </button>
             </div>
           </form>
-        </div>
       </div>
 
       {showDiffModal && (() => {
@@ -557,13 +530,13 @@ export default function CreateSkillPage() {
           if (type === 'removed') return 'text-red-400';
           if (type === 'added') return 'text-green-400';
           if (type === 'empty') return 'text-transparent select-none';
-          return 'text-gray-300';
+          return 'text-dark-text-secondary';
         };
         const lineNoBg = (type: DiffRow['type']) => {
           if (type === 'removed') return 'bg-red-100 text-red-400';
           if (type === 'added') return 'bg-green-100 text-green-500';
           if (type === 'empty') return 'bg-dark-bg text-transparent';
-          return 'bg-dark-bg text-gray-300';
+          return 'bg-dark-bg text-dark-text-secondary';
         };
         const marker = (type: DiffRow['type']) => {
           if (type === 'removed') return <span className="text-red-400 select-none mr-1">−</span>;
@@ -587,14 +560,14 @@ export default function CreateSkillPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-dark-surface rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
 
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
                     <Sparkles size={16} className="text-white" />
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-100">AI 生成内容对比</h2>
-                    <p className="text-xs text-gray-500">
+<p className="text-xs text-gray-500">
                       共 <span className="font-medium text-orange-500">{changedCount}</span> 处变更 &nbsp;·&nbsp;
                       <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block"/>删除</span> &nbsp;
                       <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300 inline-block"/>新增</span>
@@ -607,10 +580,10 @@ export default function CreateSkillPage() {
                 </button>
               </div>
 
-              <div className="flex divide-x divide-gray-700/50 flex-shrink-0 border-b border-gray-700/50">
+              <div className="flex divide-x divide-dark-border flex-shrink-0 border-b border-dark-border">
                 <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0F172A]">
                   <span className="w-2 h-2 rounded-full bg-red-400"/>
-                  <span className="text-sm font-medium text-gray-400">当前内容（你填写的）</span>
+                  <span className="text-sm font-medium text-dark-text-muted">当前内容（你填写的）</span>
                 </div>
                 <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-900/20">
                   <span className="w-2 h-2 rounded-full bg-purple-600"/>
@@ -618,7 +591,7 @@ export default function CreateSkillPage() {
                 </div>
               </div>
 
-              <div className="flex-1 flex divide-x divide-gray-700/50 min-h-0 overflow-hidden">
+              <div className="flex-1 flex divide-x divide-dark-border min-h-0 overflow-hidden">
                 <div ref={(el) => { (window as any).__diffLeft = el; }}
                   onScroll={onLeftScroll}
                   className="flex-1 overflow-auto font-mono text-xs leading-5">
@@ -655,7 +628,7 @@ export default function CreateSkillPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 flex-shrink-0 bg-dark-bg rounded-b-2xl">
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-dark-border flex-shrink-0 bg-dark-bg rounded-b-2xl">
                 <button
                   onClick={() => setShowDiffModal(false)}
                   className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
@@ -664,7 +637,7 @@ export default function CreateSkillPage() {
                 </button>
                 <button
                   onClick={() => { setContent(aiDiffContent); setShowDiffModal(false); setAiDiffContent(''); }}
-                  className="inline-flex items-center px-5 py-2 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm"
+                  className="inline-flex items-center px-5 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all shadow-sm"
                 >
                   <CheckCircle size={15} className="mr-1.5" />
                   采用 AI 生成内容

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen, Bot, Terminal, User, Calendar, Play, ShieldAlert, Bell, Percent, Globe, Lock, CheckCircle, Clock, GitPullRequest } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
@@ -14,7 +15,6 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   isPublic: boolean;
-  requireCodedmap?: boolean;
   tenantId?: string | null;
   Tenant?: {
     name: string;
@@ -54,6 +54,7 @@ export default function AgentAppsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingApp, setViewingApp] = useState<AgentApp | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -80,13 +81,13 @@ export default function AgentAppsPage() {
         setApps(data.apps || []);
       } else {
         const errorData = await response.json().catch(() => ({ error: '未知错误' }));
-        console.error('获取Agent列表失败:', errorData);
-        toast.error(errorData.error || '获取Agent列表失败');
+        console.error('获取应用列表失败:', errorData);
+        toast.error(errorData.error || '获取应用列表失败');
         setApps([]);
       }
     } catch (error) {
-      console.error('获取Agent列表失败:', error);
-      toast.error('获取Agent列表失败');
+      console.error('获取应用列表失败:', error);
+      toast.error('获取应用列表失败');
       setApps([]);
     } finally {
       setLoading(false);
@@ -134,7 +135,7 @@ export default function AgentAppsPage() {
   };
 
   const handleDelete = async (app: AgentApp) => {
-    if (!confirm(`确定要删除Agent "${app.name}" 吗？此操作不可恢复。`)) {
+    if (!confirm(`确定要删除应用 "${app.name}" 吗？此操作不可恢复。`)) {
       return;
     }
 
@@ -159,7 +160,7 @@ export default function AgentAppsPage() {
         throw new Error(data.error || '删除失败');
       }
       
-      toast.success('Agent删除成功');
+      toast.success('应用删除成功');
       await fetchApps();
     } catch (error: any) {
       toast.error(error.message || '删除失败，请重试');
@@ -183,7 +184,6 @@ export default function AgentAppsPage() {
         fd.append('inputRequirements', formData.inputRequirements);
       }
       fd.append('isPublic', isPublic ? 'true' : 'false');
-      fd.append('requireCodedmap', formData.requireCodedmap ? 'true' : 'false');
       // __public__ 是前端占位值，后端收到 isPublic=true 时不需要 tenantId
       const tenantId = formData.tenantId === '__public__' ? '' : (formData.tenantId || '');
       fd.append('tenantId', tenantId);
@@ -239,7 +239,6 @@ export default function AgentAppsPage() {
           fd.append('inputRequirements', formData.inputRequirements);
         }
         fd.append('isPublic', isPublic ? 'true' : 'false');
-        fd.append('requireCodedmap', formData.requireCodedmap ? 'true' : 'false');
         fd.append('agentHarnessFileType', agentHarnessFile.type);
         
         if (agentHarnessFile.type === 'archive') {
@@ -291,7 +290,6 @@ export default function AgentAppsPage() {
             defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
             inputRequirements: formData.inputRequirements || null,
-            requireCodedmap: formData.requireCodedmap || false,
             isPublic: isPublic,
           }),
         });
@@ -311,70 +309,65 @@ export default function AgentAppsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-            <Box size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">Agent市场</h1>
-            <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent</p>
+{/* Toolbar + Cards container */}
+      <div className="bg-dark-surface border border-dark-border/40 rounded-xl">
+        {/* Toolbar */}
+        <div className="px-5 py-4 border-b border-dark-border/40">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/dashboard/agent-apps/developer-guide')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border transition-colors"
+              >
+                <BookOpen size={14} />
+                开发者指南
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                刷新
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleSyncFromGitea}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-dark-text-secondary bg-dark-surface-hover rounded-lg hover:bg-dark-border disabled:opacity-50 transition-colors"
+                >
+                  {syncing ? <RefreshCw size={14} className="animate-spin" /> : <GitPullRequest size={14} />}
+                  同步仓库
+                </button>
+              )}
+            </div>
+            <button
+              onClick={handleCreateApp}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+            >
+              <Plus size={14} />
+              创建新应用
+            </button>
           </div>
         </div>
-<div className="flex items-center gap-3">
-          <button
-            onClick={() => window.location.href = '/dashboard/agent-apps/developer-guide'}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-300 bg-dark-surface border border-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <BookOpen size={16} />
-            开发者指南
-          </button>
-<button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-              刷新
-            </button>
-            {isAdmin && (
-              <button
-                onClick={handleSyncFromGitea}
-                disabled={syncing}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-all"
-              >
-                {syncing ? <RefreshCw size={16} className="animate-spin" /> : <GitPullRequest size={16} />}
-                同步仓库
-              </button>
-            )}
-            <button
-             onClick={handleCreateApp}
-             className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
-           >
-             <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
-             创建新Agent
-           </button>
-         </div>
-      </div>
 
       {/* Card Grid */}
       {loading ? (
-        <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-12 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+        <div className="p-12 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-dark-text-muted" />
         </div>
       ) : apps.length === 0 ? (
-        <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-12">
+        <div className="p-12">
           <div className="text-center">
-            <Box className="mx-auto h-16 w-16 text-gray-500 opacity-60" />
-            <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Agent</h3>
-            <p className="mt-2 text-sm text-gray-500">
+            <Box className="mx-auto h-16 w-16 text-dark-text-muted opacity-60" />
+            <h3 className="mt-4 text-lg font-medium text-dark-text">暂无 Agent</h3>
+            <p className="mt-2 text-sm text-dark-text-muted">
               点击右上角"创建新 Agent"开始
             </p>
           </div>
         </div>
       ) : (
-        <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-5">
+        <div className="p-5">
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
             {apps.map((app) => {
               const engineColors: Record<string, string> = {
@@ -387,7 +380,7 @@ export default function AgentAppsPage() {
               return (
                 <div
                   key={app.id}
-                  className="group relative flex flex-col rounded-xl border border-gray-700/50 bg-gray-800/40 hover:bg-gray-800/70 hover:border-gray-600/70 transition-all cursor-pointer"
+                  className="group relative flex flex-col rounded-xl border border-dark-border bg-dark-surface-hover/30 hover:bg-dark-surface-hover/60 hover:border-dark-border transition-all cursor-pointer"
                   onClick={() => handleEdit(app)}
                 >
                   {/* Header */}
@@ -396,14 +389,14 @@ export default function AgentAppsPage() {
                       <Bot size={18} className="text-white" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-semibold text-gray-100 truncate pr-6">{app.name}</h4>
+                      <h4 className="text-sm font-semibold text-dark-text truncate pr-6">{app.name}</h4>
                       <div className="flex items-center gap-1.5 mt-1">
-                        <span className="text-[11px] bg-gray-900/80 text-gray-400 px-1.5 py-0.5 rounded font-mono border border-gray-700/50">
+                        <span className="text-[11px] bg-dark-bg/80 text-dark-text-muted px-1.5 py-0.5 rounded font-mono border border-dark-border">
                           {app.engine === 'opencode' ? 'OpenCode' : app.engine === 'claudecode' ? 'Claude Code' : app.engine}
                         </span>
                         {app.isPublic
                           ? <span title="已共享"><Globe size={11} className="text-green-400" /></span>
-                          : <span title="私有"><Lock size={11} className="text-gray-500" /></span>}
+                          : <span title="私有"><Lock size={11} className="text-dark-text-muted" /></span>}
                       </div>
                     </div>
                     {/* Edit + Delete + View icons */}
@@ -411,7 +404,7 @@ export default function AgentAppsPage() {
                       {app.engine === 'agentflow' && (
                         <button
                           onClick={() => setViewingApp(app)}
-                          className="p-1.5 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                          className="p-1.5 rounded-lg text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
                           title="查看流程"
                         >
                           <Eye size={13} />
@@ -419,7 +412,7 @@ export default function AgentAppsPage() {
                       )}
                       <button
                         onClick={() => handleEdit(app)}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-primary-400 hover:bg-primary-500/10 transition-colors"
+                        className="p-1.5 rounded-lg text-dark-text-muted hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
                         title="编辑"
                       >
                         <Edit2 size={13} />
@@ -427,7 +420,7 @@ export default function AgentAppsPage() {
                       <button
                         onClick={() => handleDelete(app)}
                         disabled={deletingId === app.id}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-lg text-dark-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
                         title="删除"
                       >
                         {deletingId === app.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
@@ -436,13 +429,13 @@ export default function AgentAppsPage() {
                   </div>
 
                   {/* Divider */}
-                  <div className="mx-4 border-t border-gray-700/40" />
+                  <div className="mx-4 border-t border-dark-border/40" />
 
                   {/* Metrics — 3 cols top row, 3 cols bottom row */}
                   <div className="px-4 py-3 grid grid-cols-3 gap-1.5">
                     {[
                       { icon: <Play size={12} />, value: app._metrics?.runCount ?? 0, label: '运行次数', color: 'text-blue-400', show: true },
-                      { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '确认漏洞', color: 'text-red-400', show: true },
+                      { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '发现漏洞', color: 'text-red-400', show: true },
                       { icon: <Bell size={12} />, value: app._metrics?.alertCount ?? 0, label: '告警数量', color: 'text-yellow-400', show: true },
                       {
                         icon: <CheckCircle size={12} />,
@@ -466,25 +459,25 @@ export default function AgentAppsPage() {
                           ? new Date(app._metrics.lastRunAt).toLocaleDateString('zh-CN')
                           : '-',
                         label: '最近运行',
-                        color: 'text-gray-400',
+                        color: 'text-dark-text-muted',
                         show: true,
                       },
                     ].filter(m => m.show).map(({ icon, value, label, color }) => (
-                      <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-gray-900/40">
+                      <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-dark-bg/40">
                         <span className={color}>{icon}</span>
-                        <span className="text-sm font-bold text-gray-100 leading-tight">{value}</span>
-                        <span className="text-[10px] text-gray-500">{label}</span>
+                        <span className="text-sm font-bold text-dark-text leading-tight">{value}</span>
+                        <span className="text-[10px] text-dark-text-muted">{label}</span>
                       </div>
                     ))}
                   </div>
 
                   {/* Divider */}
-                  <div className="mx-4 border-t border-gray-700/40" />
+                  <div className="mx-4 border-t border-dark-border/40" />
 
                   {/* Meta info */}
-                  <div className="px-4 py-3 flex items-center justify-between text-xs text-gray-400">
-                    <span><span className="text-gray-600">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
-                    <span><span className="text-gray-600">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
+                  <div className="px-4 py-3 flex items-center justify-between text-xs text-dark-text-muted">
+                    <span><span className="text-dark-text-muted">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
+                    <span><span className="text-dark-text-muted">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
                   </div>
                 </div>
               );
@@ -492,6 +485,7 @@ export default function AgentAppsPage() {
           </div>
         </div>
       )}
+      </div>
 
       <CreateAgentAppModal
         isOpen={isCreateModalOpen}

@@ -322,11 +322,11 @@ function EditorContent() {
 
   return (
     <div className="flex flex-col h-full bg-gray-900 text-white">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-dark-border">
         <div className="flex items-center gap-3">
           <button
             onClick={handleGoBack}
-            className="flex items-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 rounded-md transition-colors"
+            className="flex items-center gap-1 px-2 py-1.5 text-dark-text-muted hover:text-gray-200 hover:bg-gray-700/50 rounded-md transition-colors"
           >
             <ArrowLeft size={18} />
             <span className="text-sm">返回</span>
@@ -341,10 +341,10 @@ function EditorContent() {
           />
         </div>
         <div className="flex items-center gap-4">
-          <span className={`text-sm ${saveStatus === 'unsaved' ? 'text-yellow-500' : 'text-gray-400'}`}>
+          <span className={`text-sm ${saveStatus === 'unsaved' ? 'text-yellow-500' : 'text-dark-text-muted'}`}>
             {saveStatusText[saveStatus]}
           </span>
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-dark-text-muted">
             状态: {status === 'published' ? '已发布' : '草稿'}
           </span>
           <button
@@ -356,7 +356,7 @@ function EditorContent() {
           </button>
           <button
             onClick={handlePublish}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded"
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded"
           >
             发布
           </button>
@@ -388,13 +388,13 @@ function EditorContent() {
 
           {contextMenu && (
             <div
-              className="absolute bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50"
+              className="absolute bg-gray-800 border border-dark-border rounded shadow-lg py-1 z-50"
               style={{ left: contextMenu.x, top: contextMenu.y }}
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => handleEdgeAction('toggle-failure')}
-                className="block w-full px-4 py-2 text-left hover:bg-gray-700 text-sm"
+                className="block w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm"
               >
                 {edges.find(e => e.id === contextMenu.edgeId)?.data?.isFailure
                   ? '切换为普通边'
@@ -402,7 +402,7 @@ function EditorContent() {
               </button>
               <button
                 onClick={() => handleEdgeAction('delete')}
-                className="block w-full px-4 py-2 text-left hover:bg-gray-700 text-sm text-red-400"
+                className="block w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm text-red-400"
               >
                 删除边
               </button>

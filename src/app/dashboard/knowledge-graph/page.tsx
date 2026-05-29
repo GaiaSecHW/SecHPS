@@ -47,7 +47,7 @@ function methodColor(m: MethodInfo) {
   if (m.isSink) return 'text-red-400';
   if (m.isSource) return 'text-green-400';
   if (m.isEntryPoint) return 'text-yellow-400';
-  return 'text-gray-300';
+  return 'text-dark-text-secondary';
 }
 
 function tagBadge(m: MethodInfo) {
@@ -98,7 +98,7 @@ function MethodItem({ m, selected, onSelect, product, onTagChange }: {
       <button
         onClick={onSelect}
         className={`flex-1 text-left flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-          selected ? 'bg-primary-600/20 text-primary-300' : `${methodColor(m)} hover:bg-gray-700/40`
+          selected ? 'bg-indigo-600/20 text-indigo-300' : `${methodColor(m)} hover:bg-dark-surface-hover/40`
         }`}
         title={m.fullName}
       >
@@ -109,34 +109,34 @@ function MethodItem({ m, selected, onSelect, product, onTagChange }: {
         {open ? (
           <div className="flex items-center gap-0.5 pr-1">
             {tagging ? (
-              <Loader2 size={10} className="animate-spin text-gray-500 mx-1" />
+              <Loader2 size={10} className="animate-spin text-dark-text-muted mx-1" />
             ) : (
               <>
                 <button
                   onClick={() => handleTag('entry')}
                   title="Entry Point"
-                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isEntryPoint ? 'bg-yellow-500/30 text-yellow-400' : 'text-gray-600 hover:text-yellow-400 hover:bg-yellow-500/10'}`}
+                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isEntryPoint ? 'bg-yellow-500/30 text-yellow-400' : 'text-dark-text-muted hover:text-yellow-400 hover:bg-yellow-500/10'}`}
                 >E</button>
                 <button
                   onClick={() => handleTag('source')}
                   title="Source"
-                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isSource ? 'bg-green-500/30 text-green-400' : 'text-gray-600 hover:text-green-400 hover:bg-green-500/10'}`}
+                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isSource ? 'bg-green-500/30 text-green-400' : 'text-dark-text-muted hover:text-green-400 hover:bg-green-500/10'}`}
                 >S</button>
                 <button
                   onClick={() => handleTag('sink')}
                   title="Sink"
-                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isSink ? 'bg-red-500/30 text-red-400' : 'text-gray-600 hover:text-red-400 hover:bg-red-500/10'}`}
+                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isSink ? 'bg-red-500/30 text-red-400' : 'text-dark-text-muted hover:text-red-400 hover:bg-red-500/10'}`}
                 >K</button>
               </>
             )}
-            <button onClick={() => setOpen(false)} className="text-gray-600 hover:text-gray-400 ml-0.5">
+            <button onClick={() => setOpen(false)} className="text-dark-text-muted hover:text-dark-text-muted ml-0.5">
               <X size={9} />
             </button>
           </div>
         ) : (
           <button
             onClick={e => { e.stopPropagation(); setOpen(true); }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity px-1 py-1 text-gray-600 hover:text-gray-300"
+            className="opacity-0 group-hover:opacity-100 transition-opacity px-1 py-1 text-dark-text-muted hover:text-dark-text-secondary"
             title="标记"
           >
             <Tag size={10} />
@@ -180,14 +180,14 @@ function ClassItem({ cls, selectedId, onSelect, search, tagFilter, product, onTa
     <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700/30 rounded transition-colors"
+        className="w-full flex items-center gap-1 px-2 py-1 text-xs text-dark-text-muted hover:text-gray-200 hover:bg-dark-surface-hover/30 rounded transition-colors"
       >
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         <span className="truncate font-medium">{cls.name}</span>
-        <span className="ml-auto text-gray-600 text-[10px]">{filteredMethods.length}</span>
+        <span className="ml-auto text-dark-text-muted text-[10px]">{filteredMethods.length}</span>
       </button>
       {open && (
-        <div className="ml-3 border-l border-gray-700/40 pl-1">
+        <div className="ml-3 border-l border-dark-border/30 pl-1">
           {filteredMethods.map(m => (
             <MethodItem key={m.id} m={m} selected={selectedId === m.id} onSelect={() => onSelect(m)} product={product} onTagChange={onTagChange} />
           ))}
@@ -220,11 +220,11 @@ function PackageItem({ pkg, selectedId, onSelect, search, tagFilter, product, on
     <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-700/20 rounded transition-colors"
+        className="w-full flex items-center gap-1 px-2 py-1.5 text-xs text-dark-text-muted hover:text-dark-text-secondary hover:bg-dark-surface-hover/20 rounded transition-colors"
       >
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         <span className="truncate">{pkg.name}</span>
-        <span className="ml-auto text-gray-600 text-[10px]">{pkg.classes.length}</span>
+        <span className="ml-auto text-dark-text-muted text-[10px]">{pkg.classes.length}</span>
       </button>
       {open && (
         <div className="ml-2">
@@ -312,7 +312,7 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
 
   if (!method) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+      <div className="flex-1 flex items-center justify-center text-dark-text-muted text-sm">
         在左侧选择一个方法查看调用图
       </div>
     );
@@ -322,16 +322,16 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
     <div className="flex-1 relative">
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-dark-bg/60 z-10">
-          <Loader2 size={24} className="animate-spin text-primary-400" />
+          <Loader2 size={24} className="animate-spin text-indigo-400" />
         </div>
       )}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 bg-dark-surface/90 border border-gray-700/50 rounded-lg px-2 py-1">
-        <span className="text-[10px] text-gray-500">深度</span>
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 bg-dark-surface/90 border border-dark-border rounded-lg px-2 py-1">
+        <span className="text-[10px] text-dark-text-muted">深度</span>
         {[1, 2, 3, 4].map(d => (
           <button
             key={d}
             onClick={() => setDepth(d)}
-            className={`w-6 h-6 text-xs rounded transition-colors ${depth === d ? 'bg-primary-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+            className={`w-6 h-6 text-xs rounded transition-colors ${depth === d ? 'bg-indigo-600 text-white' : 'text-dark-text-muted hover:bg-dark-surface-hover'}`}
           >
             {d}
           </button>
@@ -348,7 +348,7 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
         <Controls />
       </ReactFlow>
       {selected && (
-        <div className="absolute bottom-3 left-3 right-3 z-10 bg-dark-bg/95 border border-gray-700/60 rounded-xl shadow-xl backdrop-blur-sm overflow-hidden" style={{ maxHeight: '55%' }}>
+        <div className="absolute bottom-3 left-3 right-3 z-10 bg-dark-bg/95 border border-dark-border/50 rounded-xl shadow-xl backdrop-blur-sm overflow-hidden" style={{ maxHeight: '55%' }}>
           <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2 flex-shrink-0">
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -356,7 +356,7 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
                 {selected.isSource && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30 flex-shrink-0">SOURCE</span>}
                 {selected.isSink && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex-shrink-0">SINK</span>}
                 {selected.isEntryPoint && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex-shrink-0">ENTRY</span>}
-                {selected.isExternal && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400 border border-gray-600/30 flex-shrink-0">EXTERNAL</span>}
+                {selected.isExternal && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/20 text-dark-text-muted border border-gray-600/30 flex-shrink-0">EXTERNAL</span>}
               </div>
               {selected.signature && (
                 <div className="font-mono text-xs bg-dark-surface/80 rounded px-2 py-1 break-all">
@@ -367,33 +367,33 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
                     const params = parenIdx >= 0 ? sig.slice(parenIdx + 1, -1) : '';
                     return (
                       <>
-                        <span className="text-gray-400">{returnType} </span>
+                        <span className="text-dark-text-muted">{returnType} </span>
                         <span className="text-cyan-300">{selected.name}</span>
-                        <span className="text-gray-300">({params})</span>
+                        <span className="text-dark-text-secondary">({params})</span>
                       </>
                     );
                   })()}
                 </div>
               )}
               <div className="flex items-center gap-3">
-                <span className="text-[10px] text-gray-500 truncate">{selected.fullName}</span>
-                {selected.lineNumber && <span className="text-[10px] text-gray-600 flex-shrink-0">Line {selected.lineNumber}</span>}
+                <span className="text-[10px] text-dark-text-muted truncate">{selected.fullName}</span>
+                {selected.lineNumber && <span className="text-[10px] text-dark-text-muted flex-shrink-0">Line {selected.lineNumber}</span>}
               </div>
             </div>
-            <button onClick={() => { setSelected(null); setCode(null); }} className="text-gray-600 hover:text-gray-300 flex-shrink-0 mt-0.5">
+            <button onClick={() => { setSelected(null); setCode(null); }} className="text-dark-text-muted hover:text-dark-text-secondary flex-shrink-0 mt-0.5">
               <X size={14} />
             </button>
           </div>
-          <div className="border-t border-gray-700/40 overflow-auto custom-scrollbar" style={{ maxHeight: 220 }}>
+          <div className="border-t border-dark-border/30 overflow-auto custom-scrollbar" style={{ maxHeight: 220 }}>
             {codeLoading ? (
               <div className="flex items-center justify-center py-4 gap-2">
-                <Loader2 size={16} className="animate-spin text-primary-400" />
-                <span className="text-[11px] text-gray-500">代码加载中...</span>
+                <Loader2 size={16} className="animate-spin text-indigo-400" />
+                <span className="text-[11px] text-dark-text-muted">代码加载中...</span>
               </div>
             ) : code ? (
-              <pre className="font-mono text-[11px] text-gray-300 leading-relaxed px-3 py-2 whitespace-pre">{code}</pre>
+              <pre className="font-mono text-[11px] text-dark-text-secondary leading-relaxed px-3 py-2 whitespace-pre">{code}</pre>
             ) : (
-              <p className="text-[11px] text-gray-600 px-3 py-2">无可用方法体</p>
+              <p className="text-[11px] text-dark-text-muted px-3 py-2">无可用方法体</p>
             )}
           </div>
         </div>
@@ -407,20 +407,20 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
 function PathCard({ path }: { path: PathData }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+    <div className="border border-dark-border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-700/20 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-dark-surface-hover/20 transition-colors text-left"
       >
         <span className="text-xs px-2 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/20 flex-shrink-0">SOURCE</span>
-        <span className="text-xs text-gray-300 truncate flex-1" title={path.source.fullName}>{shortName(path.source.fullName)}</span>
-        <span className="text-gray-600 text-xs flex-shrink-0">→ {path.intermediates.length} 跳 →</span>
+        <span className="text-xs text-dark-text-secondary truncate flex-1" title={path.source.fullName}>{shortName(path.source.fullName)}</span>
+        <span className="text-dark-text-muted text-xs flex-shrink-0">→ {path.intermediates.length} 跳 →</span>
         <span className="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20 flex-shrink-0">SINK</span>
-        <span className="text-xs text-gray-300 truncate flex-1" title={path.sink.fullName}>{shortName(path.sink.fullName)}</span>
-        {open ? <ChevronDown size={14} className="text-gray-500 flex-shrink-0" /> : <ChevronRight size={14} className="text-gray-500 flex-shrink-0" />}
+        <span className="text-xs text-dark-text-secondary truncate flex-1" title={path.sink.fullName}>{shortName(path.sink.fullName)}</span>
+        {open ? <ChevronDown size={14} className="text-dark-text-muted flex-shrink-0" /> : <ChevronRight size={14} className="text-dark-text-muted flex-shrink-0" />}
       </button>
       {open && (
-        <div className="px-4 pb-3 border-t border-gray-700/30">
+        <div className="px-4 pb-3 border-t border-dark-border/30">
           <div className="mt-3 space-y-1">
             <PathNode label="SOURCE" name={path.source.name} fullName={path.source.fullName} color="green" />
             {path.intermediates.map((n, i) => (
@@ -438,13 +438,13 @@ function PathNode({ label, name, fullName, color }: { label: string; name: strin
   const colors: Record<string, string> = {
     green: 'bg-green-500/10 text-green-400 border-green-500/20',
     red: 'bg-red-500/10 text-red-400 border-red-500/20',
-    blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    blue: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
   };
   return (
     <div className="flex items-center gap-2 py-1">
       <span className={`text-[10px] px-1.5 py-0.5 rounded border flex-shrink-0 ${colors[color]}`}>{label}</span>
-      <span className="text-xs text-gray-300 font-medium">{name}</span>
-      <span className="text-[10px] text-gray-600 truncate" title={fullName}>{fullName}</span>
+      <span className="text-xs text-dark-text-secondary font-medium">{name}</span>
+      <span className="text-[10px] text-dark-text-muted truncate" title={fullName}>{fullName}</span>
     </div>
   );
 }
@@ -467,11 +467,11 @@ function SourceSinkPaths({ product }: { product: string }) {
       .finally(() => setLoading(false));
   }, [product, loaded]);
 
-  if (loading) return <div className="flex-1 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-primary-400" /></div>;
+  if (loading) return <div className="flex-1 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-indigo-400" /></div>;
 
   if (paths.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-2">
+      <div className="flex-1 flex flex-col items-center justify-center text-dark-text-muted gap-2">
         <AlertCircle size={32} className="opacity-40" />
         <p className="text-sm">未发现 Source-Sink 路径</p>
       </div>
@@ -480,7 +480,7 @@ function SourceSinkPaths({ product }: { product: string }) {
 
   return (
     <div className="flex-1 overflow-auto p-4 space-y-2">
-      <p className="text-xs text-gray-500 mb-3">共发现 {paths.length} 条数据流路径</p>
+      <p className="text-xs text-dark-text-muted mb-3">共发现 {paths.length} 条数据流路径</p>
       {paths.map(p => <PathCard key={p.id} path={p} />)}
     </div>
   );
@@ -570,31 +570,22 @@ export default function KnowledgeGraphPage() {
 
   return (
     <div className="flex flex-col h-full gap-0" style={{ height: 'calc(100vh - 56px - 48px)' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-3 mb-3 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center">
-            <Network size={16} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-white">知识图谱</h1>
-            <p className="text-xs text-gray-400">代码安全知识图谱可视化</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+        <div className="flex items-center gap-3 text-xs">
           {stats && (
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-gray-500">{stats.totalMethods} 方法</span>
+            <>
+              <span className="text-dark-text-muted">{stats.totalMethods} 方法</span>
               <span className="text-green-400">{stats.sources} Source</span>
               <span className="text-red-400">{stats.sinks} Sink</span>
               <span className="text-yellow-400">{stats.entryPoints} Entry</span>
-            </div>
+            </>
           )}
           {product && (
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-dark-text-muted hover:text-dark-text-secondary bg-dark-surface-hover hover:bg-dark-border transition-colors disabled:opacity-50"
               title="同步到云端"
             >
               {syncing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
@@ -604,7 +595,7 @@ export default function KnowledgeGraphPage() {
           <select
             value={product}
             onChange={e => { setSelectedMethod(null); setProduct(e.target.value); }}
-            className="bg-dark-bg border border-gray-700/50 text-gray-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary-500"
+            className="bg-dark-bg border border-dark-border text-dark-text text-sm rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
           >
             {products.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -614,20 +605,20 @@ export default function KnowledgeGraphPage() {
       {/* Body */}
       <div className="flex flex-1 gap-3 min-h-0">
         {/* Left: Package Tree */}
-        <div className="w-64 flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-xl flex flex-col overflow-hidden">
-          <div className="px-3 py-2 border-b border-gray-700/40 flex-shrink-0 space-y-2">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">包结构</p>
+        <div className="w-64 flex-shrink-0 bg-dark-surface border border-dark-border/40 rounded-xl flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b border-dark-border/30 flex-shrink-0 space-y-2">
+            <p className="text-xs text-dark-text-muted font-medium uppercase tracking-wider">包结构</p>
             <div className="relative">
-              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-dark-text-muted" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="搜索方法名..."
-                className="w-full bg-dark-bg border border-gray-700/50 rounded text-xs text-gray-300 placeholder-gray-600 pl-6 pr-6 py-1 focus:outline-none focus:border-primary-500"
+                className="w-full bg-dark-bg border border-dark-border/40 rounded text-xs text-dark-text-secondary placeholder-dark-text-muted pl-6 pr-6 py-1 focus:border-indigo-500"
               />
               {search && (
-                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-dark-text-muted hover:text-dark-text-secondary">
                   <X size={11} />
                 </button>
               )}
@@ -636,10 +627,10 @@ export default function KnowledgeGraphPage() {
               {(['all', 'entry', 'source', 'sink'] as const).map(f => {
                 const labels: Record<string, string> = { all: '全部', entry: 'Entry', source: 'Source', sink: 'Sink' };
                 const colors: Record<string, string> = {
-                  all: tagFilter === 'all' ? 'bg-gray-600 text-gray-100' : 'text-gray-500 hover:text-gray-300',
-                  entry: tagFilter === 'entry' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'text-gray-500 hover:text-yellow-400',
-                  source: tagFilter === 'source' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-gray-500 hover:text-green-400',
-                  sink: tagFilter === 'sink' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-gray-500 hover:text-red-400',
+                  all: tagFilter === 'all' ? 'bg-dark-surface-hover text-dark-text' : 'text-dark-text-muted hover:text-dark-text-secondary',
+                  entry: tagFilter === 'entry' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'text-dark-text-muted hover:text-yellow-400',
+                  source: tagFilter === 'source' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'text-dark-text-muted hover:text-green-400',
+                  sink: tagFilter === 'sink' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'text-dark-text-muted hover:text-red-400',
                 };
                 return (
                   <button
@@ -655,7 +646,7 @@ export default function KnowledgeGraphPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-1 custom-scrollbar">
             {treeLoading ? (
-              <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-primary-400" /></div>
+              <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-indigo-400" /></div>
             ) : treeData?.packages ? (
               treeData.packages.map(pkg => (
                 <PackageItem key={pkg.name} pkg={pkg} selectedId={selectedMethod?.id || null} onSelect={setSelectedMethod} search={search} tagFilter={tagFilter} product={product} onTagChange={handleTagChange} />
@@ -665,22 +656,22 @@ export default function KnowledgeGraphPage() {
         </div>
 
         {/* Right: Graph / Paths */}
-        <div className="flex-1 bg-dark-surface border border-gray-700/50 rounded-xl flex flex-col overflow-hidden min-w-0">
-          <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-700/40 flex-shrink-0">
+        <div className="flex-1 bg-dark-surface border border-dark-border rounded-xl flex flex-col overflow-hidden min-w-0">
+          <div className="flex items-center gap-1 px-4 py-2 border-b border-dark-border/30 flex-shrink-0">
             <button
               onClick={() => setTab('graph')}
-              className={`px-3 py-1 text-xs rounded transition-colors ${tab === 'graph' ? 'bg-primary-600/20 text-primary-300' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-3 py-1 text-xs rounded transition-colors ${tab === 'graph' ? 'bg-indigo-600/20 text-indigo-300' : 'text-dark-text-muted hover:text-dark-text-secondary'}`}
             >
               调用图
             </button>
             <button
               onClick={() => setTab('paths')}
-              className={`px-3 py-1 text-xs rounded transition-colors ${tab === 'paths' ? 'bg-primary-600/20 text-primary-300' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`px-3 py-1 text-xs rounded transition-colors ${tab === 'paths' ? 'bg-indigo-600/20 text-indigo-300' : 'text-dark-text-muted hover:text-dark-text-secondary'}`}
             >
               Source-Sink 路径
             </button>
             {selectedMethod && tab === 'graph' && (
-              <span className="ml-3 text-xs text-gray-500 truncate" title={selectedMethod.fullName}>
+              <span className="ml-3 text-xs text-dark-text-muted truncate" title={selectedMethod.fullName}>
                 {selectedMethod.name}
               </span>
             )}

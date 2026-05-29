@@ -171,10 +171,10 @@ export default function UserTokenStatsPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-400">此页面仅管理员可访问</p>
+          <p className="text-dark-text-muted">此页面仅管理员可访问</p>
           <button
             onClick={() => router.push('/dashboard/token-stats')}
-            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-600"
+            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-600"
           >
             返回 Token 统计
           </button>
@@ -188,10 +188,10 @@ export default function UserTokenStatsPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-400">{error}</p>
+          <p className="text-dark-text-muted">{error}</p>
           <button
             onClick={checkAdminAndFetch}
-            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-600"
+            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-600"
           >
             重试
           </button>
@@ -206,38 +206,38 @@ export default function UserTokenStatsPage() {
       <div className="mb-6">
         <button
           onClick={() => router.push('/dashboard/token-stats')}
-          className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="flex items-center text-dark-text-muted hover:text-dark-text mb-4"
         >
           <ArrowLeft size={18} className="mr-2" />
           返回 Token 统计
         </button>
-        <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center justify-between bg-dark-surface border border-dark-border rounded-xl px-5 py-4">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
               <Users size={18} className="text-white" />
             </div>
             <div>
               <h1 className="text-xl font-semibold text-white">用户 Token 统计</h1>
-              <p className="text-sm text-gray-400 mt-0.5">查看所有用户的 Token 使用情况</p>
+              <p className="text-sm text-dark-text-muted mt-0.5">查看所有用户的 Token 使用情况</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
               {/* 搜索框 */}
               <div className="relative w-48">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-text-muted" size={18} />
                 <input
                   type="text"
                   placeholder="搜索用户..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                  className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500 text-dark-text placeholder-gray-500 text-sm"
                 />
               </div>
               {/* 时间选择 */}
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="w-[100px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+                className="w-[100px] px-3 py-2.5 bg-dark-bg border border-dark-border rounded-lg focus:ring-2 focus:ring-indigo-500 text-dark-text text-sm"
               >
                 <option value="day">今日</option>
                 <option value="week">本周</option>
@@ -264,8 +264,8 @@ export default function UserTokenStatsPage() {
               <TrendingUp size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalInputTokens)}</p>
-              <p className="text-xs text-gray-500">总输入 Token</p>
+              <p className="text-2xl font-bold text-dark-text">{formatNumber(totalInputTokens)}</p>
+              <p className="text-xs text-dark-text-muted">总输入 Token</p>
             </div>
           </div>
         </div>
@@ -275,8 +275,8 @@ export default function UserTokenStatsPage() {
               <TrendingUp size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalOutputTokens)}</p>
-              <p className="text-xs text-gray-500">总输出 Token</p>
+              <p className="text-2xl font-bold text-dark-text">{formatNumber(totalOutputTokens)}</p>
+              <p className="text-xs text-dark-text-muted">总输出 Token</p>
             </div>
           </div>
         </div>
@@ -295,7 +295,7 @@ export default function UserTokenStatsPage() {
                   </span>
                 </span>
               </p>
-              <p className="text-xs text-gray-500">总预估费用</p>
+              <p className="text-xs text-dark-text-muted">总预估费用</p>
             </div>
           </div>
         </div>
@@ -305,8 +305,8 @@ export default function UserTokenStatsPage() {
               <Users size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{userStats.length}</p>
-              <p className="text-xs text-gray-500">活跃用户数</p>
+              <p className="text-2xl font-bold text-dark-text">{userStats.length}</p>
+              <p className="text-xs text-dark-text-muted">活跃用户数</p>
             </div>
           </div>
         </div>
@@ -314,13 +314,13 @@ export default function UserTokenStatsPage() {
 
       {/* User Stats Table */}
       <div className="bg-dark-surface rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">用户消耗排行</h2>
-          <p className="text-sm text-gray-500 mt-1">按 Token 使用量排序</p>
+        <div className="px-6 py-4 border-b border-dark-border">
+          <h2 className="text-lg font-semibold text-dark-text">用户消耗排行</h2>
+          <p className="text-sm text-dark-text-muted mt-1">按 Token 使用量排序</p>
         </div>
         
         {userStats.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500">
+          <div className="px-6 py-8 text-center text-dark-text-muted">
             暂无数据
           </div>
         ) : (
@@ -329,7 +329,7 @@ export default function UserTokenStatsPage() {
               <thead className="bg-[#162032]">
                 <tr>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
+                    className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('username')}
                   >
                     <div className="flex items-center">
@@ -339,14 +339,14 @@ export default function UserTokenStatsPage() {
                       )}
                     </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                     输入 Token
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                     输出 Token
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
+                    className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('totalTokens')}
                   >
                     <div className="flex items-center">
@@ -357,7 +357,7 @@ export default function UserTokenStatsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
+                    className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('estimatedCost')}
                   >
                     <div className="flex items-center">
@@ -368,7 +368,7 @@ export default function UserTokenStatsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
+                    className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('evaluationCount')}
                   >
                     <div className="flex items-center">
@@ -378,7 +378,7 @@ export default function UserTokenStatsPage() {
                       )}
                     </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-dark-text-muted uppercase tracking-wider">
                     操作
                   </th>
                 </tr>
@@ -388,7 +388,7 @@ export default function UserTokenStatsPage() {
                   <tr key={user.userId} className="hover:bg-[#0F172A]">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <span className="text-sm font-medium text-gray-100">
+                        <span className="text-sm font-medium text-dark-text">
                           {user.username}
                         </span>
                         {index === 0 && (
@@ -425,7 +425,7 @@ export default function UserTokenStatsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-400">
+                      <span className="text-sm text-dark-text-muted">
                         {user.evaluationCount}
                       </span>
                     </td>

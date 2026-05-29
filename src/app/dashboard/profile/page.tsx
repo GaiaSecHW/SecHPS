@@ -146,19 +146,6 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-            <User size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">个人中心</h1>
-            <p className="text-sm text-gray-400 mt-0.5">管理个人信息和账户设置</p>
-          </div>
-        </div>
-      </div>
-
       {error && (
         <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
@@ -172,7 +159,7 @@ export default function ProfilePage() {
       )}
 
       {/* 用户信息卡片 */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 px-4 py-3 flex items-center gap-4">
+      <div className="bg-dark-surface rounded-lg border border-dark-border px-4 py-3 flex items-center gap-4">
         {user?.avatar ? (
           <img
             src={user.avatar}
@@ -180,7 +167,7 @@ export default function ProfilePage() {
             className="h-12 w-12 rounded-full shrink-0"
           />
         ) : (
-          <div className="h-12 w-12 rounded-full bg-primary-600 flex items-center justify-center shrink-0">
+          <div className="h-12 w-12 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
             <span className="text-white text-xl font-medium">
               {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
             </span>
@@ -188,12 +175,12 @@ export default function ProfilePage() {
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-gray-100 truncate">
+            <h2 className="text-lg font-semibold text-dark-text truncate">
               {user?.name || user?.username}
             </h2>
-            <span className="text-xs text-gray-500">@{user?.username}</span>
+            <span className="text-xs text-dark-text-muted">@{user?.username}</span>
           </div>
-          <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+          <p className="text-xs text-dark-text-muted truncate">{user?.email}</p>
           <div className="flex flex-wrap gap-1 mt-1.5">
             {user?.roles?.map((role: string) => (
               <span
@@ -208,17 +195,17 @@ export default function ProfilePage() {
       </div>
 
       {/* 个人信息修改 */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+      <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
         <div className="flex items-center space-x-2 mb-6">
-          <User size={20} className="text-gray-400" />
-          <h3 className="text-lg font-semibold text-gray-100">个人信息</h3>
+          <User size={20} className="text-dark-text-muted" />
+          <h3 className="text-lg font-semibold text-dark-text">个人信息</h3>
         </div>
 
         <form onSubmit={handleUpdateProfile} className="space-y-4">
           {/* 用户名和邮箱占一行 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="username" className="block text-sm font-medium text-dark-text-secondary">
                 用户名
               </label>
               <input
@@ -226,13 +213,13 @@ export default function ProfilePage() {
                 type="text"
                 value={user?.username || ''}
                 disabled
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-500 cursor-not-allowed"
+                className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-md bg-[#0F172A] text-dark-text-muted cursor-not-allowed"
               />
-              <p className="mt-1 text-xs text-gray-500">用户名不可修改</p>
+              <p className="mt-1 text-xs text-dark-text-muted">用户名不可修改</p>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="email" className="block text-sm font-medium text-dark-text-secondary">
                 邮箱
               </label>
               <input
@@ -240,16 +227,16 @@ export default function ProfilePage() {
                 type="email"
                 value={user?.email || ''}
                 disabled
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-500 cursor-not-allowed"
+                className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-md bg-[#0F172A] text-dark-text-muted cursor-not-allowed"
               />
-              <p className="mt-1 text-xs text-gray-500">邮箱不可修改</p>
+              <p className="mt-1 text-xs text-dark-text-muted">邮箱不可修改</p>
             </div>
           </div>
 
           {/* 姓名和头像链接占一行 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="name" className="block text-sm font-medium text-dark-text-secondary">
                 姓名
               </label>
               <input
@@ -257,13 +244,13 @@ export default function ProfilePage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="请输入您的姓名"
               />
             </div>
 
             <div>
-              <label htmlFor="avatar" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="avatar" className="block text-sm font-medium text-dark-text-secondary">
                 头像链接
               </label>
               <input
@@ -271,7 +258,7 @@ export default function ProfilePage() {
                 type="url"
                 value={avatar}
                 onChange={(e) => setAvatar(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="mt-1 block w-full px-3 py-2 border border-dark-border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="https://example.com/avatar.png"
               />
             </div>
@@ -281,7 +268,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={updatingProfile}
-              className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               <Save size={18} />
               <span>{updatingProfile ? '保存中...' : '保存修改'}</span>
@@ -291,17 +278,17 @@ export default function ProfilePage() {
       </div>
 
       {/* 修改密码 */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+      <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
         <div className="flex items-center space-x-2 mb-6">
-          <Lock size={20} className="text-gray-400" />
-          <h3 className="text-lg font-semibold text-gray-100">修改密码</h3>
+          <Lock size={20} className="text-dark-text-muted" />
+          <h3 className="text-lg font-semibold text-dark-text">修改密码</h3>
         </div>
 
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
             <label
               htmlFor="currentPassword"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               当前密码
             </label>
@@ -312,13 +299,13 @@ export default function ProfilePage() {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 required
-                className="block w-full px-3 py-2 pr-10 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="block w-full px-3 py-2 pr-10 border border-dark-border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="请输入当前密码"
               />
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-400"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-dark-text-muted hover:text-dark-text-muted"
               >
                 {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -328,7 +315,7 @@ export default function ProfilePage() {
           <div>
             <label
               htmlFor="newPassword"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               新密码
             </label>
@@ -340,13 +327,13 @@ export default function ProfilePage() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 minLength={6}
-                className="block w-full px-3 py-2 pr-10 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="block w-full px-3 py-2 pr-10 border border-dark-border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="请输入新密码（至少 6 位）"
               />
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-400"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-dark-text-muted hover:text-dark-text-muted"
               >
                 {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -356,7 +343,7 @@ export default function ProfilePage() {
           <div>
             <label
               htmlFor="confirmPassword"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-dark-text-secondary"
             >
               确认新密码
             </label>
@@ -368,13 +355,13 @@ export default function ProfilePage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={6}
-                className="block w-full px-3 py-2 pr-10 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                className="block w-full px-3 py-2 pr-10 border border-dark-border rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="请再次输入新密码"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-400"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-dark-text-muted hover:text-dark-text-muted"
               >
                 {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -385,7 +372,7 @@ export default function ProfilePage() {
             <button
               type="submit"
               disabled={updatingPassword}
-              className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               <Lock size={18} />
               <span>{updatingPassword ? '修改中...' : '修改密码'}</span>

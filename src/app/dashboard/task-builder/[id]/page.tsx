@@ -468,15 +468,7 @@ export default function TaskDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-        <button
-          onClick={() => router.push('/dashboard/task-builder')}
-          className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
-        >
-          <ArrowLeft size={20} className="mr-2" />
-          返回任务列表
-        </button>
-
+      <div className="bg-dark-surface rounded-lg border border-dark-border p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="p-3 rounded-lg bg-blue-600/10">
