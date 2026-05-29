@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Upload, File, Loader2, ChevronDown, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ProductTreeSelect from '@/components/ui/ProductTreeSelect';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AgentApp {
   id: string;
@@ -68,11 +69,13 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
   function generateDefaultTaskName(): string {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `任务-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const prefix = user?.username || '任务';
+    return `${prefix}-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   }
 
   const compatibleProviderTypes = useMemo(() => {
