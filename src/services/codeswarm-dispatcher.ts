@@ -369,28 +369,9 @@ const taskPayload = JSON.stringify({
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                // DB 连接耗尽时不立即重入队，等待 10 秒后重试，避免快速循环耗尽 Stream
-                const isDbConnError = this.isDbConnectionError(dbTaskId);
-                if (isDbConnError) {
-                  logger.warn(LOG_MODULES.CODESWARM, 'DB 连接不足，延迟 10 秒后重入队');
-                  await this.sleep(10000);
-                }
-
-                const retries = (this.retryCounts.get(dbTaskId) || 0) + 1;
-                this.retryCounts.set(dbTaskId, retries);
-
-                if (retries >= CodeswarmDispatcher.MAX_REQUEUE_ATTEMPTS) {
-                  logger.error(LOG_MODULES.CODESWARM, `Task ${dbTaskId} failed after ${retries} dispatch attempts, marking as failed`);
-                  await prisma.codeswarmTask.updateMany({
-                    where: { id: dbTaskId, state: 'queued' },
-                    data: { state: 'failed', error: `No available worker after ${retries} attempts`, completedAt: new Date(), updatedAt: new Date() },
-                  }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
-                  this.retryCounts.delete(dbTaskId);
-                } else {
-                  await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
-                }
-              } else {
-                this.retryCounts.delete(dbTaskId);
+                // Worker 全满，任务保持 queued，等待事件驱动或兜底轮询触发
+                // 重新入队，让 tryDispatchNext 或兜底轮询可以捡起
+                await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
               }
             })
           );
@@ -583,8 +564,7 @@ const taskPayload = JSON.stringify({
   }
 
   private lastDbErrorTaskId: string | null = null;
-  private readonly retryCounts = new Map<string, number>();
-  private static readonly MAX_REQUEUE_ATTEMPTS = 10;
+  private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
 
   private isDbConnectionError(dbTaskId: string): boolean {
     if (this.lastDbErrorTaskId === dbTaskId) {
@@ -660,8 +640,54 @@ const taskPayload = JSON.stringify({
 
   // ---- Phase 3: 健壮性增强 ----
 
+  // 事件驱动 + 兜底轮询：从队列取下一个任务尝试分发
+  async tryDispatchNext(): Promise<void> {
+    if (!this.redis || !this.running) return;
+
+    try {
+      const messages = await this.redis.xreadgroup(
+        'GROUP', CONSUMER_GROUP, `${CONSUMER_NAME}-event`,
+        'COUNT', 1,
+        'STREAMS', STREAM_KEY, '>'
+      ) as [string, [string, string[]][]][] | null;
+
+      if (!messages || messages.length === 0) return;
+
+      for (const [, msgs] of messages) {
+        for (const [msgId, fields] of msgs) {
+          const dbTaskId = fields[1];
+          if (!dbTaskId) {
+            await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
+            continue;
+          }
+
+          const dispatched = await this.dispatchOne(dbTaskId);
+          await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
+
+          if (!dispatched) {
+            // 仍无可用 Worker，重新入队，等待下次触发
+            await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+          }
+        }
+      }
+    } catch (e) {
+      logger.warn(LOG_MODULES.CODESWARM, 'tryDispatchNext 失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+    }
+  }
+
+  private startFallbackPoller() {
+    const INTERVAL_MS = 5 * 60 * 1000;
+    this.fallbackPollTimer = setInterval(() => {
+      this.tryDispatchNext().catch(e =>
+        logger.warn(LOG_MODULES.CODESWARM, '兜底轮询异常', { details: { error: e instanceof Error ? e.message : String(e) } })
+      );
+    }, INTERVAL_MS);
+  }
+
   // 启动定时任务：掉线检测 + 超时扫描
   private startHealthChecks() {
+    // 启动兜底轮询：每 5 分钟尝试分发队列中的任务（防止事件回调丢失）
+    this.startFallbackPoller();
     // 每 60 秒检测掉线 Worker
     this.offlineCheckTimer = setInterval(() => this.checkOfflineWorkers(), 60_000);
     // 每 30 秒扫描超时任务
@@ -933,6 +959,7 @@ const taskPayload = JSON.stringify({
     if (this.timeoutCheckTimer) clearInterval(this.timeoutCheckTimer);
     if (this.pendingRetryTimer) clearInterval(this.pendingRetryTimer);
     if (this.streamCleanupTimer) clearInterval(this.streamCleanupTimer);
+    if (this.fallbackPollTimer) clearInterval(this.fallbackPollTimer);
     this.teardownRedis();
   }
 }

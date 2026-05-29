@@ -543,6 +543,10 @@ export async function POST(request: Request) {
 
     if (nodeId) {
       await codeswarmDispatcher.onTaskCompleted(nodeId);
+      // 事件驱动：Worker 释放 slot 后立即尝试分发队列中的下一个任务
+      codeswarmDispatcher.tryDispatchNext().catch(e =>
+        logger.warn(LOG_MODULES.CODESWARM, '触发下一任务分发失败', { details: { error: e instanceof Error ? e.message : String(e) } })
+      );
     }
 
     await codeswarmDispatcher.publishTaskEvent(taskId, {
