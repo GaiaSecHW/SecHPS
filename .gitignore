@@ -4,6 +4,9 @@ node_modules/
 .pnp.js
 package-lock.json
 
+# Database dumps
+copy_dump.sql
+
 # Testing
 coverage/
 
