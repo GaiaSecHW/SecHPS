@@ -1650,6 +1650,7 @@ model TaskInstance {
   modelName        String?
   parameters       String
   filePath         String?
+  fileName         String?
   projectPath      String?
   skills           String?
   scripts          String?

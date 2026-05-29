@@ -257,11 +257,13 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   }
 
   let filePath: string | null = null;
+  let fileName: string | null = null;
   let projectPath: string | null = null;
 
   if (files && files.length > 0) {
     for (const file of files) {
       const lowerName = file.name.toLowerCase();
+      fileName = file.name;
 
       if (lowerName.endsWith('.zip')) {
         serverLog.info(`[TaskCreation] 检测到压缩文件 ${file.name}，开始解压`);
@@ -303,6 +305,7 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
       modelName,
       parameters,
       filePath,
+      fileName,
       projectPath,
       skills,
       scripts,

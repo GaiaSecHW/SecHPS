@@ -14,6 +14,7 @@ interface TaskInstance {
   agentName: string;
   parameters: string;
   filePath: string | null;
+  fileName: string | null;
   projectPath: string | null;
   skills: string | null;
   scripts: string | null;
@@ -587,13 +588,22 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      {task.filePath && (
+      {(task.fileName || task.projectPath) && (
         <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText size={20} className="text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-100">上传文件</h2>
           </div>
-          <p className="text-sm text-gray-300">{task.filePath}</p>
+          {task.fileName && (
+            <p className="text-sm text-gray-300">
+              <span className="text-gray-500 mr-2">文件名:</span>{task.fileName}
+            </p>
+          )}
+          {task.projectPath && (
+            <p className="text-sm text-gray-400 mt-1">
+              <span className="text-gray-500 mr-2">工作目录:</span>{task.projectPath}
+            </p>
+          )}
         </div>
       )}
 
