@@ -3,6 +3,9 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { rm } from 'fs/promises';
+import { existsSync } from 'fs';
+import { join } from 'path';
 
 export async function GET(
   request: NextRequest,
@@ -94,6 +97,40 @@ export async function DELETE(
       return NextResponse.json({ error: '执行中的任务无法删除' }, { status: 400 });
     }
 
+    // 清理关联的 CodeswarmTask + CodeswarmEvent
+    if (task.codeswarmTaskId) {
+      try {
+        await prisma.codeswarmEvent.deleteMany({ where: { taskId: task.codeswarmTaskId } });
+        await prisma.codeswarmTask.deleteMany({ where: { taskId: task.codeswarmTaskId } });
+      } catch (e) {
+        logger.warn(LOG_MODULES.AGENT, '删除 CodeswarmTask 关联数据失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+      }
+    }
+
+    // 清理 NFS 目录
+    const SHARED_WORKSPACE_BASE = process.env.NFS_MOUNT_PATH || process.env.SHARED_WORKSPACE_PATH || '/data/shared-workspace';
+    const taskDir = join(SHARED_WORKSPACE_BASE, id);
+    if (existsSync(taskDir)) {
+      try {
+        await rm(taskDir, { recursive: true, force: true });
+      } catch (e) {
+        logger.warn(LOG_MODULES.AGENT, '删除 NFS 目录失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+      }
+    }
+
+    // 清理 MinIO workspace 包
+    try {
+      const { getMinioClientForCleanup } = await import('@/lib/task-cleanup');
+      const mc = getMinioClientForCleanup();
+      const WORKSPACE_BUCKET = process.env.MINIO_WORKSPACE_BUCKET || 'workspace';
+      await mc.removeObject(WORKSPACE_BUCKET, `workspaces/${id}.tar.gz`);
+    } catch (e: any) {
+      if (!e?.code?.includes('NoSuch') && e?.statusCode !== 404) {
+        logger.warn(LOG_MODULES.AGENT, '删除 MinIO workspace 包失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+      }
+    }
+
+    // 最后删除 TaskInstance（级联删 TaskExecutionLog + Vulnerability）
     await prisma.taskInstance.delete({
       where: { id },
     });

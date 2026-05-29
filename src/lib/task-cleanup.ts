@@ -21,6 +21,10 @@ const BATCH_SIZE = 100;
 
 let minioClient: Minio.Client | null = null;
 
+export function getMinioClientForCleanup(): Minio.Client {
+  return getMinioClient();
+}
+
 function getMinioClient(): Minio.Client {
   if (!minioClient) {
     minioClient = new Minio.Client({
