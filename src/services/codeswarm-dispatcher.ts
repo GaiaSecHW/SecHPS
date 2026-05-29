@@ -35,7 +35,7 @@ class CodeswarmDispatcher {
 
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      logger.warn(LOG_MODULES.CODESWARM, 'REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
+      logger.error(LOG_MODULES.CODESWARM, 'REDIS_URL 未配置，调度器未启动（降级为 DB 轮询模式）');
       this.startCleanupScheduler();
       return;
     }
@@ -102,9 +102,9 @@ class CodeswarmDispatcher {
       // 启动掉线检测 + 超时扫描
       this.startHealthChecks();
     } catch (e) {
-      logger.warn(LOG_MODULES.CODESWARM, 'Redis 不可用，降级为 DB 轮询模式');
-      logger.warn(LOG_MODULES.CODESWARM, '错误详情', { details: { error: e instanceof Error ? e.message : String(e) } });
-      logger.warn(LOG_MODULES.CODESWARM, 'REDIS_URL', { details: { redisUrl } });
+      logger.error(LOG_MODULES.CODESWARM, 'Redis 不可用，降级为 DB 轮询模式');
+      logger.error(LOG_MODULES.CODESWARM, '错误详情', { details: { error: e instanceof Error ? e.message : String(e) } });
+      logger.error(LOG_MODULES.CODESWARM, 'REDIS_URL', { details: { redisUrl } });
       this.teardownRedis();
       this.startCleanupScheduler();
     }

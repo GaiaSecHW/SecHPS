@@ -341,7 +341,7 @@ export async function computeContentSimilarity(
   try {
     return await computeLLMContentSimilarity(skillA, skillB);
   } catch (error) {
-    logger.warn(LOG_MODULES.SKILL, 'LLM分析失败，降级到文本相似度', { details: { error: error instanceof Error ? error.message : String(error) } });
+    logger.error(LOG_MODULES.SKILL, 'LLM分析失败，降级到文本相似度', { details: { error: error instanceof Error ? error.message : String(error) } });
     // 降级方案：使用文本相似度
     return computeTextSimilarity(skillA.content, skillB.content);
   }
