@@ -256,3 +256,87 @@ export async function listDbFiles(targetProduct: string): Promise<string[]> {
     return [];
   }
 }
+
+// ---- Workspace bucket support ----
+
+const WORKSPACE_BUCKET = process.env.MINIO_WORKSPACE_BUCKET || 'workspace';
+
+export { WORKSPACE_BUCKET as MINIO_WORKSPACE_BUCKET };
+
+let workspaceBucketEnsured = false;
+
+/** Ensure workspace bucket exists */
+export async function ensureWorkspaceBucket(): Promise<void> {
+  if (workspaceBucketEnsured) return;
+  try {
+    const client = getClient();
+    const exists = await client.bucketExists(WORKSPACE_BUCKET);
+    if (!exists) {
+      await client.makeBucket(WORKSPACE_BUCKET);
+    }
+    workspaceBucketEnsured = true;
+  } catch (err) {
+    throw new Error(`Failed to ensure workspace bucket: ${err}`);
+  }
+}
+
+/** Download tar.gz from MinIO and extract to local directory (streaming, no full buffer) */
+export async function downloadAndExtractWorkspace(
+  objectKey: string,
+  destDir: string
+): Promise<{ bytes: number }> {
+  const tar = require('tar');
+  const fs = require('fs');
+  const { pipeline } = require('stream/promises');
+
+  const client = getClient();
+  const dataStream = await client.getObject(WORKSPACE_BUCKET, objectKey);
+
+  fs.mkdirSync(destDir, { recursive: true });
+
+  let bytes = 0;
+  const countingStream = new (require('stream').Transform)({
+    transform(chunk: Buffer, _enc: string, cb: Function) {
+      bytes += chunk.length;
+      cb(null, chunk);
+    },
+  });
+
+  await pipeline(
+    dataStream,
+    countingStream,
+    tar.x({ gzip: true, cwd: destDir })
+  );
+
+  return { bytes };
+}
+
+/** Pack local directory into tar.gz and upload to MinIO (streaming, no full buffer) */
+export async function uploadWorkspaceResult(
+  localDir: string,
+  objectKey: string
+): Promise<{ objectKey: string; bytes: number }> {
+  const tar = require('tar');
+  const { PassThrough } = require('stream');
+
+  const client = getClient();
+  const packStream = tar.c({
+    gzip: true,
+    cwd: localDir,
+    portable: true,
+  }, ['.']);
+
+  // Collect to buffer — MinIO putObject needs content-length for stream uploads
+  // For large workspaces, consider using multipart upload in the future
+  const chunks: Buffer[] = [];
+  for await (const chunk of packStream) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  const buffer = Buffer.concat(chunks);
+
+  await client.putObject(WORKSPACE_BUCKET, objectKey, buffer, buffer.length, {
+    'Content-Type': 'application/gzip',
+  });
+
+  return { objectKey, bytes: buffer.length };
+}

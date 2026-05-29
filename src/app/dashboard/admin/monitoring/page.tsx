@@ -49,7 +49,6 @@ interface InfrastructureInfo {
   redis: InfrastructureService;
   gitea: InfrastructureService;
   minio: InfrastructureService;
-  nfs: InfrastructureService;
 }
 
 interface SystemHealthReport {
@@ -382,8 +381,8 @@ export default function MonitoringPage() {
             <Network size={16} className="text-cyan-400" />
             基础设施连接
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {(['database', 'redis', 'gitea', 'minio', 'nfs'] as const).map(key => {
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {(['database', 'redis', 'gitea', 'minio'] as const).map(key => {
               const svc = health.infrastructure[key];
               const infra = infraStatusConfig[svc.status];
               const InfraIcon = infra.icon;

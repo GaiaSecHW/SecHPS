@@ -5,9 +5,6 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, withRetry } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
-import { copyAgentHarnessFromLocal } from '@/lib/task-creation';
-import { existsSync, readdirSync } from 'fs';
-import { join } from 'path';
 
 /** 任务执行超时（秒），默认 7天 (7*24*3600=604800)，可通过 .env TASK_TIMEOUT_SEC 配置 */
 const DEFAULT_TASK_TIMEOUT_SEC = 7 * 24 * 3600;
@@ -22,25 +19,6 @@ function parseJsonArray(value: string | null | undefined): string[] {
   } catch {
     return value ? [value] : [];
   }
-}
-
-/** Check if workspace contains agent config files (opencode.json etc.) */
-function checkWorkspaceHasHarness(workspacePath: string): boolean {
-  if (!existsSync(workspacePath)) return false;
-  try {
-    const entries = readdirSync(workspacePath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const subDir = join(workspacePath, entry.name);
-        if (existsSync(join(subDir, 'opencode.json'))) return true;
-      } else if (entry.name === 'opencode.json') {
-        return true;
-      }
-    }
-  } catch {
-    // ignore read errors
-  }
-  return false;
 }
 
 export async function POST(
@@ -120,27 +98,7 @@ export async function POST(
       timestamp: new Date(),
     });
 
-    const workspacePath = task.projectPath || undefined;
-
-    // On-demand: check if workspace has agent harness files, copy from local if missing
-    if (workspacePath && task.agentId) {
-      const hasHarness = checkWorkspaceHasHarness(workspacePath);
-      if (!hasHarness) {
-        const agentAppForHarness = await prisma.agentApp.findUnique({
-          where: { id: task.agentId },
-          select: { agentHarnessPath: true },
-        });
-        if (agentAppForHarness?.agentHarnessPath) {
-          logger.info(LOG_MODULES.AGENT, `Workspace missing agent harness, copying from local: ${agentAppForHarness.agentHarnessPath}`);
-          try {
-            await copyAgentHarnessFromLocal(agentAppForHarness.agentHarnessPath, workspacePath);
-            logger.info(LOG_MODULES.AGENT, `Agent harness copied to workspace`);
-          } catch (copyError) {
-            logger.error(LOG_MODULES.AGENT, `Failed to copy agent harness from local`, { details: { error: copyError instanceof Error ? copyError.message : String(copyError) } });
-          }
-        }
-      }
-    }
+    const workspaceStorageKey = task.workspaceStorageKey || undefined;
     const skills = mergedSkills ? parseJsonArray(mergedSkills) : undefined;
     const scripts = mergedScripts ? parseJsonArray(mergedScripts) : undefined;
 
@@ -176,7 +134,7 @@ export async function POST(
         "platformTaskId", "createdAt", "updatedAt"
       ) VALUES (
         ${codeswarmDbId}, ${codeswarmTaskId}, 'queued',
-        ${instruction}, NULL, ${workspacePath || null},
+        ${instruction}, NULL, ${workspaceStorageKey || null},
         ${skills ? JSON.stringify(skills) : null},
         ${scripts ? JSON.stringify(scripts) : null},
         NULL, ${model || null}, ${apiKey || null}, ${timeoutSec},
@@ -220,7 +178,7 @@ export async function POST(
           taskId: codeswarmTaskId,
           instruction: instruction,
           projectPath: null,
-          workspacePath: workspacePath || null,
+          workspacePath: workspaceStorageKey || null,
           skills: skills ? JSON.stringify(skills) : null,
           scripts: scripts ? JSON.stringify(scripts) : null,
           mcps: null,

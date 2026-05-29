@@ -110,8 +110,10 @@ export const TaskPayloadSchema = z.object({
   apiKey: z.string().optional(),
   // API base URL for custom endpoints (e.g. private model router)
   apiBaseUrl: z.string().optional(),
-  // NFS passthrough: skip copying project files, use this path directly as workspace
+  // Workspace path (legacy, prefer workspaceStorageKey)
   workspacePath: z.string().optional(),
+  // MinIO workspace object key
+  workspaceStorageKey: z.string().optional(),
   // Override callback URL (orchestrator backend address)
   callbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
@@ -195,6 +197,8 @@ export const TaskResultSchema = z.object({
   error: z.string().optional(),
   // Security report content (reports.jsonl raw text)
   reportContent: z.string().optional(),
+  // MinIO results object key (uploaded by Worker after execution)
+  resultStorageKey: z.string().optional(),
 });
 
 export type TaskResult = z.infer<typeof TaskResultSchema>;

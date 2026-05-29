@@ -126,19 +126,6 @@ async function checkMinIO(): Promise<InfrastructureService> {
   }
 }
 
-async function checkNFS(): Promise<InfrastructureService> {
-  const mountPath = process.env.NFS_MOUNT_PATH || '';
-  if (!mountPath) {
-    return { name: 'NFS', type: 'file-storage', host: '', configured: false, status: 'not_configured' };
-  }
-  try {
-    fs.accessSync(mountPath, fs.constants.R_OK);
-    return { name: 'NFS', type: 'file-storage', host: mountPath, configured: true, status: 'connected', message: `路径 "${mountPath}" 可访问` };
-  } catch {
-    return { name: 'NFS', type: 'file-storage', host: mountPath, configured: true, status: 'unreachable', message: `路径 "${mountPath}" 不可访问` };
-  }
-}
-
 /**
  * 执行所有健康检查
  */
@@ -156,7 +143,6 @@ export async function runHealthChecks(): Promise<SystemHealthReport> {
     redis: await checkRedis(),
     gitea: await checkGitea(),
     minio: await checkMinIO(),
-    nfs: await checkNFS(),
   };
 
   const memDetails = checks[1].details as { heapUsed: number; heapTotal: number };

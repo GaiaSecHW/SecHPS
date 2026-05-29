@@ -341,7 +341,7 @@ function CodeSwarmPageContent() {
             { name: 'instruction', type: 'string', required: true, desc: 'AI 执行指令' },
             { name: 'agent', type: 'string', required: false, desc: '执行器类型 (opencode/claude/nazhua-audit)' },
             { name: 'projectPath', type: 'string', required: false, desc: '项目路径 (本地)' },
-            { name: 'workspacePath', type: 'string', required: false, desc: '工作空间路径 (NFS共享目录)' },
+            { name: 'workspacePath', type: 'string', required: false, desc: '工作空间路径 (MinIO 对象键或本地路径)' },
             { name: 'engine', type: 'string', required: false, desc: '执行引擎 (opencode/claudecode，默认 opencode)' },
             { name: 'model', type: 'string', required: false, desc: 'AI 模型 (如 anthropic/claude-sonnet-4-5)' },
             { name: 'apiKey', type: 'string', required: false, desc: 'API Key (覆盖模型默认Key)' },

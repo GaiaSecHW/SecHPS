@@ -12,7 +12,7 @@ import { EnvironmentFactory } from './environment.js';
 import { ProcessManager, type AgentEvent, classifyAcpError, hasSubstantialOutput } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 import { CodedmapManager } from './codedmap-manager.js';
-import { ensureBucket } from './minio-client.js';
+import { ensureBucket, ensureWorkspaceBucket } from './minio-client.js';
 
 interface WorkerDaemonConfig {
   nodeId: string;
@@ -186,10 +186,13 @@ export class WorkerDaemon {
     await this.server.listen({ port: this.config.port, host: '0.0.0.0' });
     this.checkBinaries();
     this.startHeartbeat();
-    // Ensure MinIO bucket exists at startup
-    ensureBucket().catch(err => {
+    // Ensure MinIO buckets exist at startup (blocking — must be ready before accepting tasks)
+    try {
+      await ensureBucket();
+      await ensureWorkspaceBucket();
+    } catch (err) {
       this.server.log.warn({ error: err }, 'MinIO bucket check failed (non-fatal)');
-    });
+    }
     this.server.log.info({ config: this.config }, 'Worker daemon started');
     console.log(`\n${'='.repeat(50)}`);
     console.log(`  Worker Node: ${this.config.nodeId}`);
@@ -605,6 +608,20 @@ export class WorkerDaemon {
         });
       }
 
+      // Upload results to MinIO (must complete before postResult)
+      const resultStorageKey = buildResult.resultStorageKey;
+      let effectiveResultStorageKey: string | undefined = resultStorageKey;
+      if (resultStorageKey && status === 'completed') {
+        try {
+          const { uploadWorkspaceResult } = require('./minio-client');
+          await uploadWorkspaceResult(workspacePath, resultStorageKey);
+        } catch (err) {
+          // Upload failed: clear key so Server won't attempt to download a non-existent object
+          effectiveResultStorageKey = undefined;
+          this.server.log.warn({ taskId, error: err }, 'Result upload to MinIO failed, vulnerability parse will be skipped');
+        }
+      }
+
       this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
@@ -612,6 +629,7 @@ export class WorkerDaemon {
         result: isCancelled ? undefined : (result.stdout || undefined),
         error: isCancelled ? 'Task cancelled by user' : (result.exitCode !== 0 ? result.stderr || `Process exited with code ${result.exitCode}` : undefined),
         reportContent: isCancelled ? undefined : reportContent,
+        resultStorageKey: effectiveResultStorageKey,
       }).catch(err => {
         this.server.log.warn({ taskId, error: err }, 'postResult (success path) failed (non-blocking)');
       });
@@ -635,6 +653,7 @@ export class WorkerDaemon {
         nodeId: this.config.nodeId,
         status: 'failed',
         error: errorMsg,
+        resultStorageKey: buildResult?.resultStorageKey,
       }).catch(err => {
         this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed (non-blocking)');
       });
@@ -642,8 +661,8 @@ export class WorkerDaemon {
       this.cancelledTasks.delete(taskId);
       // Codedmap is fully async — do NOT await it here.
       // Errors are handled inside the promise chain (lines 232-243).
-      // NFS passthrough mode skips cleanup anyway, so no risk of
-      // deleting files while codedmap is still writing.
+      // MinIO mode skips cleanup of downloaded workspaces after result upload.
+      // No risk of deleting files while codedmap is still writing.
       if (buildResult) {
         await this.envFactory.cleanup(buildResult.workspacePath);
       }
@@ -716,6 +735,7 @@ export class WorkerDaemon {
     result?: string;
     error?: string;
     reportContent?: string;
+    resultStorageKey?: string;
   }): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
     const maxRetries = 3;

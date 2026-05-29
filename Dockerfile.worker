@@ -32,7 +32,6 @@
 #   MINIO_USE_SSL       - MinIO SSL toggle (default false)
 #   GITEA_CODEDMAP_REPO - Gitea repo URL for codedmap db cache
 #   GITEA_CODEDMAP_TOKEN- Gitea access token
-#   PATH_MAPPING        - NFS path mapping
 #
 # Important:
 #   - pnpm install MUST include optional deps (@img/sharp-* for claude-agent-sdk)
@@ -336,7 +335,8 @@ RUN python3 -c "import codedmap; print('codedmap import OK')" && \
 # ---------------------------------------------------------------------------
 COPY --from=worker-builder /deploy/worker /opt/worker
 
-RUN mkdir -p /opt/worker/data/task_workspaces
+RUN mkdir -p /opt/worker/data/task_workspaces && \
+    mkdir -p /data/worker_workspaces
 
 # ---------------------------------------------------------------------------
 # Copy models.json to OpenCode cache directory

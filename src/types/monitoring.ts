@@ -138,7 +138,6 @@ export interface InfrastructureInfo {
   redis: InfrastructureService;
   gitea: InfrastructureService;
   minio: InfrastructureService;
-  nfs: InfrastructureService;
 }
 
 // 系统健康报告

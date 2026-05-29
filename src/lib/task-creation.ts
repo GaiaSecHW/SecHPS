@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { writeFile, mkdir, rm, readdir, readFile } from 'fs/promises';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { existsSync } from 'fs';
 import AdmZip from 'adm-zip';
 import { serverLog } from '@/lib/server-log';
@@ -188,7 +189,7 @@ export async function copyAgentHarnessFromLocal(repoName: string, destDir: strin
   }
 }
 
-const SHARED_WORKSPACE_BASE = process.env.NFS_MOUNT_PATH || process.env.SHARED_WORKSPACE_PATH || '/data/shared-workspace';
+const TEMP_WORKSPACE_BASE = join(tmpdir(), 'sehps-workspaces');
 
 interface CreateTaskParams {
   taskId: string;
@@ -214,7 +215,7 @@ interface CreateTaskResult {
     name: string;
     status: string;
     filePath?: string | null;
-    projectPath?: string | null;
+    workspaceStorageKey?: string | null;
     createdAt: Date;
   };
 }
@@ -238,7 +239,7 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
     files,
   } = params;
 
-  const taskDir = join(SHARED_WORKSPACE_BASE, taskId);
+  const taskDir = join(TEMP_WORKSPACE_BASE, taskId);
   await mkdir(taskDir, { recursive: true });
 
   // 获取 Agent 信息
@@ -257,7 +258,6 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   }
 
   let filePath: string | null = null;
-  let projectPath: string | null = null;
 
   if (files && files.length > 0) {
     for (const file of files) {
@@ -289,7 +289,32 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
     }
   }
 
-  projectPath = taskDir;
+  // AgentHarness injection (moved from execute/route.ts to creation time)
+  if (agentId) {
+    try {
+      const agentApp = await prisma.agentApp.findUnique({
+        where: { id: agentId },
+        select: { agentHarnessPath: true },
+      });
+      if (agentApp?.agentHarnessPath) {
+        await copyAgentHarnessFromLocal(agentApp.agentHarnessPath, taskDir);
+      }
+    } catch (e) {
+      serverLog.warn(`[TaskCreation] AgentHarness 注入失败`, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // Upload to MinIO
+  const { uploadDirectory } = await import('@/lib/minio-workspace');
+  const workspaceStorageKey = `workspaces/${taskId}.tar.gz`;
+  try {
+    await uploadDirectory(taskDir, workspaceStorageKey, {
+      exclude: ['.git', 'node_modules'],
+    });
+  } finally {
+    // Cleanup temp directory regardless of upload success/failure
+    await rm(taskDir, { recursive: true, force: true });
+  }
 
   const task = await prisma.taskInstance.create({
     data: {
@@ -303,7 +328,7 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
       modelName,
       parameters,
       filePath,
-      projectPath,
+      workspaceStorageKey,
       skills,
       scripts,
       targetProduct,
@@ -320,16 +345,12 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
       name: task.name,
       status: task.status,
       filePath: task.filePath,
-      projectPath: task.projectPath,
+      workspaceStorageKey: task.workspaceStorageKey,
       createdAt: task.createdAt,
     },
   };
 }
 
 export async function cleanupTaskDirectory(taskId: string): Promise<void> {
-  const taskDir = join(SHARED_WORKSPACE_BASE, taskId);
-  if (existsSync(taskDir)) {
-    await rm(taskDir, { recursive: true, force: true });
-    serverLog.info(`[TaskCreation] 清理任务目录: ${taskDir}`);
-  }
+  // No-op: temp directories are cleaned up immediately after MinIO upload in createTaskWithFiles
 }

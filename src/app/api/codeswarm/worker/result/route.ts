@@ -294,13 +294,37 @@ interface ParseContext {
 
 function executeVulnerabilityParseAsync(
   taskId: string,
-  projectPath: string,
+  resultStorageKey: string | null,
   taskInstanceId: string,
   context: ParseContext
 ): void {
   (async () => {
     const startTime = Date.now();
     const { productName, taskName } = context;
+
+    // Download results from MinIO to temp directory
+    const { tmpdir } = await import('os');
+    const { join } = await import('path');
+    const { mkdir, rm } = await import('fs/promises');
+    const { downloadAndExtract } = await import('@/lib/minio-workspace');
+
+    const projectPath = join(tmpdir(), `sehps-parse-${taskId}`);
+
+    if (!resultStorageKey) {
+      logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] No resultStorageKey, skipping vulnerability parse`);
+      vulnParseInProgress.delete(taskId);
+      return;
+    }
+
+    try {
+      await mkdir(projectPath, { recursive: true });
+      await downloadAndExtract(resultStorageKey, projectPath);
+    } catch (err) {
+      logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Failed to download results from MinIO`, { details: { error: err instanceof Error ? err.message : String(err) } });
+      await rm(projectPath, { recursive: true, force: true }).catch(() => {});
+      vulnParseInProgress.delete(taskId);
+      return;
+    }
 
     try {
       logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 开始解析漏洞报告 (productName=${productName}, taskName=${taskName})`);
@@ -451,6 +475,8 @@ if (instructionPhase1) {
       logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 异常`, { details: { error: e instanceof Error ? e.message : String(e) } });
       await createParseLog(taskInstanceId, 'error', 'VulnParse 异常', e instanceof Error ? e.message : String(e));
     } finally {
+      // Cleanup temp directory
+      await rm(projectPath, { recursive: true, force: true }).catch(() => {});
       vulnParseInProgress.delete(taskId);
     }
   })();
@@ -459,7 +485,7 @@ if (instructionPhase1) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { taskId, nodeId, status, result, error, reportContent } = body;
+    const { taskId, nodeId, status, result, error, reportContent, resultStorageKey } = body;
 
     if (!taskId) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
@@ -500,11 +526,12 @@ export async function POST(request: Request) {
             errorMessage: error || null,
             executionResult: result || null,
             reportPath: reportContent || null,
+            resultStorageKey: resultStorageKey || null,
           },
         });
       }
 
-      return { alreadyTerminal: false, taskInstance };
+      return { alreadyTerminal: false, taskInstance, resultStorageKey: resultStorageKey || null };
     });
 
     if (txResult.alreadyTerminal) {
@@ -555,14 +582,18 @@ export async function POST(request: Request) {
     });
 
     if (finalState === 'completed') {
-      const taskInstanceForParse = await prisma.taskInstance.findFirst({
-        where: { codeswarmTaskId: taskId },
-        select: { id: true, projectPath: true, name: true, targetProduct: true },
-      });
+      const storedResultKey = txResult.resultStorageKey;
 
-      if (taskInstanceForParse?.projectPath && !vulnParseInProgress.has(taskId)) {
+      if (storedResultKey && !vulnParseInProgress.has(taskId)) {
         vulnParseInProgress.add(taskId);
-        let productName = taskInstanceForParse.targetProduct;
+        let productName: string | null = null;
+
+        const taskInstanceForParse = await prisma.taskInstance.findFirst({
+          where: { codeswarmTaskId: taskId },
+          select: { id: true, name: true, targetProduct: true },
+        });
+
+        productName = taskInstanceForParse?.targetProduct || null;
 
         if (!productName) {
           const codeswarmTask = await prisma.codeswarmTask.findUnique({
@@ -572,14 +603,17 @@ export async function POST(request: Request) {
           productName = codeswarmTask?.targetProduct || 'default';
         }
 
-        const taskName = taskInstanceForParse.name || 'unnamed-task';
+        const taskName = taskInstanceForParse?.name || 'unnamed-task';
+        const taskInstanceId = taskInstanceForParse?.id || '';
 
-        await createParseLog(taskInstanceForParse.id, 'info', '收到 Worker 完成回调', `codeswarmTaskId: ${taskId}, 产品: ${productName}, 任务: ${taskName}`);
+        if (taskInstanceId) {
+          await createParseLog(taskInstanceId, 'info', '收到 Worker 完成回调', `codeswarmTaskId: ${taskId}, 产品: ${productName}, 任务: ${taskName}`);
+        }
 
         executeVulnerabilityParseAsync(
           taskId,
-          taskInstanceForParse.projectPath,
-          taskInstanceForParse.id,
+          storedResultKey,
+          taskInstanceId,
           { productName, taskName }
         );
       } else if (vulnParseInProgress.has(taskId)) {

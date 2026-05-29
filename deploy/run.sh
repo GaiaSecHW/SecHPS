@@ -25,9 +25,6 @@ WORKER_CONTAINER="sechps-worker"
 SERVER_PORT=3000
 WORKER_PORT=8090
 
-# 共享数据卷：宿主机路径 → 容器内路径
-SHARED_VOLUME="/home/icsl/luyuxin/ai4_worker:/mnt/luyuxin/ai4_worker"
-
 # 自动检测 latest 镜像 tag
 SERVER_IMAGE="sechps-server:latest"
 WORKER_IMAGE="sechps-worker:latest"
@@ -81,7 +78,6 @@ run_server() {
         --user root \
         --env-file "$SERVER_ENV_FILE" \
         -p "${SERVER_PORT}:${SERVER_PORT}" \
-        -v "$SHARED_VOLUME" \
         --restart unless-stopped \
         "$SERVER_IMAGE"
 
@@ -112,7 +108,6 @@ run_worker() {
         --name "$WORKER_CONTAINER" \
         --env-file "$WORKER_ENV_FILE" \
         -p "${WORKER_PORT}:${WORKER_PORT}" \
-        -v "$SHARED_VOLUME" \
         --restart unless-stopped \
         "$WORKER_IMAGE"
 

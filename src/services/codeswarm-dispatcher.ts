@@ -175,7 +175,7 @@ const taskPayload = JSON.stringify({
       taskId: task.taskId,
       instruction: task.instruction || undefined,
       projectPath: task.projectPath || undefined,
-      workspacePath: task.workspacePath || undefined,
+      workspaceStorageKey: task.workspacePath || undefined,
       skills: task.skills ? safeJsonParse(task.skills) : undefined,
       scripts: task.scripts ? safeJsonParse(task.scripts) : undefined,
       mcps: task.mcps ? safeJsonParse(task.mcps) : undefined,

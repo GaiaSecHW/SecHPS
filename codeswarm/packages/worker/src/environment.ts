@@ -14,6 +14,7 @@ export interface BuildResult {
   commandTemplate?: string;
   model?: string;
   engine?: 'opencode' | 'claudecode';
+  resultStorageKey?: string;
 }
 
 export type BuildProgressCallback = (message: string) => void;
@@ -107,21 +108,6 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
   return config;
 }
 
-function mapRemotePathToLocal(remotePath: string): string {
-  const pathMapping = process.env.PATH_MAPPING;
-  if (!pathMapping) {
-    return remotePath;
-  }
-  const [remotePrefix, localPrefix] = pathMapping.split('=');
-  if (!remotePrefix || !localPrefix) {
-    return remotePath;
-  }
-  if (remotePath.startsWith(remotePrefix)) {
-    return remotePath.replace(remotePrefix, localPrefix);
-  }
-  return remotePath;
-}
-
 export class EnvironmentFactory {
   private readonly workspaceBasePath: string;
   private readonly skillsRegistryPath: string;
@@ -133,7 +119,7 @@ export class EnvironmentFactory {
 
   /**
    * Build an isolated workspace for a task.
-   * Priority: workspacePath (NFS) > projectPath (local copy)
+   * Priority: workspaceStorageKey (MinIO) > projectPath (local copy)
    */
   async build(payload: TaskPayload, onProgress?: BuildProgressCallback, engine?: 'opencode' | 'claudecode'): Promise<BuildResult> {
     const progress = (msg: string) => {
@@ -149,25 +135,31 @@ export class EnvironmentFactory {
     console.log(`[Environment] payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
     console.log(`[Environment] payload.model: ${payload.model}`);
     
-    // NFS passthrough mode: use the provided workspace path directly
-    // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
-    // Read default_agent from opencode.json if agent not specified in payload
-    if (payload.workspacePath) {
-      progress(`Mode: NFS passthrough (workspacePath=${payload.workspacePath})`);
-      const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
-      progress(`路径映射: ${payload.workspacePath} -> ${localWorkspacePath}`);
+    // MinIO download mode
+    if (payload.workspaceStorageKey) {
+      const localBase = process.env.WORKSPACE_LOCAL_PATH || '/data/worker_workspaces';
+      const localPath = path.join(localBase, payload.taskId);
 
-      // Check workspace permissions for NFS passthrough mode
-      this.checkWorkspacePermissions(localWorkspacePath);
+      onProgress?.('Downloading workspace from MinIO...');
+      fs.mkdirSync(localPath, { recursive: true });
 
-      let actualWorkspacePath = localWorkspacePath;
+      try {
+        const { downloadAndExtractWorkspace } = require('./minio-client');
+        await downloadAndExtractWorkspace(payload.workspaceStorageKey, localPath);
+      } catch (err) {
+        fs.rmSync(localPath, { recursive: true, force: true });
+        throw new Error(`Workspace download failed: ${err}`);
+      }
+
+      // Read opencode.json / instruction.txt from local path
+      let actualWorkspacePath = localPath;
       let resolvedAgent: string | undefined;
       let resolvedInstruction: string | undefined;
       let commandTemplate: string | undefined;
 
       // Read instruction.txt from root directory
       progress(`Step 1: 检查 instruction.txt...`);
-      const instructionPath = path.join(localWorkspacePath, 'instruction.txt');
+      const instructionPath = path.join(localPath, 'instruction.txt');
       progress(`instruction.txt exists: ${fs.existsSync(instructionPath)}`);
 
       if (fs.existsSync(instructionPath)) {
@@ -188,7 +180,7 @@ export class EnvironmentFactory {
       // opencode.json is opencode-specific config; skip for claudecode engine
       if (engine !== 'claudecode') {
         progress(`Step 2: 检查 opencode.json...`);
-        const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
+        const directOpencodeJsonPath = path.join(localPath, 'opencode.json');
         progress(`opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
         if (fs.existsSync(directOpencodeJsonPath)) {
           progress(`找到 opencode.json，读取配置...`);
@@ -219,14 +211,14 @@ export class EnvironmentFactory {
           }
         } else {
           progress(`Step 2b: 检查子目录...`);
-          const subdirs = fs.readdirSync(localWorkspacePath, { withFileTypes: true })
-            .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
-            .map(entry => entry.name);
+          const subdirs = fs.readdirSync(localPath, { withFileTypes: true })
+            .filter((entry: any) => entry.isDirectory() && !entry.name.startsWith('.'))
+            .map((entry: any) => entry.name);
 
           progress(`子目录列表: ${subdirs.join(', ')} (${subdirs.length}个)`);
 
           if (subdirs.length === 1) {
-            const subdirPath = path.join(localWorkspacePath, subdirs[0]);
+            const subdirPath = path.join(localPath, subdirs[0]);
             const subdirOpencodeJsonPath = path.join(subdirPath, 'opencode.json');
             progress(`检查子目录: ${subdirs[0]}`);
             if (fs.existsSync(subdirOpencodeJsonPath)) {
@@ -253,7 +245,7 @@ export class EnvironmentFactory {
                 progress(`读取子目录 opencode.json 失败: ${e}`);
               }
             }
-} else if (subdirs.length > 1) {
+          } else if (subdirs.length > 1) {
             progress(`多个子目录，不自动选择`);
           }
           // If no opencode.json was found in workspace, auto-generate one with model config
@@ -267,7 +259,7 @@ export class EnvironmentFactory {
             if (payload.agent) {
               autoConfig.default_agent = payload.agent;
             }
-            const autoConfigPath = path.join(localWorkspacePath, 'opencode.json');
+            const autoConfigPath = path.join(localPath, 'opencode.json');
             fs.writeFileSync(autoConfigPath, JSON.stringify(autoConfig, null, 2));
             progress(`自动生成 opencode.json: model=${autoConfig.model}, agent=${payload.agent || 'none'}`);
           }
@@ -280,8 +272,15 @@ export class EnvironmentFactory {
       const opencodeDir = path.join(actualWorkspacePath, '.opencode');
       fs.mkdirSync(opencodeDir, { recursive: true });
 
-      progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
-      return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate, model: payload.model };
+      progress(`BUILD COMPLETE (MinIO mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
+      return {
+        workspacePath: actualWorkspacePath,
+        agent: resolvedAgent,
+        instruction: resolvedInstruction,
+        commandTemplate,
+        model: payload.model,
+        resultStorageKey: `results/${payload.taskId}.tar.gz`,
+      };
     }
 
     // Local workspace mode
@@ -383,22 +382,10 @@ export class EnvironmentFactory {
 
   /**
    * Clean up a workspace directory.
-   * Skips cleanup if the path is not under the local workspaceBasePath (NFS paths).
+   * Skips cleanup if the path is not under the local workspaceBasePath.
    */
   async cleanup(workspacePath: string): Promise<void> {
-    // Never delete mapped remote paths (they come from NFS/remote server)
-    const pathMapping = process.env.PATH_MAPPING;
-    if (pathMapping) {
-      const localPrefix = pathMapping.split('=')[1];
-      if (localPrefix && workspacePath.startsWith(localPrefix)) {
-        return;
-      }
-    }
     const resolved = path.resolve(workspacePath);
-    const base = path.resolve(this.workspaceBasePath);
-    if (!resolved.startsWith(base)) {
-      return;
-    }
     if (fs.existsSync(resolved)) {
       fs.rmSync(resolved, { recursive: true, force: true });
     }
@@ -430,29 +417,4 @@ export class EnvironmentFactory {
     return !relativePath.includes('node_modules');
   }
 
-  /**
-   * Check workspace permissions and log warnings if access is limited.
-   * This is critical for NFS passthrough mode where the worker needs execute permissions.
-   */
-  private checkWorkspacePermissions(workspacePath: string): void {
-    const checks = [
-      { name: 'read', bit: fs.constants.R_OK },
-      { name: 'write', bit: fs.constants.W_OK },
-      { name: 'execute/search', bit: fs.constants.X_OK },
-    ];
-
-    let allOk = true;
-    for (const check of checks) {
-      try {
-        fs.accessSync(workspacePath, check.bit);
-      } catch {
-        console.warn(`[Environment] ⚠️ 工作区 ${workspacePath} 缺少 ${check.name} 权限 (${check.bit})`);
-        allOk = false;
-      }
-    }
-
-    if (allOk) {
-      console.log(`[Environment] ✓ 工作区权限检查通过: ${workspacePath}`);
-    }
-  }
 }

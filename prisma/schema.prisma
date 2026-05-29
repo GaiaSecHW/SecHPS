@@ -1651,6 +1651,8 @@ model TaskInstance {
   parameters       String
   filePath         String?
   projectPath      String?
+  workspaceStorageKey   String?
+  resultStorageKey      String?
   skills           String?
   scripts          String?
   notes            String?

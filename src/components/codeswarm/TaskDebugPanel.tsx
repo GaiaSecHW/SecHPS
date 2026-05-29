@@ -390,7 +390,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                工作区路径 (NFS)
+                工作区路径 (workspacePath)
               </label>
               <input
                 type="text"
