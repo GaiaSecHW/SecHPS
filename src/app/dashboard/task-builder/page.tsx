@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server } from 'lucide-react';
+import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server, X, Check, ChevronDown } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import ModeSelectModal from './ModeSelectModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -76,6 +76,15 @@ export default function TaskBuilderPage() {
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'running' | 'completed' | 'failed'>('all');
+
+  // 重试弹窗状态
+  const [rerunModal, setRerunModal] = useState<{ isOpen: boolean; taskId: string | null; taskName: string; modelId: string; modelName: string }>({
+    isOpen: false, taskId: null, taskName: '', modelId: '', modelName: '',
+  });
+  const [rerunModels, setRerunModels] = useState<{ modelId: string; modelName: string; key: string }[]>([]);
+  const [rerunSelectedKey, setRerunSelectedKey] = useState('');
+  const [rerunDropdownOpen, setRerunDropdownOpen] = useState(false);
+  const rerunDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchTasks(currentPage, pageSize);
@@ -174,14 +183,15 @@ export default function TaskBuilderPage() {
     router.push(`/dashboard/task-builder/${taskId}`);
   };
 
-  const handleRunTask = async (taskId: string) => {
+  const handleRunTask = async (taskId: string, modelId?: string, modelName?: string) => {
     if (executingIds.has(taskId)) return;
     setExecutingIds(prev => new Set(prev).add(taskId));
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/task-builder/tasks/${taskId}/execute`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelId: modelId || undefined, modelName: modelName || undefined }),
       });
 
       if (!response.ok) {
@@ -496,7 +506,25 @@ export default function TaskBuilderPage() {
                     )}
                     {(task.status === 'completed' || task.status === 'failed') && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleRunTask(task.id); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fetch('/api/models')
+                            .then(r => r.json())
+                            .then(data => {
+                              const models = (data.models || data || []).flatMap((m: any) =>
+                                (m.models ? JSON.parse(m.models) : []).map((name: string) => ({
+                                  modelId: m.id, modelName: name, key: `${m.id}:${name}`,
+                                }))
+                              );
+                              setRerunModels(models);
+                              const defaultKey = task.modelId && task.modelName ? `${task.modelId}:${task.modelName}` : '';
+                              setRerunSelectedKey(models.find((m: { key: string }) => m.key === defaultKey)?.key || models[0]?.key || '');
+                              setRerunModal({ isOpen: true, taskId: task.id, taskName: task.name, modelId: task.modelId || '', modelName: task.modelName || '' });
+                            })
+                            .catch(() => {
+                              toast.error('获取模型列表失败');
+                            });
+                        }}
                         disabled={isExecuting}
                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-400 hover:bg-blue-400/15 rounded transition-colors disabled:opacity-50"
                       >
@@ -604,6 +632,74 @@ export default function TaskBuilderPage() {
         variant="danger"
         loading={false}
       />
+
+      {/* 重试弹窗 - 选择模型 */}
+      {rerunModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h3 className="text-lg font-semibold text-white">重试任务</h3>
+              <button onClick={() => setRerunModal({ isOpen: false, taskId: null, taskName: '', modelId: '', modelName: '' })} className="text-gray-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <span className="text-sm text-gray-400">任务名称</span>
+                <p className="text-sm text-white mt-1">{rerunModal.taskName}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">选择模型</label>
+                <div className="relative" ref={rerunDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setRerunDropdownOpen(!rerunDropdownOpen)}
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-bg text-left text-sm text-white flex items-center justify-between hover:border-gray-500"
+                  >
+                    <span className="truncate">{rerunModels.find(m => m.key === rerunSelectedKey)?.modelName || '选择模型'}</span>
+                    <ChevronDown size={14} className="text-gray-400 flex-shrink-0 ml-2" />
+                  </button>
+                  {rerunDropdownOpen && rerunModels.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {rerunModels.map(m => (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => { setRerunSelectedKey(m.key); setRerunDropdownOpen(false); }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between"
+                        >
+                          <span className={m.key === rerunSelectedKey ? 'text-blue-400' : 'text-white'}>{m.modelName}</span>
+                          {m.key === rerunSelectedKey && <Check size={14} className="text-blue-400 flex-shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-gray-700">
+              <button
+                onClick={() => setRerunModal({ isOpen: false, taskId: null, taskName: '', modelId: '', modelName: '' })}
+                className="px-4 py-2 text-sm text-gray-300 hover:text-white border border-gray-600 rounded-md hover:border-gray-500"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  const selected = rerunModels.find(m => m.key === rerunSelectedKey);
+                  if (rerunModal.taskId && selected) {
+                    setRerunModal(prev => ({ ...prev, isOpen: false }));
+                    handleRunTask(rerunModal.taskId, selected.modelId, selected.modelName);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                确认执行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

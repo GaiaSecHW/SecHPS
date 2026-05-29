@@ -51,6 +51,15 @@ export async function POST(
   if (!auth.success) return authErrorResponse(auth);
 
   const { id } = await params;
+  let overrideModelId: string | null = null;
+  let overrideModelName: string | null = null;
+  try {
+    const body = await request.json();
+    overrideModelId = body.modelId || null;
+    overrideModelName = body.modelName || null;
+  } catch {
+    // GET 风格调用（无 body），忽略
+  }
 
   try {
     const task = await prisma.taskInstance.findUnique({
@@ -103,6 +112,8 @@ export async function POST(
         startedAt: new Date(),
         completedAt: null,
         errorMessage: null,
+        modelId: overrideModelId || undefined,
+        modelName: overrideModelName || undefined,
         mergedSkills,
         mergedScripts,
         updatedAt: new Date(),
@@ -148,21 +159,38 @@ export async function POST(
     const skills = mergedSkills ? parseJsonArray(mergedSkills) : undefined;
     const scripts = mergedScripts ? parseJsonArray(mergedScripts) : undefined;
 
-    // Prefer user-selected model name, fall back to first model in config
-    let model: string | undefined = task.modelName || undefined;
-    if (!model && task.ModelConfig?.models) {
-      try {
-        const modelsArray = JSON.parse(task.ModelConfig.models);
-        if (Array.isArray(modelsArray) && modelsArray.length > 0) {
-          model = modelsArray[0];
+    // 模型解析：重试覆盖 > 任务原有 > ModelConfig 第一项
+    let effectiveModelId = overrideModelId || task.modelId || null;
+    let effectiveModelName = overrideModelName || task.modelName || null;
+
+    let modelConfigForExec: { apiKey?: string; apiBaseUrl?: string; models?: string } | null = null;
+    if (effectiveModelId && effectiveModelId !== task.modelId) {
+      const newModelConfig = await prisma.modelConfig.findUnique({
+        where: { id: effectiveModelId },
+        select: { apiKey: true, apiBaseUrl: true, models: true },
+      });
+      if (newModelConfig) modelConfigForExec = newModelConfig;
+    }
+    const resolvedConfig = task.ModelConfig || task.ModelConfig === null ? task.ModelConfig : null;
+    const activeConfig = task.ModelConfig;
+
+    let model: string | undefined = effectiveModelName || undefined;
+    if (!model) {
+      const configSource = task.ModelConfig;
+      if (configSource?.models) {
+        try {
+          const modelsArray = JSON.parse(configSource.models);
+          if (Array.isArray(modelsArray) && modelsArray.length > 0) {
+            model = modelsArray[0];
+          }
+        } catch {
+          logger.warn(LOG_MODULES.AGENT, '解析 ModelConfig.models 失败');
         }
-      } catch {
-        logger.warn(LOG_MODULES.AGENT, '解析 ModelConfig.models 失败');
       }
     }
 
-    const apiKey = task.ModelConfig?.apiKey || undefined;
-    const apiBaseUrl = task.ModelConfig?.apiBaseUrl || undefined;
+    const apiKey = modelConfigForExec?.apiKey || task.ModelConfig?.apiKey || undefined;
+    const apiBaseUrl = modelConfigForExec?.apiBaseUrl || task.ModelConfig?.apiBaseUrl || undefined;
     const timeoutSec = TASK_TIMEOUT_SEC;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
