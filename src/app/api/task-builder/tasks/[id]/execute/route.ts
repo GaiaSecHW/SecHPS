@@ -166,14 +166,21 @@ export async function POST(
     let modelConfigForExec: { apiKey?: string; apiBaseUrl?: string; models?: string } | null = null;
     if (effectiveModelId && effectiveModelId !== task.modelId) {
       const newModelConfig = await prisma.modelConfig.findUnique({
-        where: { id: effectiveModelId },
+        where: {
+          id: effectiveModelId,
+          OR: [
+            { tenantId: null },
+            { tenantId: auth.payload.tenantId ?? undefined },
+            { isPublic: true },
+          ],
+        },
         select: { apiKey: true, apiBaseUrl: true, models: true },
       });
-      if (newModelConfig) modelConfigForExec = newModelConfig;
+      if (!newModelConfig) {
+        return NextResponse.json({ error: '指定的模型配置不存在或无权使用' }, { status: 403 });
+      }
+      modelConfigForExec = newModelConfig;
     }
-    const resolvedConfig = task.ModelConfig || task.ModelConfig === null ? task.ModelConfig : null;
-    const activeConfig = task.ModelConfig;
-
     let model: string | undefined = effectiveModelName || undefined;
     if (!model) {
       const configSource = task.ModelConfig;

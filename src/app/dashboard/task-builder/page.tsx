@@ -87,6 +87,17 @@ export default function TaskBuilderPage() {
   const rerunDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!rerunDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (rerunDropdownRef.current && !rerunDropdownRef.current.contains(e.target as Node)) {
+        setRerunDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [rerunDropdownOpen]);
+
+  useEffect(() => {
     fetchTasks(currentPage, pageSize);
   }, [currentPage, pageSize]);
 
@@ -508,14 +519,19 @@ export default function TaskBuilderPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          fetch('/api/models')
+                          const token = localStorage.getItem('token');
+                          fetch('/api/models', { headers: { Authorization: `Bearer ${token}` } })
                             .then(r => r.json())
                             .then(data => {
-                              const models = (data.models || data || []).flatMap((m: any) =>
-                                (m.models ? JSON.parse(m.models) : []).map((name: string) => ({
-                                  modelId: m.id, modelName: name, key: `${m.id}:${name}`,
-                                }))
-                              );
+                              const models = (data.models || data || []).flatMap((m: any) => {
+                                try {
+                                  return (m.models ? JSON.parse(m.models) : []).map((name: string) => ({
+                                    modelId: m.id, modelName: name, key: `${m.id}:${name}`,
+                                  }));
+                                } catch {
+                                  return [];
+                                }
+                              });
                               setRerunModels(models);
                               const defaultKey = task.modelId && task.modelName ? `${task.modelId}:${task.modelName}` : '';
                               setRerunSelectedKey(models.find((m: { key: string }) => m.key === defaultKey)?.key || models[0]?.key || '');

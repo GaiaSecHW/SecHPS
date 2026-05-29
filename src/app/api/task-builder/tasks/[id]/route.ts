@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { rm } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { resolve } from 'path';
 
 export async function GET(
   request: NextRequest,
@@ -109,8 +109,11 @@ export async function DELETE(
 
     // 清理 NFS 目录
     const SHARED_WORKSPACE_BASE = process.env.NFS_MOUNT_PATH || process.env.SHARED_WORKSPACE_PATH || '/data/shared-workspace';
-    const taskDir = join(SHARED_WORKSPACE_BASE, id);
-    if (existsSync(taskDir)) {
+    const resolvedBase = resolve(SHARED_WORKSPACE_BASE);
+    const taskDir = resolve(resolvedBase, id);
+    if (!taskDir.startsWith(resolvedBase + '/') && taskDir !== resolvedBase) {
+      logger.warn(LOG_MODULES.AGENT, `非法任务目录路径，跳过删除: ${taskDir}`);
+    } else if (existsSync(taskDir)) {
       try {
         await rm(taskDir, { recursive: true, force: true });
       } catch (e) {
