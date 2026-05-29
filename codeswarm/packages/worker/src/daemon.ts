@@ -497,7 +497,8 @@ export class WorkerDaemon {
         instruction,
         onEvent,
         apiBaseUrl,
-        taskTimeoutMs
+        taskTimeoutMs,
+        payload.mcps?.length ? JSON.stringify(payload.mcps) : undefined,
       );
       console.log(`[Daemon] Step 3 DONE: runAgent returned`);
 

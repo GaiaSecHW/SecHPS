@@ -21,7 +21,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Build codeswarm worker (Node.js)
 # ---------------------------------------------------------------------------
-FROM node:20-bookworm AS worker-builder
+FROM node:22-bookworm AS worker-builder
 
 WORKDIR /build/codeswarm
 
@@ -32,16 +32,12 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 
 # Copy package manifests (leverage Docker layer cache)
 COPY packages/types/package.json ./packages/types/package.json
-COPY packages/acp/package.json ./packages/acp/package.json
-COPY packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
 COPY packages/worker/package.json ./packages/worker/package.json
 
 RUN pnpm install --no-frozen-lockfile
 
 # Copy source & build
 COPY packages/types/ ./packages/types/
-COPY packages/acp/ ./packages/acp/
-COPY packages/sdk-adapter/ ./packages/sdk-adapter/
 COPY packages/worker/ ./packages/worker/
 
 RUN pnpm run build
@@ -64,9 +60,12 @@ RUN apk add --no-cache \
     git \
     unzip \
     python3 \
-    py3-pip \
-    nodejs \
-    npm
+    py3-pip
+
+# Install Node.js 22 (acpx requires >= 22.13.0)
+COPY --from=node:22-alpine /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:22-alpine /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
 # Install opencode CLI
 RUN npm install -g opencode-ai@1.15.1

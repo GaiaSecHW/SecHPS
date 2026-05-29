@@ -1,43 +1,130 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { ACPClient, type StopReason, type ACPClientConfig } from "@codeswarm/acp";
-import { ClaudeCodeClient } from "@codeswarm/sdk-adapter";
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
+import {
+  createAcpRuntime,
+  createFileSessionStore,
+  createAgentRegistry,
+  isAcpRuntimeError,
+  type AcpxRuntime,
+  type AcpRuntimeEvent,
+  type AcpRuntimeHandle,
+  type AcpRuntimeTurnResult,
+} from 'acpx/runtime';
 
-interface ProcessEntry {
-  client: ACPClient;
-  workspace: string;
-  sessionId: string;
-  createdAt: number;
-}
+// ============================================================================
+// acpx local type aliases
+// ============================================================================
 
-function loadClaudeSettingsJson(): Record<string, string> {
-  const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
-  const result: Record<string, string> = {};
-  try {
-    if (fs.existsSync(settingsPath)) {
-      const content = fs.readFileSync(settingsPath, 'utf-8');
-      const settings = JSON.parse(content);
-      const keys = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-        'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_MODEL',
-        'ANTHROPIC_REASONING_MODEL', 'CLAUDE_API_KEY'];
-      for (const key of keys) {
-        if (settings.env?.[key]) {
-          result[key] = settings.env[key];
-        }
-      }
-      // claude-agent-acp uses ANTHROPIC_AUTH_TOKEN, sync from it if needed
-      if (result.ANTHROPIC_AUTH_TOKEN && !result.CLAUDE_API_KEY) {
-        result.CLAUDE_API_KEY = result.ANTHROPIC_AUTH_TOKEN;
-      }
-      console.log(`[ProcessMgr] Loaded Claude settings.json, found keys: ${Object.keys(result).join(', ')}`);
-    }
-  } catch (err) {
-    console.log(`[ProcessMgr] Failed to load settings.json: ${err}`);
+type AcpxSessionStore = ReturnType<typeof createFileSessionStore>;
+type AcpxAgentRegistry = ReturnType<typeof createAgentRegistry>;
+
+// MCP Server types — 使用 any[] 避免与 @agentclientprotocol/sdk 歧义联合类型冲突
+// acpx 内部使用 McpServerHttp | McpServerSse | McpServerStdio 三种类型
+
+// ============================================================================
+// Agent Engine Whitelist & Resolution
+// ============================================================================
+
+const ENGINE_ALLOWLIST: ReadonlySet<string> = new Set([
+  'opencode', 'claudecode', 'codex', 'gemini', 'cursor', 'copilot', 'kiro',
+]);
+
+function resolveAgentName(engine: string): string {
+  if (!ENGINE_ALLOWLIST.has(engine)) {
+    throw new Error(`Unsupported engine: ${engine}. Allowed: ${[...ENGINE_ALLOWLIST].join(', ')}`);
   }
-  return result;
+  const map: Record<string, string> = {
+    opencode: 'opencode',
+    claudecode: 'claude',
+    codex: 'codex',
+    gemini: 'gemini',
+    cursor: 'cursor',
+    copilot: 'copilot',
+    kiro: 'kiro',
+  };
+  return map[engine] ?? engine;
 }
+
+// ============================================================================
+// Auth env helper
+// ============================================================================
+
+function applyAuthEnv(
+  engine: string,
+  apiKey?: string,
+  model?: string,
+  apiBaseUrl?: string,
+): void {
+  if (!apiKey) return;
+
+  const agent = resolveAgentName(engine);
+
+  if (agent === 'claude') {
+    process.env.ANTHROPIC_API_KEY = apiKey;
+    process.env.CLAUDE_API_KEY = apiKey;
+  } else if (agent === 'codex' || agent === 'copilot') {
+    process.env.OPENAI_API_KEY = apiKey;
+  } else if (agent === 'gemini') {
+    process.env.GOOGLE_API_KEY = apiKey;
+  } else if (model) {
+    const providerId = model.split('/')[0]?.toUpperCase();
+    if (providerId) process.env[`${providerId}_API_KEY`] = apiKey;
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY && !process.env.GOOGLE_API_KEY) {
+    process.env.ANTHROPIC_API_KEY = apiKey;
+  }
+
+  if (apiBaseUrl) {
+    process.env.ANTHROPIC_BASE_URL = apiBaseUrl;
+  }
+}
+
+// ============================================================================
+// MCP Conversion
+// ============================================================================
+
+interface PlatformMcpConfig {
+  name: string;
+  transport: 'stdio' | 'http' | 'sse';
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertMcpServers(mcpsJson?: string): any[] | undefined {
+  if (!mcpsJson) return undefined;
+
+  try {
+    const configs: PlatformMcpConfig[] = JSON.parse(mcpsJson);
+    return configs.map((cfg) => {
+      if (cfg.transport === 'http') {
+        return {
+          name: cfg.name, type: 'http', url: cfg.url!,
+          headers: cfg.headers ? Object.entries(cfg.headers).map(([name, value]) => ({ name, value })) : undefined,
+        };
+      }
+      if (cfg.transport === 'sse') {
+        return {
+          name: cfg.name, type: 'sse', url: cfg.url!,
+          headers: cfg.headers ? Object.entries(cfg.headers).map(([name, value]) => ({ name, value })) : undefined,
+        };
+      }
+      return {
+        name: cfg.name, type: 'stdio', command: cfg.command!, args: cfg.args ?? [],
+        env: cfg.env ? Object.entries(cfg.env).map(([name, value]) => ({ name, value })) : undefined,
+      };
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+// ============================================================================
+// Public Types (unchanged interface)
+// ============================================================================
 
 export type AgentEventType =
   | 'agent_message_chunk'
@@ -87,29 +174,33 @@ export interface CommandResult {
   durationMs: number;
 }
 
-/** 续推上下文 - 跟踪续推状态和进度 */
+// ============================================================================
+// Internal Types
+// ============================================================================
+
+interface ProcessEntry {
+  runtime: AcpxRuntime;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any — acpx 未导出 AcpRuntimeHandle 类型
+  handle: any;
+  workspace: string;
+  createdAt: number;
+}
+
 interface ContinuationContext {
-  /** 原始指令 */
   originalInstruction: string;
-  /** 当前续推次数（0=首次执行, 1-N=续推） */
   continueAttempt: number;
-  /** 已收集的关键事件（用于提取进度摘要，限制最近 MAX_EVENT_HISTORY 条） */
   eventHistory: AgentEvent[];
-  /** 已完成的 Skill 列表 */
   completedSkills: string[];
-  /** 上次使用的续推策略 */
   lastStrategy: 'cancel_same_session' | 'destroy_new_session' | null;
-  /** 上次续推恢复的时间戳（用于判断是否重置计数器） */
   lastContinuationTime: number | null;
-  /** 续推恢复后累计的正常事件数（用于判断 Agent 是否真正恢复了） */
   eventsSinceContinuation: number;
 }
 
-/** 运行状态 - 可在事件处理器闭包中修改的对象引用 */
 interface RunState {
   stdout: string;
   stderr: string;
   currentSkill: string | null;
+  textChunks: string[];
   inactivityTimer: NodeJS.Timeout | null;
   inactivityTimeoutReject: ((reason: Error) => void) | null;
   inactivityTimeoutTriggered: boolean;
@@ -117,61 +208,51 @@ interface RunState {
 
 const MAX_EVENT_HISTORY = 200;
 
+// ============================================================================
+// ProcessManager
+// ============================================================================
+
+export interface ProcessManagerOptions {
+  sessionStore?: AcpxSessionStore;
+  agentRegistry?: AcpxAgentRegistry;
+}
+
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
+  private readonly sessionStore: AcpxSessionStore;
+  private readonly agentRegistry: AcpxAgentRegistry;
 
-  async start(taskId: string, workspace: string, apiKey: string, model?: string, env?: Record<string, string>, agent?: string): Promise<ACPClient> {
-    if (this.processes.has(taskId)) {
-      throw new Error(`Process for task ${taskId} already exists`);
-    }
-
-    const mergedEnv: Record<string, string> = { ...env };
-    if (apiKey) {
-      mergedEnv.ANTHROPIC_API_KEY = apiKey;
-    }
-
-    const client = new ACPClient();
-    await client.start({
-      cwd: workspace,
-      env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
-      model,
-      agent,
+  constructor(options?: ProcessManagerOptions) {
+    this.sessionStore = options?.sessionStore ?? createFileSessionStore({
+      stateDir: process.env.SESSION_DIR ?? '.acpx-state',
     });
-    const sessionId = await client.createSession(agent);
-
-    this.processes.set(taskId, { client, workspace, sessionId, createdAt: Date.now() });
-    return client;
-  }
-
-  async sendPrompt(taskId: string, instruction: string): Promise<StopReason> {
-    const entry = this.processes.get(taskId);
-    if (!entry) throw new Error(`No process found for task ${taskId}`);
-    return entry.client.sendPrompt(instruction);
+    this.agentRegistry = options?.agentRegistry ?? createAgentRegistry();
   }
 
   async terminate(taskId: string): Promise<void> {
     const entry = this.processes.get(taskId);
     if (!entry) return;
-    await entry.client.destroy();
+    try {
+      await entry.runtime.close({ handle: entry.handle, reason: 'terminate', discardPersistentState: true });
+    } catch (err) {
+      console.log(`[ProcessMgr] terminate: close error (non-fatal): ${err}`);
+    }
     this.processes.delete(taskId);
-  }
-
-  getClient(taskId: string): ACPClient | undefined {
-    return this.processes.get(taskId)?.client as ACPClient | undefined;
   }
 
   async runAgent(
     taskId: string,
     workspace: string,
-    engine: 'opencode' | 'claudecode',
+    engine: string,
     agentName: string,
     apiKey?: string,
     model?: string,
-    env?: Record<string, string>,
+    _env?: Record<string, string>,
     instruction?: string,
     onEvent?: AgentEventCallback,
     apiBaseUrl?: string,
     timeoutMs?: number,
+    mcps?: string,
   ): Promise<RunAgentResult> {
     const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '900000');
     const CONTINUE_MAX_ATTEMPTS = parseInt(process.env.CONTINUE_MAX_ATTEMPTS || '5');
@@ -184,6 +265,7 @@ export class ProcessManager {
       stdout: '',
       stderr: '',
       currentSkill: null,
+      textChunks: [],
       inactivityTimer: null,
       inactivityTimeoutReject: null,
       inactivityTimeoutTriggered: false,
@@ -200,9 +282,6 @@ export class ProcessManager {
     };
 
     const taskStartTime = Date.now();
-    let client: ACPClient | null = null;
-    let clientConfig: ACPClientConfig;
-    let sessionAgent: string | undefined;
 
     const handleInactivityTimeout = () => {
       if (!continuationEnabled || state.inactivityTimeoutReject === null) return;
@@ -212,81 +291,81 @@ export class ProcessManager {
       state.inactivityTimeoutReject(new Error(`Inactivity timeout: no events for ${timeoutSecs}s`));
     };
 
-    const createAndStartClient = async (): Promise<ACPClient> => {
-      const c = new ACPClient();
-      await c.start(clientConfig);
-      const sid = await c.createSession(sessionAgent);
-      registerEventHandlers(c, state, ctx, {
-        INACTIVITY_TIMEOUT_MS,
-        handleInactivityTimeout,
-      }, onEvent);
-      this.processes.set(taskId, { client: c, workspace, sessionId: sid, createdAt: Date.now() });
-      if (onEvent) {
-        onEvent({ type: 'session_created', message: sid, timestamp: new Date().toISOString() });
+    const createRuntimeAndSession = async () => {
+      applyAuthEnv(engine, apiKey, model, apiBaseUrl);
+      const runtime = createAcpRuntime({
+        cwd: workspace,
+        sessionStore: this.sessionStore,
+        agentRegistry: this.agentRegistry,
+        permissionMode: 'approve-all',
+        nonInteractivePermissions: 'deny',
+        timeoutMs: effectiveTimeoutMs,
+        mcpServers: convertMcpServers(mcps),
+      });
+
+      const agent = resolveAgentName(engine);
+      let handle: unknown;
+      try {
+        handle = await runtime.ensureSession({
+          sessionKey: taskId,
+          agent,
+          mode: 'oneshot',
+          cwd: workspace,
+          sessionOptions: model ? { model } : undefined,
+        });
+      } catch (err: any) {
+        if (err?.constructor?.name === 'RequestedModelUnsupportedError' || /model.*not.*advertised/i.test(err?.message)) {
+          console.log(`[ProcessMgr] Model "${model}" not advertised, retrying without model`);
+          handle = await runtime.ensureSession({
+            sessionKey: taskId,
+            agent,
+            mode: 'oneshot',
+            cwd: workspace,
+          });
+        } else {
+          throw err;
+        }
       }
-      return c;
+
+      this.processes.set(taskId, { runtime, handle, workspace, createdAt: Date.now() });
+      if (onEvent) {
+        onEvent({ type: 'session_created', message: String(handle), timestamp: new Date().toISOString() });
+      }
+      return { runtime, handle };
     };
 
     console.log(`[ProcessMgr] ========== RUN AGENT START ==========`);
     console.log(`[ProcessMgr] taskId: ${taskId}`);
     console.log(`[ProcessMgr] workspace: ${workspace}`);
-    console.log(`[ProcessMgr] engine: ${engine}`);
+    console.log(`[ProcessMgr] engine: ${engine} (→ ${resolveAgentName(engine)})`);
     console.log(`[ProcessMgr] agentName: ${agentName}`);
     console.log(`[ProcessMgr] model: ${model}`);
     console.log(`[ProcessMgr] apiKey present: ${!!apiKey}`);
     console.log(`[ProcessMgr] instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
-    console.log(`[ProcessMgr] env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
+    console.log(`[ProcessMgr] mcps present: ${!!mcps}`);
     console.log(`[ProcessMgr] INACTIVITY_TIMEOUT_MS: ${INACTIVITY_TIMEOUT_MS}`);
     console.log(`[ProcessMgr] CONTINUE_MAX_ATTEMPTS: ${CONTINUE_MAX_ATTEMPTS}`);
     console.log(`[ProcessMgr] continuationEnabled: ${continuationEnabled}`);
 
+    let runtime!: AcpxRuntime;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any — acpx 未导出 AcpRuntimeHandle 类型
+    let handle: any = null;
+
     try {
-      console.log(`[ProcessMgr] Step A: Merging environment...`);
-      const mergedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
-
-      if (engine === 'claudecode') {
-        const settingsEnv = loadClaudeSettingsJson();
-        Object.assign(mergedEnv, settingsEnv);
-      }
-
-      if (env) Object.assign(mergedEnv, env);
-      if (apiKey) {
-        if (model) {
-          const providerId = model.split('/')[0];
-          const envKey = `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-          mergedEnv[envKey] = apiKey;
-        }
-        mergedEnv.ANTHROPIC_API_KEY = apiKey;
-      }
-      if (model) mergedEnv.ANTHROPIC_MODEL = model;
-      if (apiBaseUrl && engine === 'claudecode') mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
-      if (engine === 'claudecode' && mergedEnv.ANTHROPIC_API_KEY && !mergedEnv.CLAUDE_API_KEY) {
-        mergedEnv.CLAUDE_API_KEY = mergedEnv.ANTHROPIC_API_KEY;
-      }
-
-      console.log(`[ProcessMgr] Step B: Creating and starting client...`);
-      clientConfig = {
-        cwd: workspace,
-        env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
-        ...(model ? { model } : {}),
-        agent: agentName,
-        ...(engine === 'claudecode' ? { command: 'claude-agent-acp', args: [] } : {}),
-      };
-      sessionAgent = engine === 'claudecode' ? undefined : agentName;
-
-      client = await createAndStartClient();
+      console.log(`[ProcessMgr] Creating runtime and session...`);
+      ({ runtime, handle } = await createRuntimeAndSession());
 
       while (ctx.continueAttempt <= CONTINUE_MAX_ATTEMPTS) {
         const elapsed = Date.now() - taskStartTime;
         if (elapsed >= effectiveTimeoutMs) {
-          console.log(`[ProcessMgr] Task overall timeout (${effectiveTimeoutMs/1000}s), terminating`);
+          console.log(`[ProcessMgr] Task overall timeout (${effectiveTimeoutMs / 1000}s), terminating`);
           break;
         }
         const remainingTimeoutMs = effectiveTimeoutMs - elapsed;
 
         if (ctx.lastStrategy === 'destroy_new_session' && ctx.continueAttempt > 0) {
-          console.log(`[ProcessMgr] Rebuilding client (destroy_new_session strategy)`);
-          client = await createAndStartClient();
+          console.log(`[ProcessMgr] Rebuilding session (destroy_new_session strategy)`);
+          ({ runtime, handle } = await createRuntimeAndSession());
         }
 
         const currentInstruction = ctx.continueAttempt === 0
@@ -295,24 +374,38 @@ export class ProcessManager {
 
         console.log(`[ProcessMgr] Sending prompt (attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS})`);
 
-        if (continuationEnabled && INACTIVITY_TIMEOUT_MS > 0) {
-          if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
-          state.inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
-        }
+        state.inactivityTimeoutTriggered = false;
+
+        const turn = runtime.startTurn({
+          handle,
+          text: currentInstruction,
+          mode: 'prompt',
+          requestId: `${taskId}-turn-${ctx.continueAttempt}`,
+          timeoutMs: Math.min(remainingTimeoutMs, INACTIVITY_TIMEOUT_MS > 0 ? INACTIVITY_TIMEOUT_MS * 2 : remainingTimeoutMs),
+        });
+
+        // Consume events in background — resets inactivity timer on each event
+        const eventsPromise = (async () => {
+          for await (const event of (turn.events as AsyncIterable<AcpRuntimeEvent>)) {
+            mapAndForwardEvent(event, onEvent, state, ctx);
+            if (continuationEnabled && INACTIVITY_TIMEOUT_MS > 0) {
+              if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
+              state.inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+            }
+          }
+        })();
 
         const inactivityPromise = continuationEnabled
           ? new Promise<never>((_, reject) => { state.inactivityTimeoutReject = reject; })
-          : new Promise<never>(() => {});
+          : new Promise<never>(() => { });
 
         const taskTimeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Task overall timeout after ${remainingTimeoutMs/1000}s`)), remainingTimeoutMs);
+          setTimeout(() => reject(new Error(`Task overall timeout after ${remainingTimeoutMs / 1000}s`)), remainingTimeoutMs);
         });
 
-        state.inactivityTimeoutTriggered = false;
-
         try {
-          const stopReason = await Promise.race([
-            client!.sendPrompt(currentInstruction),
+          const result = await Promise.race([
+            turn.result as Promise<AcpRuntimeTurnResult>,
             inactivityPromise,
             taskTimeoutPromise,
           ]);
@@ -320,7 +413,7 @@ export class ProcessManager {
           if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
           state.inactivityTimeoutReject = null;
 
-          console.log(`[ProcessMgr] Prompt completed with stopReason=${stopReason}`);
+          console.log(`[ProcessMgr] Turn completed with status=${result.status}`);
 
           if (state.currentSkill && onEvent) {
             ctx.completedSkills.push(state.currentSkill);
@@ -328,15 +421,14 @@ export class ProcessManager {
             state.currentSkill = null;
           }
 
-          if (stopReason === 'end_turn') {
-            console.log(`[ProcessMgr] end_turn - destroying client`);
-            await client!.destroy();
+          if (result.status === 'completed') {
             console.log(`[ProcessMgr] ========== RUN AGENT COMPLETE ==========`);
+            await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
             return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
           }
 
-          if (stopReason === 'cancelled') {
-            console.log(`[ProcessMgr] Cancel returned, same session continuation`);
+          if (result.status === 'cancelled') {
+            console.log(`[ProcessMgr] Turn cancelled, same session continuation`);
             ctx.lastStrategy = 'cancel_same_session';
             ctx.continueAttempt = 0;
             ctx.eventsSinceContinuation = 0;
@@ -351,15 +443,44 @@ export class ProcessManager {
             continue;
           }
 
-          console.log(`[ProcessMgr] Waiting for exitCode (stopReason=${stopReason})...`);
-          const exitCode = await Promise.race([
-            client!.exitCode,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for exit')), 30000)),
-          ]);
-          console.log(`[ProcessMgr] exitCode = ${exitCode}`);
-          await client!.destroy();
-          console.log(`[ProcessMgr] ========== RUN AGENT COMPLETE ==========`);
-          return { exitCode: exitCode ?? 1, stdout: state.stdout, stderr: state.stderr };
+          // result.status === 'failed'
+          const error = result.error;
+          console.log(`[ProcessMgr] Turn failed: ${error?.message}`);
+
+          if (error?.retryable && hasSubstantialOutput(state.stdout)) {
+            console.log(`[ProcessMgr] Retryable error after substantial output — tolerating`);
+            if (state.currentSkill && onEvent) {
+              ctx.completedSkills.push(state.currentSkill);
+              onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
+              state.currentSkill = null;
+            }
+            await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
+            return { exitCode: 0, stdout: state.stdout, stderr: error.message };
+          }
+
+          if (error?.code === 'ACP_BACKEND_UNAVAILABLE' || error?.code === 'ACP_BACKEND_MISSING') {
+            console.log(`[ProcessMgr] Agent backend unavailable: ${error.code}`);
+            await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
+            return { exitCode: 2, stdout: state.stdout, stderr: `Agent unavailable: ${error.message}` };
+          }
+
+          const classified = classifyAcpError(error?.message ?? 'Unknown error');
+          if (!classified.isCritical && hasSubstantialOutput(state.stdout)) {
+            console.log(`[ProcessMgr] Non-critical turn error after substantial output`);
+            if (state.currentSkill && onEvent) {
+              ctx.completedSkills.push(state.currentSkill);
+              onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
+            }
+            await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
+            return { exitCode: 0, stdout: state.stdout, stderr: error?.message ?? '' };
+          }
+
+          if (!state.inactivityTimeoutTriggered) state.stderr += error?.message ?? '';
+          if (onEvent) {
+            onEvent({ type: 'error', message: error?.message ?? 'Turn failed', timestamp: new Date().toISOString() });
+          }
+          await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
+          return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
 
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
@@ -369,6 +490,18 @@ export class ProcessManager {
           state.inactivityTimeoutReject = null;
 
           if (!isInactivityTimeout) {
+            // Runtime error (not inactivity)
+            if (isAcpRuntimeError(error as object)) {
+              const acpErr = error as { code?: string; message?: string };
+              const exitCode = acpErr.code === 'ACP_BACKEND_MISSING' || acpErr.code === 'ACP_BACKEND_UNAVAILABLE' ? 2 : 1;
+              console.log(`[ProcessMgr] ACP runtime error: ${acpErr.code} - ${acpErr.message}`);
+              if (!state.inactivityTimeoutTriggered) state.stderr += acpErr.message ?? '';
+              if (onEvent) {
+                onEvent({ type: 'error', message: acpErr.message ?? 'ACP error', timestamp: new Date().toISOString() });
+              }
+              return { exitCode, stdout: state.stdout, stderr: state.stderr };
+            }
+
             const classified = classifyAcpError(errorMsg);
             console.log(`[ProcessMgr] Error: ${errorMsg} (category=${classified.category}, isCritical=${classified.isCritical})`);
 
@@ -393,6 +526,7 @@ export class ProcessManager {
             return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
           }
 
+          // === Inactivity timeout → Continuation ===
           ctx.continueAttempt++;
           console.log(`[ProcessMgr] Inactivity timeout, attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS}`);
 
@@ -406,25 +540,29 @@ export class ProcessManager {
               });
             }
             state.stderr += `\nExceeded max continuation attempts (${CONTINUE_MAX_ATTEMPTS})`;
-            if (client) await client.destroy();
+            await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
             return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
           }
 
           if (onEvent) {
             onEvent({
               type: 'continuation_attempt',
-              message: `Agent 无响应 ${INACTIVITY_TIMEOUT_MS/1000}s，第 ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS} 次续推`,
+              message: `Agent 无响应 ${INACTIVITY_TIMEOUT_MS / 1000}s，第 ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS} 次续推`,
               timestamp: new Date().toISOString(),
             });
           }
 
-          if (client && client.isAlive) {
-            console.log(`[ProcessMgr] Trying session/cancel (方案 A)`);
-            await client.cancel();
+          // Strategy A: cancel current turn
+          try {
+            console.log(`[ProcessMgr] Trying Strategy A: turn.cancel()`);
+            await turn.cancel({ reason: 'inactivity' });
 
-            const cancelStopReason = await client.waitForCurrentPrompt(CANCEL_WAIT_MS);
+            const cancelResult = await Promise.race([
+              turn.result as Promise<AcpRuntimeTurnResult>,
+              new Promise<null>(resolve => setTimeout(() => resolve(null), CANCEL_WAIT_MS)),
+            ]);
 
-            if (cancelStopReason === 'cancelled') {
+            if (cancelResult?.status === 'cancelled') {
               console.log(`[ProcessMgr] Cancel succeeded, same session continuation`);
               ctx.lastStrategy = 'cancel_same_session';
               ctx.continueAttempt = 0;
@@ -440,20 +578,23 @@ export class ProcessManager {
               continue;
             }
 
-            if (cancelStopReason === 'end_turn') {
-              console.log(`[ProcessMgr] Cancel returned end_turn - task actually completed`);
+            if (cancelResult?.status === 'completed') {
+              console.log(`[ProcessMgr] Cancel returned completed - task actually completed`);
               if (state.currentSkill && onEvent) {
                 ctx.completedSkills.push(state.currentSkill);
                 onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
               }
-              await client.destroy();
+              await runtime.close({ handle, reason: 'turn-error', discardPersistentState: true });
               return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
             }
 
-            console.log(`[ProcessMgr] Cancel timeout or other response (${CANCEL_WAIT_MS}ms), fallback to 方案 B`);
+            console.log(`[ProcessMgr] Cancel timeout or unexpected result, fallback to Strategy B`);
+          } catch (cancelErr) {
+            console.log(`[ProcessMgr] Strategy A failed: ${cancelErr}, fallback to Strategy B`);
           }
 
-          console.log(`[ProcessMgr] Executing 方案 B: destroy + new session`);
+          // Strategy B: close + new session
+          console.log(`[ProcessMgr] Executing Strategy B: close + new session`);
           ctx.lastStrategy = 'destroy_new_session';
 
           if (onEvent) {
@@ -464,9 +605,12 @@ export class ProcessManager {
             });
           }
 
-          if (client) {
-            await client.destroy();
-            client = null;
+          {
+            try {
+              await runtime.close({ handle, reason: 'strategy-b-preserve', discardPersistentState: false });
+            } catch { /* ignore */ }
+            // runtime will be reassigned by createRuntimeAndSession() on next loop iteration
+            handle = null;
           }
 
           continue;
@@ -474,16 +618,25 @@ export class ProcessManager {
       }
 
       console.log(`[ProcessMgr] ========== RUN AGENT FAILED ==========`);
-      if (client) await client.destroy();
+      await runtime.close({ handle, reason: 'task-failed', discardPersistentState: true });
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      const classified = classifyAcpError(errorMsg);
       console.log(`[ProcessMgr] ========== RUN AGENT ERROR ==========`);
       console.log(`[ProcessMgr] Error: ${errorMsg}`);
-      console.log(`[ProcessMgr] Error category: ${classified.category}, isCritical: ${classified.isCritical}`);
 
+      if (isAcpRuntimeError(error as object)) {
+        const acpErr = error as { code?: string; message?: string };
+        const exitCode = acpErr.code === 'ACP_BACKEND_MISSING' || acpErr.code === 'ACP_BACKEND_UNAVAILABLE' ? 2 : 1;
+        if (!state.inactivityTimeoutTriggered) state.stderr += acpErr.message ?? '';
+        if (onEvent) {
+          onEvent({ type: 'error', message: acpErr.message ?? 'ACP error', timestamp: new Date().toISOString() });
+        }
+        return { exitCode, stdout: state.stdout, stderr: state.stderr };
+      }
+
+      const classified = classifyAcpError(errorMsg);
       if (!state.inactivityTimeoutTriggered) state.stderr += errorMsg;
 
       if (onEvent) {
@@ -497,9 +650,8 @@ export class ProcessManager {
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
 
     } finally {
-      console.log(`[ProcessMgr] Finally: destroying client and cleaning up`);
+      console.log(`[ProcessMgr] Finally: cleaning up`);
       if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); }
-      if (client) await client.destroy();
       this.processes.delete(taskId);
       console.log(`[ProcessMgr] Cleanup done`);
     }
@@ -603,6 +755,144 @@ export class ProcessManager {
   }
 }
 
+// ============================================================================
+// acpx Event Mapping
+// ============================================================================
+
+function mapAndForwardEvent(
+  event: AcpRuntimeEvent,
+  onEvent: AgentEventCallback | undefined,
+  state: RunState,
+  ctx: ContinuationContext,
+): void {
+  const timestamp = new Date().toISOString();
+
+  switch (event.type) {
+    case 'text_delta': {
+      const content = event.text;
+      state.textChunks.push(content);
+      if (state.textChunks.length > 5) state.textChunks.shift();
+      state.stdout += content;
+
+      ctx.eventHistory.push({ type: 'agent_message_chunk', content, timestamp });
+      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
+
+      if (onEvent) {
+        onEvent({ type: 'agent_message_chunk', content, timestamp });
+      }
+      break;
+    }
+
+    case 'tool_call': {
+      const isUpdate = event.tag === 'tool_call_update';
+      const toolName = event.title ?? event.kind ?? 'unknown';
+
+      if (!isUpdate) {
+        ctx.eventHistory.push({ type: 'tool_call', tool: toolName.toLowerCase(), input: event.rawInput, timestamp });
+        if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
+
+        // Skill tracking
+        const actualToolName = toolName.toLowerCase();
+        const isSkillCall = actualToolName === 'skill'
+          || (typeof event.rawInput === 'object' && event.rawInput !== null && ('skill' in (event.rawInput as object) || 'skill_name' in (event.rawInput as object)));
+
+        if (isSkillCall && onEvent) {
+          let skillName = extractSkillName(event.rawInput) || 'unknown';
+
+          if (skillName === 'unknown') {
+            skillName = inferSkillNameFromContext(state.textChunks) || 'unknown';
+          }
+
+          if (state.currentSkill && state.currentSkill !== skillName) {
+            ctx.completedSkills.push(state.currentSkill);
+            onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp });
+          }
+
+          state.currentSkill = skillName;
+          onEvent({ type: 'skill_start', skill: skillName, content: `开始执行 Skill: ${skillName}`, timestamp });
+        }
+
+        // Agent/task tool skill detection
+        if ((actualToolName === 'agent' || actualToolName === 'task') && onEvent) {
+          const description = (event.rawInput as any)?.description || '';
+          const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
+          if (skillMatch?.[1]) {
+            const skillName = skillMatch[1];
+            if (state.currentSkill && state.currentSkill !== skillName) {
+              ctx.completedSkills.push(state.currentSkill);
+              onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp });
+            }
+            state.currentSkill = skillName;
+            onEvent({ type: 'skill_start', skill: skillName, content: `Agent 执行 Skill: ${skillName}`, timestamp });
+          }
+        }
+
+        if (onEvent) {
+          onEvent({ type: 'tool_call', tool: actualToolName, input: event.rawInput, timestamp });
+        }
+      } else {
+        // tool_call_update
+        const output = String(event.rawOutput ?? event.text ?? '');
+
+        ctx.eventHistory.push({ type: 'tool_call_update', output, timestamp });
+        if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
+
+        if (state.currentSkill === 'unknown' && output) {
+          const launchMatch = output.match(/(?:Launching|Invoking|Running|Executing)\s+skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
+          if (launchMatch?.[1]) {
+            state.currentSkill = launchMatch[1];
+            if (onEvent) {
+              onEvent({ type: 'skill_start', skill: state.currentSkill, content: `Skill 名称已修正: ${state.currentSkill}`, timestamp });
+            }
+          }
+        }
+
+        if (onEvent) {
+          onEvent({ type: 'tool_call_update', output, timestamp });
+        }
+      }
+      break;
+    }
+
+    case 'status': {
+      if (event.tag === 'usage_update' || event.tag === 'available_commands_update') {
+        // alive signal only — timer is reset by the caller
+        return;
+      }
+      if (onEvent) {
+        onEvent({ type: 'log_chunk', content: event.text, level: 'agent', timestamp });
+      }
+      break;
+    }
+
+    case 'error': {
+      const classified = classifyAcpError(event.message);
+      console.log(`[ProcessMgr] EVENT error: ${event.message} (category=${classified.category}, isCritical=${classified.isCritical})`);
+      state.stderr += event.message;
+      if (onEvent) {
+        onEvent({
+          type: classified.isCritical ? 'error' : 'phase_error',
+          message: event.message,
+          phase: classified.category,
+          timestamp,
+        });
+      }
+      break;
+    }
+
+    case 'done': {
+      // startTurn() does NOT emit 'done' — only runTurn() does.
+      // If we receive one, it's unexpected. Log it.
+      console.log(`[ProcessMgr] Unexpected 'done' event in startTurn stream: stopReason=${event.stopReason}`);
+      break;
+    }
+  }
+}
+
+// ============================================================================
+// Skill Name Extraction (unchanged)
+// ============================================================================
+
 function extractSkillName(input: unknown): string | null {
   if (typeof input === 'object' && input !== null) {
     if ('skill' in input && typeof input.skill === 'string') return input.skill;
@@ -617,23 +907,18 @@ function inferSkillNameFromContext(textBuffer: string[]): string | null {
   const fullText = textBuffer.join('');
   if (!fullText) return null;
 
-  // 1. Match `/skill-name` pattern (e.g., "invoked the `/api-scan`" → "api-scan")
   const slashMatch = fullText.match(/\/([a-zA-Z][a-zA-Z0-9_-]+)/);
   if (slashMatch) return slashMatch[1];
 
-  // 2. Match identifier between backticks or quotes (e.g., "`review`" → "review")
   const quotedMatch = fullText.match(/[`"']([a-zA-Z][a-zA-Z0-9_-]+)[`"']/);
   if (quotedMatch) return quotedMatch[1];
 
-  // 3. Match "invoking/launching/calling/using <name> skill" pattern
   const invokeMatch = fullText.match(/(?:invoking|launching|calling|using|invoke|launch|call|use)\s+(?:the\s+)?(?:skill\s+)?`?([a-zA-Z][a-zA-Z0-9_-]+)`?/i);
   if (invokeMatch) return invokeMatch[1];
 
-  // 4. Match "skill: <name>" or "skill <name>" pattern
   const skillLabelMatch = fullText.match(/skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
   if (skillLabelMatch) return skillLabelMatch[1];
 
-  // 5. Fallback: last standalone identifier-like word in buffer
   const lastWord = fullText.match(/\b([a-zA-Z][a-zA-Z0-9_-]{2,})\b/g);
   if (lastWord && lastWord.length > 0) return lastWord[lastWord.length - 1];
 
@@ -641,7 +926,7 @@ function inferSkillNameFromContext(textBuffer: string[]): string | null {
 }
 
 // ============================================================================
-// Error Classification for Exception Isolation
+// Error Classification (unchanged logic)
 // ============================================================================
 
 export interface ClassifiedError {
@@ -650,55 +935,41 @@ export interface ClassifiedError {
   rawMessage: string;
 }
 
-/**
- * Classify ACP/LLM errors to distinguish critical task errors from non-critical
- * post-task operations (e.g., title generation failures).
- *
- * Non-critical errors should NOT cascade to affect the main task status.
- */
 export function classifyAcpError(message: string): ClassifiedError {
-  // Title generation related errors → non-critical
   if (/title.*generat|generat.*title|session.*title|title.*generator/i.test(message)) {
     return { isCritical: false, category: 'title_generation', rawMessage: message };
   }
 
-  // AI Retry / Rate limit / FreeUsageLimitError → context-dependent
-  // If occurs after substantial output, treat as non-critical (likely post-task)
   if (/AI_RetryError|RetryError|rate.*limit|429|FreeUsageLimitError/i.test(message)) {
     return { isCritical: false, category: 'rate_limit', rawMessage: message };
   }
 
-  // Default: treat unknown errors as critical (conservative)
   return { isCritical: true, category: 'unknown', rawMessage: message };
 }
 
-/**
- * Check if stdout contains substantial output (indicating main task completed).
- * Used to determine if a post-task error should be tolerated.
- */
 export function hasSubstantialOutput(stdout: string, minLength = 100): boolean {
   const stripped = stdout.replace(/\s+/g, '').trim();
   return stripped.length >= minLength;
 }
 
-/**
- * Extract progress summary from continuation context for building continuation prompt.
- * Limited to 500 characters to avoid overly long prompts.
- */
+// ============================================================================
+// Continuation Prompt Builders (unchanged)
+// ============================================================================
+
 function extractProgressSummary(ctx: ContinuationContext): string {
   const lines: string[] = [];
-  
+
   if (ctx.completedSkills.length > 0) {
     lines.push(`已完成的检测: ${ctx.completedSkills.join(', ')}`);
   }
-  
+
   const toolCalls = ctx.eventHistory.filter(e => e.type === 'tool_call');
   const toolNames = toolCalls.map(e => e.tool).filter(Boolean);
   if (toolNames.length > 0) {
     const uniqueTools = [...new Set(toolNames)];
     lines.push(`已使用的工具: ${uniqueTools.join(', ')} (共${toolNames.length}次调用)`);
   }
-  
+
   const textChunks = ctx.eventHistory.filter(e => e.type === 'agent_message_chunk');
   if (textChunks.length > 0) {
     const lastText = textChunks.slice(-5).map(e => e.content).join('');
@@ -706,24 +977,20 @@ function extractProgressSummary(ctx: ContinuationContext): string {
       lines.push(`最后输出: "${lastText.substring(0, 200)}${lastText.length > 200 ? '...' : ''}"`);
     }
   }
-  
+
   const result = lines.join('\n');
   return result.length > 500 ? result.substring(0, 500) + '...' : result;
 }
 
-/**
- * Build continuation prompt based on attempt number, strategy, and progress.
- * Escalating urgency: 1st=gentle, 2nd=warning, 3rd+=final warning.
- */
 function buildContinuationPrompt(ctx: ContinuationContext): string {
   const attempt = ctx.continueAttempt;
   const original = ctx.originalInstruction;
   const summary = extractProgressSummary(ctx);
-  
+
   const strategyHint = ctx.lastStrategy === 'cancel_same_session'
     ? '（你之前的工作上下文仍然保留，请直接继续）'
     : '（这是一个新的会话，请根据以下进度摘要继续工作。请先检查工作目录中已有的文件。）';
-  
+
   if (attempt === 1) {
     return [
       `你之前的任务执行中断了，请继续完成原始任务。${strategyHint}`,
@@ -732,7 +999,7 @@ function buildContinuationPrompt(ctx: ContinuationContext): string {
       `\n请从上次中断的地方继续，不要重复已完成的工作。`,
     ].join('');
   }
-  
+
   if (attempt === 2) {
     return [
       `⚠️ 这是第二次续推提醒。${strategyHint}`,
@@ -744,199 +1011,11 @@ function buildContinuationPrompt(ctx: ContinuationContext): string {
       `\n请立即继续执行剩余工作。`,
     ].join('');
   }
-  
+
   return [
     `🔴 最后一次续推提醒。如果仍然无法继续，任务将被终止。`,
     summary ? `\n进度: ${summary}` : '',
     `\n原始指令（精简）:\n${original.substring(0, 300)}${original.length > 300 ? '...' : ''}`,
     `\n请立即执行剩余任务。`,
   ].join('');
-}
-
-/**
- * Register event handlers on ACPClient, using RunState and ContinuationContext
- * for state management. This function can be called multiple times (for client rebuilds).
- */
-function registerEventHandlers(
-  client: ACPClient,
-  state: RunState,
-  ctx: ContinuationContext,
-  config: {
-    INACTIVITY_TIMEOUT_MS: number;
-    handleInactivityTimeout: () => void;
-  },
-  onEvent?: AgentEventCallback,
-): void {
-  client.on({
-    text: (content: string) => {
-      console.log(`[ProcessMgr] EVENT text: "${content.substring(0, 50)}..."`);
-      if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
-      state.stdout += content;
-      
-      ctx.eventHistory.push({
-        type: 'agent_message_chunk',
-        content,
-        timestamp: new Date().toISOString(),
-      });
-      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
-      
-      if (onEvent) {
-        onEvent({
-          type: 'agent_message_chunk',
-          content,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    
-    toolCall: (tool: string, input: unknown, title?: string) => {
-      if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
-      const actualToolName = (title || tool).toLowerCase();
-      console.log(`[ProcessMgr] EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
-      console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
-      
-      ctx.eventHistory.push({
-        type: 'tool_call',
-        tool: actualToolName,
-        input,
-        timestamp: new Date().toISOString(),
-      });
-      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
-      
-      const isSkillCall = actualToolName === 'skill'
-        || (typeof input === 'object' && input !== null && ('skill' in input || 'skill_name' in input));
-      
-      if (isSkillCall && onEvent) {
-        let skillName = extractSkillName(input) || 'unknown';
-        
-        if (skillName === 'unknown') {
-          const textBuffer = client.getTextBuffer();
-          console.log(`[ProcessMgr] Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`);
-          skillName = inferSkillNameFromContext(textBuffer) || 'unknown';
-        }
-        
-        if (state.currentSkill && state.currentSkill !== skillName) {
-          ctx.completedSkills.push(state.currentSkill);
-          onEvent({
-            type: 'skill_complete',
-            skill: state.currentSkill,
-            timestamp: new Date().toISOString(),
-          });
-        }
-        
-        state.currentSkill = skillName;
-        onEvent({
-          type: 'skill_start',
-          skill: skillName,
-          content: `开始执行 Skill: ${skillName}`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-      
-      if ((actualToolName === 'agent' || actualToolName === 'task') && onEvent) {
-        const description = (input as any)?.description || '';
-        const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
-        if (skillMatch && skillMatch[1]) {
-          const skillName = skillMatch[1];
-          console.log(`[ProcessMgr] 检测到 Agent 执行 Skill: ${skillName}`);
-          
-          if (state.currentSkill && state.currentSkill !== skillName) {
-            ctx.completedSkills.push(state.currentSkill);
-            onEvent({
-              type: 'skill_complete',
-              skill: state.currentSkill,
-              timestamp: new Date().toISOString(),
-            });
-          }
-          
-          state.currentSkill = skillName;
-          onEvent({
-            type: 'skill_start',
-            skill: skillName,
-            content: `Agent 执行 Skill: ${skillName}`,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
-      
-      if (onEvent) {
-        onEvent({
-          type: 'tool_call',
-          tool: actualToolName,
-          input,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    
-    toolCallUpdate: (output: string) => {
-      if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
-      console.log(`[ProcessMgr] EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
-      
-      ctx.eventHistory.push({
-        type: 'tool_call_update',
-        output,
-        timestamp: new Date().toISOString(),
-      });
-      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
-      
-      if (state.currentSkill === 'unknown' && output) {
-        const launchMatch = output.match(/(?:Launching|Invoking|Running|Executing)\s+skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
-        if (launchMatch && launchMatch[1]) {
-          console.log(`[ProcessMgr] Skill name resolved from output: ${launchMatch[1]}`);
-          state.currentSkill = launchMatch[1];
-          if (onEvent) {
-            onEvent({
-              type: 'skill_start',
-              skill: state.currentSkill,
-              content: `Skill 名称已修正: ${state.currentSkill}`,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        }
-      }
-      
-      if (onEvent) {
-        onEvent({
-          type: 'tool_call_update',
-          output,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    
-    error: (message: string) => {
-      if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
-      const classified = classifyAcpError(message);
-      console.log(`[ProcessMgr] EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
-      state.stderr += message;
-      if (onEvent) {
-        onEvent({
-          type: classified.isCritical ? 'error' : 'phase_error',
-          message,
-          phase: classified.category,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
-    
-    raw: (data: string) => {
-      if (data === '__alive__' && config.INACTIVITY_TIMEOUT_MS > 0) {
-        if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
-    },
-  });
 }
