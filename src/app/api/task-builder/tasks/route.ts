@@ -26,21 +26,25 @@ export async function POST(request: NextRequest) {
     const scripts = formData.get('scripts') as string | null;
     const targetProduct = formData.get('targetProduct') as string | null;
     const file = formData.get('file') as File | null;
+    const userProvidedName = formData.get('name') as string | null;
 
     if (!agentId) {
       return NextResponse.json({ error: '缺少必填参数：agentId' }, { status: 400 });
     }
 
-    // 自动生成任务名称：用户名_租户名_时间戳
-    let tenantName = 'public';
-    if (tenant.tenantId) {
-      const tenantRecord = await prisma.tenant.findUnique({
-        where: { id: tenant.tenantId },
-        select: { name: true },
-      });
-      if (tenantRecord) tenantName = tenantRecord.name;
+    // 使用用户提供的名称，为空时自动生成
+    let name = userProvidedName?.trim();
+    if (!name) {
+      let tenantName = 'public';
+      if (tenant.tenantId) {
+        const tenantRecord = await prisma.tenant.findUnique({
+          where: { id: tenant.tenantId },
+          select: { name: true },
+        });
+        if (tenantRecord) tenantName = tenantRecord.name;
+      }
+      name = `${payload.username}_${tenantName}_${Date.now()}`;
     }
-    const name = `${payload.username}_${tenantName}_${Date.now()}`;
 
     // notes 为可选字段，无需校验
 

@@ -69,6 +69,12 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
 
+  function generateDefaultTaskName(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `任务-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  }
+
   const compatibleProviderTypes = useMemo(() => {
     const selectedEngines = agentApps
       .filter(a => selectedAgentIds.has(a.id))
@@ -92,7 +98,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     if (isOpen) {
       fetchAgentApps();
       fetchModels();
-      setName('');
+      setName(generateDefaultTaskName());
       setDescription('');
       setSelectedAgentIds(new Set());
       setSelectedModelKey('');
