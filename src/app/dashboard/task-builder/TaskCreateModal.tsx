@@ -71,6 +71,9 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
+  const MAX_UPLOAD_MB = parseInt(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB || '500', 10);
+  const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
   function generateDefaultTaskName(): string {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -208,8 +211,8 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024 * 1024) {
-        toast.error('文件大小不能超过 5GB');
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(`文件大小不能超过 ${MAX_UPLOAD_MB}MB`);
         return;
       }
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -228,8 +231,8 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const handleFileDrop = (files: FileList) => {
     const file = files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024 * 1024) {
-      toast.error('文件大小不能超过 5GB');
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error(`文件大小不能超过 ${MAX_UPLOAD_MB}MB`);
       return;
     }
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
