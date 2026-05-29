@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Chimera LOGO 预览 v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a14;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Palatino Linotype', Georgia, serif;
+    color: #C8A030;
+    padding: 40px 20px;
+  }
+  h1 { font-size: 11px; letter-spacing: 6px; margin-bottom: 50px; opacity: 0.5; text-transform: uppercase; }
+  .grid { display: flex; gap: 50px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .label { font-size: 10px; letter-spacing: 3px; opacity: 0.4; text-transform: uppercase; }
+  .bg-dark  { background: #0D0702; border-radius: 4px; padding: 24px; }
+  .bg-mid   { background: #1a1a2e; border-radius: 4px; padding: 24px; }
+  .bg-light { background: #e8e0d0; border-radius: 4px; padding: 24px; }
+  hr { border: none; border-top: 1px solid #2a1a08; width: 60%; margin: 40px 0; }
+  .note { font-size: 11px; opacity: 0.4; letter-spacing: 2px; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <h1>Chimera Logo Preview · Vintage Engraving Style</h1>
+
+  <div class="grid">
+    <div class="item">
+      <div class="bg-dark">
+        <img src="chimera-logo-preview.svg" width="300" height="300"/>
+      </div>
+      <span class="label">300px · 完整版</span>
+    </div>
+
+    <div class="item">
+      <div class="bg-dark">
+        <img src="chimera-logo-preview.svg" width="160" height="160"/>
+      </div>
+      <span class="label">160px · 中等</span>
+    </div>
+
+    <div class="item">
+      <div class="bg-dark">
+        <img src="chimera-logo-preview.svg" width="80" height="80"/>
+      </div>
+      <span class="label">80px · 小图标</span>
+    </div>
+
+    <div class="item">
+      <div class="bg-dark">
+        <img src="chimera-logo-preview.svg" width="48" height="48"/>
+      </div>
+      <span class="label">48px · favicon</span>
+    </div>
+  </div>
+
+  <hr/>
+
+  <div class="grid">
+    <div class="item">
+      <div class="bg-mid">
+        <img src="chimera-logo-preview.svg" width="160" height="160"/>
+      </div>
+      <span class="label">深蓝背景</span>
+    </div>
+    <div class="item">
+      <div class="bg-light">
+        <img src="chimera-logo-preview.svg" width="160" height="160"/>
+      </div>
+      <span class="label">浅色背景</span>
+    </div>
+  </div>
+
+  <hr/>
+  <div class="note">满意请告知 · 不满意请说明修改方向</div>
+</body>
+</html>

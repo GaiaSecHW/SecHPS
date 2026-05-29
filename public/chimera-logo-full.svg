@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <!-- 火焰渐变: 亮金 → 焰橙 → 亮黄 -->
+    <linearGradient id="flameGrad" x1="0" y1="1" x2="0.3" y2="0">
+      <stop offset="0%" stop-color="#E8C04A"/>
+      <stop offset="50%" stop-color="#FF6B2B"/>
+      <stop offset="100%" stop-color="#FFE066"/>
+    </linearGradient>
+    <!-- 狮首渐变: 橙金 → 亮金 -->
+    <linearGradient id="lionGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D4A030"/>
+      <stop offset="100%" stop-color="#E8C04A"/>
+    </linearGradient>
+    <!-- 蛇尾渐变: 深蓝 → 中蓝 -->
+    <linearGradient id="snakeGrad" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#2A5A8F"/>
+    </linearGradient>
+    <!-- 外环渐变 -->
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#163250"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景: 极深蓝填充 -->
+  <circle cx="100" cy="100" r="95" fill="#0D1B2A"/>
+
+  <!-- 外环: 深海军蓝 -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#ringGrad)" stroke-width="5"/>
+  <!-- 内环: 橙金 -->
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#D4A030" stroke-width="1.5"/>
+
+  <!-- ===== 狮首 (顶部, 朝右) ===== -->
+  <!-- 狮首轮廓 -->
+  <path d="
+    M 105,35
+    C 110,30 125,32 130,40
+    C 135,48 132,58 128,62
+    L 132,65
+    C 135,68 133,72 130,73
+    L 126,72
+    C 124,75 122,78 118,80
+    L 112,78
+    C 108,80 106,82 105,84
+    C 100,88 95,86 93,82
+    C 90,78 92,72 96,68
+    C 100,64 103,60 105,55
+    C 107,48 106,40 105,35
+    Z
+  " fill="url(#lionGrad)" stroke="#B89020" stroke-width="1"/>
+
+  <!-- 狮鬃: 3-4 层短弧线 -->
+  <path d="M 92,38 C 88,30 82,28 78,32" fill="none" stroke="#E8C04A" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 90,44 C 84,36 76,34 72,38" fill="none" stroke="#E8C04A" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 88,50 C 80,44 74,42 68,46" fill="none" stroke="#D4A030" stroke-width="2" stroke-linecap="round"/>
+  <path d="M 86,56 C 78,50 72,48 66,52" fill="none" stroke="#D4A030" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- 狮眼 -->
+  <circle cx="118" cy="52" r="3" fill="#FFE066"/>
+  <circle cx="118" cy="52" r="1.5" fill="#0D1B2A"/>
+
+  <!-- 狮口 (张开) + 火焰 -->
+  <path d="M 126,72 L 132,68 C 134,66 135,64 134,62" fill="none" stroke="#B89020" stroke-width="1.5"/>
+
+  <!-- ===== 火焰弧线 (从狮口吐出, 突破圆环) ===== -->
+  <!-- 火焰1 (最内层) -->
+  <path d="M 132,65 C 140,55 148,48 155,42" fill="none" stroke="#FFE066" stroke-width="3" stroke-linecap="round"/>
+  <!-- 火焰2 (中层) -->
+  <path d="M 134,62 C 145,50 155,43 164,36" fill="none" stroke="#FF6B2B" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- 火焰3 (最外层, 突破圆环 ~5px) -->
+  <path d="M 136,58 C 150,44 162,36 172,28" fill="none" stroke="url(#flameGrad)" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- 火焰尖端光点 (突破圆环外) -->
+  <circle cx="172" cy="28" r="3" fill="#FFE066" opacity="0.8"/>
+
+  <!-- ===== 羊首 (中右, 从狮首颈部探出) ===== -->
+  <path d="
+    M 120,80
+    C 126,82 132,88 136,94
+    C 138,98 136,104 132,106
+    L 128,104
+    C 126,106 124,108 122,108
+    L 118,106
+    C 114,104 112,100 114,96
+    C 116,92 118,88 120,84
+    Z
+  " fill="#C8B070" stroke="#A69050" stroke-width="1"/>
+
+  <!-- 羊角 (弯角, 两根曲线) -->
+  <path d="M 136,94 C 142,88 148,86 150,90" fill="none" stroke="#E8C04A" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 134,96 C 140,92 146,90 148,94" fill="none" stroke="#D4A030" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- 羊眼 -->
+  <circle cx="128" cy="98" r="2" fill="#0D1B2A"/>
+
+  <!-- ===== 蛇尾 (底部盘旋至左侧上方) ===== -->
+  <!-- 蛇身: S形曲线从底部向上 -->
+  <path d="
+    M 70,170
+    C 65,165 60,158 58,150
+    C 56,142 58,134 62,128
+    C 66,122 68,116 66,110
+    C 64,104 60,98 58,92
+    C 56,86 60,80 66,76
+    C 72,72 76,70 78,68
+  " fill="none" stroke="url(#snakeGrad)" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- 蛇首 (朝左, 在左上方) -->
+  <path d="
+    M 78,68
+    C 76,64 72,62 68,64
+    C 64,66 62,70 64,74
+    L 66,72
+    C 68,70 72,68 76,66
+    Z
+  " fill="#2A5A8F" stroke="#1E3A5F" stroke-width="1"/>
+
+  <!-- 蛇眼 (焰橙点) -->
+  <circle cx="68" cy="68" r="1.5" fill="#FF6B2B"/>
+
+  <!-- 蛇尾末端装饰 (底部) -->
+  <path d="M 70,170 C 74,174 78,172 80,168" fill="none" stroke="#1E3A5F" stroke-width="2" stroke-linecap="round"/>
+</svg>

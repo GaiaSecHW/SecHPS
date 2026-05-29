@@ -5,7 +5,8 @@
       "Bash(findstr /i \"node\")",
       "WebFetch(domain:www.avlsec.com)",
       "WebSearch",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:agentclientprotocol.com)"
     ]
   }
 }

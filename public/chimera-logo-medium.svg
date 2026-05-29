@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="flameGrad" x1="0" y1="1" x2="0.3" y2="0">
+      <stop offset="0%" stop-color="#E8C04A"/>
+      <stop offset="50%" stop-color="#FF6B2B"/>
+      <stop offset="100%" stop-color="#FFE066"/>
+    </linearGradient>
+    <linearGradient id="lionGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D4A030"/>
+      <stop offset="100%" stop-color="#E8C04A"/>
+    </linearGradient>
+    <linearGradient id="snakeGrad" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#2A5A8F"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <circle cx="24" cy="24" r="23" fill="#0D1B2A"/>
+  <!-- 外环 -->
+  <circle cx="24" cy="24" r="23" fill="none" stroke="#1E3A5F" stroke-width="1.2"/>
+  <!-- 内环 -->
+  <circle cx="24" cy="24" r="21" fill="none" stroke="#D4A030" stroke-width="0.4"/>
+
+  <!-- 狮首轮廓 (简化, 2-3 主线) -->
+  <path d="M 26,8 C 28,6 32,7 34,10 C 36,14 35,18 33,20 L 35,21 C 36,23 34,25 32,25 L 28,24 C 27,26 25,28 24,29 C 22,30 20,28 19,26 C 18,24 19,22 22,19 C 24,17 26,14 26,10 Z" fill="url(#lionGrad)" stroke="#B89020" stroke-width="0.5"/>
+
+  <!-- 狮鬃简化 (2 条) -->
+  <path d="M 20,9 C 17,6 14,6 13,8" fill="none" stroke="#E8C04A" stroke-width="1" stroke-linecap="round"/>
+  <path d="M 19,13 C 15,10 13,10 11,12" fill="none" stroke="#D4A030" stroke-width="0.8" stroke-linecap="round"/>
+
+  <!-- 狮眼 -->
+  <circle cx="30" cy="13" r="1" fill="#FFE066"/>
+
+  <!-- 火焰弧线 (1 条, 简化) -->
+  <path d="M 35,21 C 38,16 41,12 43,8" fill="none" stroke="url(#flameGrad)" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- 羊首简化 -->
+  <path d="M 30,20 C 33,22 35,26 35,30 C 34,32 32,32 30,31 L 28,30 C 27,28 28,26 29,24 Z" fill="#C8B070" stroke="#A69050" stroke-width="0.5"/>
+  <!-- 羊角 (1 条) -->
+  <path d="M 35,26 C 38,24 40,24 40,26" fill="none" stroke="#E8C04A" stroke-width="1" stroke-linecap="round"/>
+
+  <!-- 蛇尾简化 (1 条曲线) -->
+  <path d="M 17,42 C 15,38 14,34 15,30 C 16,26 15,22 14,18 C 13,14 16,12 19,11" fill="none" stroke="url(#snakeGrad)" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- 蛇首 -->
+  <path d="M 19,11 C 18,9 15,9 14,10 C 13,11 14,13 16,12 Z" fill="#2A5A8F" stroke="#1E3A5F" stroke-width="0.3"/>
+  <!-- 蛇眼 -->
+  <circle cx="15" cy="10" r="0.6" fill="#FF6B2B"/>
+</svg>
