@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle } from 'lucide-react';
+import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import ModeSelectModal from './ModeSelectModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -27,6 +27,8 @@ interface TaskInstance {
   startedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
+  workerNodeId: string | null;
+  workerStatus: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -440,6 +442,17 @@ export default function TaskBuilderPage() {
                         <span className="truncate text-gray-500">{task.modelName}</span>
                       </>
                     )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    {task.workerNodeId ? (
+                      <span className="flex items-center gap-1 text-cyan-400 bg-cyan-900/20 px-2 py-0.5 rounded">
+                        <Server className="w-3 h-3" />
+                        <span>{task.workerNodeId}</span>
+                      </span>
+                    ) : task.status === 'pending' ? (
+                      <span className="text-gray-500">待分配 Worker</span>
+                    ) : null}
                   </div>
 
                   {task.notes && (

@@ -23,6 +23,10 @@ import {
   Brain,
   Layers,
   Search,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface LogEntry {
@@ -105,6 +109,9 @@ export function WorkerLogsPage() {
   const [taskDetail, setTaskDetail] = useState<TaskDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [resultCollapsed, setResultCollapsed] = useState(true);
+  const [instructionCollapsed, setInstructionCollapsed] = useState(true);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -278,14 +285,19 @@ export function WorkerLogsPage() {
   const timeline = buildTimeline();
 
   return (
-    <div className="flex h-[calc(100vh-180px)] bg-dark-bg">
+    <div className="flex h-[calc(100vh-140px)] bg-dark-bg">
       {/* Left Panel */}
-      <div className="w-[280px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0">
-        <div className="flex-shrink-0 p-4 border-b border-gray-700/50">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Layers size={16} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-100">任务列表</span>
+      {sidebarCollapsed ? (
+        <div className="w-[40px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0 items-center pt-3">
+          <button onClick={() => setSidebarCollapsed(false)} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded" title="展开侧栏"><PanelLeftOpen size={16} /></button>
+        </div>
+      ) : (
+        <div className="w-[240px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0">
+          <div className="flex-shrink-0 p-4 border-b border-gray-700/50">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Layers size={16} className="text-gray-400" />
+                <span className="text-sm font-medium text-gray-100">任务列表</span>
 <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-6 min-w-[120px] px-2 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-300">
                   <option value="all">全部状态 ({tasks.length})</option>
                   <option value="completed">completed ({statusCounts.completed || 0})</option>
@@ -295,33 +307,37 @@ export function WorkerLogsPage() {
                   <option value="dispatched">dispatched ({statusCounts.dispatched || 0})</option>
                   <option value="building">building ({statusCounts.building || 0})</option>
                 </select>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setSidebarCollapsed(true)} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded" title="收起侧栏"><PanelLeftClose size={14} /></button>
+                <button onClick={() => { refetchTasks(); refetchLogs(); }} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded"><RefreshCw size={14} /></button>
+              </div>
             </div>
-            <button onClick={() => { refetchTasks(); refetchLogs(); }} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded"><RefreshCw size={14} /></button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+              <input type="text" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-8 pl-9 pr-3 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-primary-500 focus:outline-none" />
+            </div>
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
-            <input type="text" placeholder="搜索任务..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-8 pl-9 pr-3 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-primary-500 focus:outline-none" />
+          <div className="flex-1 overflow-auto min-h-0">
+            {tasksLoading ? <div className="flex items-center justify-center h-32"><LoadingSpinner size="sm" /></div>
+            : filteredTasks.length === 0 ? <div className="p-4 text-center text-sm text-gray-500">{searchQuery ? '未找到匹配任务' : '暂无任务'}</div>
+            : <div className="p-2 space-y-1">{filteredTasks.map(task => {
+              const config = statusConfig[task.state] || statusConfig.queued;
+              const isSelected = selectedTaskId === task.taskId;
+              return (
+                <button key={task.taskId} onClick={() => setSelectedTaskId(task.taskId)} className={`w-full p-3 rounded-lg border text-left transition-all ${isSelected ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700/50 bg-gray-800/50 hover:bg-gray-700/30'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-medium truncate ${isSelected ? 'text-primary-300' : 'text-gray-300'}`}>{task.taskId ? task.taskId.slice(0, 16) + '...' : 'N/A'}</span>
+                    <span className={`px-1.5 py-0.5 text-xs rounded ${config.bg} ${config.text}`}>{task.state}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate">{task.instruction ? (task.instruction.length > 30 ? task.instruction.slice(0, 30) + '...' : task.instruction) : '无指令'}</p>
+                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500"><Clock size={10} /><span>{new Date(task.createdAt).toLocaleDateString('zh-CN')}</span></div>
+                </button>
+              );
+            })}</div>}
           </div>
         </div>
-        <div className="flex-1 overflow-auto min-h-0">
-          {tasksLoading ? <div className="flex items-center justify-center h-32"><LoadingSpinner size="sm" /></div>
-          : filteredTasks.length === 0 ? <div className="p-4 text-center text-sm text-gray-500">{searchQuery ? '未找到匹配任务' : '暂无任务'}</div>
-          : <div className="p-2 space-y-1">{filteredTasks.map(task => {
-            const config = statusConfig[task.state] || statusConfig.queued;
-            const isSelected = selectedTaskId === task.taskId;
-            return (
-              <button key={task.taskId} onClick={() => setSelectedTaskId(task.taskId)} className={`w-full p-3 rounded-lg border text-left transition-all ${isSelected ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700/50 bg-gray-800/50 hover:bg-gray-700/30'}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs font-medium truncate ${isSelected ? 'text-primary-300' : 'text-gray-300'}`}>{task.taskId ? task.taskId.slice(0, 16) + '...' : 'N/A'}</span>
-                  <span className={`px-1.5 py-0.5 text-xs rounded ${config.bg} ${config.text}`}>{task.state}</span>
-                </div>
-                <p className="text-xs text-gray-500 truncate">{task.instruction ? (task.instruction.length > 30 ? task.instruction.slice(0, 30) + '...' : task.instruction) : '无指令'}</p>
-                <div className="flex items-center gap-1 mt-1 text-xs text-gray-500"><Clock size={10} /><span>{new Date(task.createdAt).toLocaleDateString('zh-CN')}</span></div>
-              </button>
-            );
-          })}</div>}
-        </div>
-      </div>
+      )}
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
@@ -344,41 +360,41 @@ export function WorkerLogsPage() {
             <div className="flex-1 overflow-auto p-5 space-y-4 min-h-0 flex flex-col">
               {taskDetail && (
                 <>
-                  <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-4">
-                    <h3 className="text-xs font-medium text-gray-500 uppercase mb-3">执行时间线</h3>
+                  <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-3">
+                    <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">执行时间线</h3>
                     <div className="flex items-stretch">
                       {timeline.map((group, gi) => {
                         if (group.type === 'sequential') {
                           return group.phases.map((phase, pi) => (
                             <div key={phase.id} className="flex items-center flex-1">
                               <div className="flex flex-col items-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>{phase.icon}</div>
-                                <span className={`text-xs mt-1.5 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>{phase.icon}</div>
+                                <span className={`text-[11px] mt-1 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
                                 {phase.status === 'skipped' && <span className="text-[10px] text-gray-500">(跳过)</span>}
                               </div>
-                              {!(gi === timeline.length - 1 && pi === group.phases.length - 1) && <div className={`flex-1 h-0.5 mx-1 ${phase.status === 'completed' ? 'bg-emerald-600' : 'bg-gray-600'}`} />}
+                              {!(gi === timeline.length - 1 && pi === group.phases.length - 1) && <div className={`flex-1 h-0.5 mx-0.5 ${phase.status === 'completed' ? 'bg-emerald-600' : 'bg-gray-600'}`} />}
                             </div>
                           ));
                         }
                         // Parallel group: fork-merge display
                         return (
                           <div key={`parallel-${gi}`} className="flex-1 flex flex-col">
-                            <div className="flex-1 flex items-center justify-center h-4">
+                            <div className="flex-1 flex items-center justify-center h-3">
                               <div className="w-full border-t-2 border-l-2 border-r-2 border-b-0 border-gray-600 rounded-t-sm h-full" />
                             </div>
-                            <div className="flex gap-2 py-1">
+                            <div className="flex gap-1 py-0.5">
                               {group.phases.map(phase => (
                                 <div key={phase.id} className="flex-1 flex flex-col items-center">
-                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>
+                                  <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 ${phase.status === 'completed' ? 'bg-emerald-600 border-emerald-400 text-white' : phase.status === 'running' ? 'bg-blue-600 border-blue-400 text-white animate-pulse' : phase.status === 'failed' ? 'bg-red-600 border-red-400 text-white' : phase.status === 'skipped' ? 'bg-gray-600 border-gray-400 text-gray-300' : 'bg-gray-700 border-gray-500 text-gray-400'}`}>
                                     <span className="scale-75">{phase.icon}</span>
                                   </div>
-                                  <span className={`text-[11px] mt-1 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
+                                  <span className={`text-[10px] mt-0.5 text-center ${phase.status === 'pending' || phase.status === 'skipped' ? 'text-gray-500' : 'text-gray-300'}`}>{phase.name}</span>
                                   {phase.status === 'skipped' && <span className="text-[10px] text-gray-500">(跳过)</span>}
                                   {phase.status === 'running' && <span className="text-[10px] text-blue-400 animate-pulse">并行中</span>}
                                 </div>
                               ))}
                             </div>
-                            <div className="flex-1 flex items-center justify-center h-4">
+                            <div className="flex-1 flex items-center justify-center h-3">
                               <div className="w-full border-b-2 border-l-2 border-r-2 border-t-0 border-gray-600 rounded-b-sm h-full" />
                             </div>
                           </div>
@@ -387,19 +403,20 @@ export function WorkerLogsPage() {
                     </div>
                   </div>
 
-                  <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg p-4">
-                    <div className="grid grid-cols-4 gap-4 text-sm">
-                      <div><span className="text-gray-500 text-xs">状态</span><div className="mt-1"><span className={`font-medium ${taskDetail.state === 'completed' ? 'text-emerald-400' : taskDetail.state === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>{taskDetail.state}</span></div></div>
-                      <div><span className="text-gray-500 text-xs">Agent</span><div className="mt-1 text-gray-200 truncate">{taskDetail.agent || '未指定'}</div></div>
-                      <div><span className="text-gray-500 text-xs">创建时间</span><div className="mt-1 text-gray-200">{new Date(taskDetail.createdAt).toLocaleString('zh-CN')}</div></div>
-                      <div><span className="text-gray-500 text-xs">完成时间</span><div className="mt-1 text-gray-200">{taskDetail.completedAt ? new Date(taskDetail.completedAt).toLocaleString('zh-CN') : '-'}</div></div>
+                  <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1"><span className="text-gray-500">状态</span><span className={`font-medium ${taskDetail.state === 'completed' ? 'text-emerald-400' : taskDetail.state === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>{taskDetail.state}</span></div>
+                      <div className="flex items-center gap-1"><span className="text-gray-500">Agent</span><span className="text-gray-200 truncate">{taskDetail.agent || '未指定'}</span></div>
+                      <div className="flex items-center gap-1"><span className="text-gray-500">创建</span><span className="text-gray-200">{new Date(taskDetail.createdAt).toLocaleString('zh-CN')}</span></div>
+                      <div className="flex items-center gap-1"><span className="text-gray-500">完成</span><span className="text-gray-200">{taskDetail.completedAt ? new Date(taskDetail.completedAt).toLocaleString('zh-CN') : '-'}</span></div>
+                      <button onClick={() => setInstructionCollapsed(!instructionCollapsed)} className="ml-auto flex items-center gap-1 text-gray-400 hover:text-gray-200">{instructionCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}<span>指令</span></button>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-gray-700/50"><span className="text-gray-500 text-xs">执行指令</span><div className="mt-1 text-gray-300 text-xs">{taskDetail.instruction || '无指令'}</div></div>
+                    {!instructionCollapsed && <div className="mt-2 pt-2 border-t border-gray-700/50 text-gray-300 text-xs">{taskDetail.instruction || '无指令'}</div>}
                   </div>
                 </>
               )}
 
-              <div className="flex-1 min-h-0 bg-dark-surface border border-gray-700/50 rounded-lg flex flex-col">
+              <div className="flex-1 min-h-[200px] bg-dark-surface border border-gray-700/50 rounded-lg flex flex-col">
                 <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
                   <div className="flex items-center gap-2">
                     <Play size={14} className="text-blue-400" />
@@ -421,28 +438,33 @@ export function WorkerLogsPage() {
                     const isCodedmap = content.includes('[Codedmap]') || (() => { try { const d = JSON.parse(first.data); return (first.type === 'phase_start' || first.type === 'phase_complete') && d.phase === 'codedmap'; } catch { return false; } })();
                     const toolInfo = getToolCallInfo(first);
                     return (
-                      <div key={`g-${gi}`} className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-lg px-3 py-2 ${isError ? 'bg-red-900/20 border border-red-500/30 text-red-200' : isCodedmap ? 'bg-indigo-900/20 border border-indigo-500/30 text-indigo-100' : isTool ? 'bg-amber-900/20 border border-amber-500/30 text-amber-100' : isAgent ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100' : 'bg-gray-700/50 border border-gray-600/30 text-gray-200'}`}>
-                          <div className="flex items-center justify-between gap-2 mb-1 text-xs opacity-60">
-                            <div className="flex items-center gap-1.5">{isCodedmap ? <Brain size={12} /> : isTool ? <Wrench size={12} /> : isAgent ? <MessageSquare size={12} /> : <Cpu size={12} />}<span>{isCodedmap ? 'Codedmap' : isTool ? 'Tool' : isAgent ? 'Agent' : 'Worker'}</span><span className="font-mono">{formatTime(first.createdAt)}</span></div>
-                            <button onClick={() => copyToClipboard(content)} className="text-gray-400 hover:text-gray-200"><Copy size={12} /></button>
+                      <div key={`g-${gi}`} className={`w-full border-l-2 ${isError ? 'border-l-red-500 bg-red-900/10' : isCodedmap ? 'border-l-indigo-500 bg-indigo-900/10' : isTool ? 'border-l-amber-500 bg-amber-900/10' : isAgent ? 'border-l-blue-500 bg-blue-900/10' : 'border-l-gray-500 bg-gray-800/30'} px-3 py-1.5`}>
+                          <div className="flex items-center gap-2 text-xs opacity-60 mb-0.5">
+                            <span className="flex items-center gap-1">{isCodedmap ? <Brain size={12} /> : isTool ? <Wrench size={12} /> : isAgent ? <MessageSquare size={12} /> : <Cpu size={12} />}<span className={`font-medium ${isError ? 'text-red-400' : isCodedmap ? 'text-indigo-400' : isTool ? 'text-amber-400' : isAgent ? 'text-blue-400' : 'text-gray-400'}`}>{isCodedmap ? 'Codedmap' : isTool ? 'Tool' : isAgent ? 'Agent' : 'Worker'}</span></span>
+                            <span className="font-mono text-gray-500">{formatTime(first.createdAt)}</span>
+                            <button onClick={() => copyToClipboard(content)} className="ml-auto text-gray-400 hover:text-gray-200"><Copy size={12} /></button>
                           </div>
-                          {isTool && toolInfo && <div className="mb-2 bg-gray-900/50 rounded p-2 border border-amber-600/30"><div className="flex items-center gap-1.5 text-amber-300 font-medium mb-1"><Wrench size={12} /><span className="font-mono text-xs">{toolInfo.name}</span></div><pre className="text-xs text-gray-300 overflow-x-auto max-h-32">{JSON.stringify(toolInfo.args, null, 2)}</pre></div>}
-                          {isMultiLine || content.length > 200 ? <div><pre className={`text-xs whitespace-pre-wrap break-all font-mono ${!isExpanded ? 'max-h-20 overflow-hidden' : ''}`}>{content}</pre><button onClick={() => toggleExpand(`g-${gi}`)} className="mt-1 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">{isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}{isExpanded ? '收起' : '展开'}</button></div> : <div className="text-xs">{content}</div>}
+                          {isTool && toolInfo && <div className="mb-1 bg-gray-900/50 rounded p-2 border border-amber-600/30"><div className="flex items-center gap-1.5 text-amber-300 font-medium mb-1"><Wrench size={12} /><span className="font-mono text-xs">{toolInfo.name}</span></div><pre className="text-xs text-gray-300 overflow-x-auto max-h-32">{JSON.stringify(toolInfo.args, null, 2)}</pre></div>}
+                          {isMultiLine || content.length > 200 ? <div><pre className={`text-sm whitespace-pre-wrap break-all font-mono ${!isExpanded ? 'max-h-32 overflow-hidden' : ''}`}>{content}</pre><button onClick={() => toggleExpand(`g-${gi}`)} className="mt-0.5 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">{isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}{isExpanded ? '收起' : '展开'}</button></div> : <div className="text-sm">{content}</div>}
                         </div>
-                      </div>
                     );
                   })}<div ref={logsEndRef} /></div>}
                 </div>
               </div>
 
               <div className="flex-shrink-0 bg-dark-surface border border-gray-700/50 rounded-lg">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-700/50"><Award size={14} className="text-amber-400" /><span className="text-sm font-medium text-gray-200">执行结果</span></div>
-                <div className="p-4 max-h-[200px] overflow-y-auto">
-                  {taskDetail?.result && <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3"><div className="text-emerald-400 text-xs uppercase mb-1">执行结果</div><pre className="text-gray-200 whitespace-pre-wrap break-all text-xs">{taskDetail.result}</pre></div>}
-                  {taskDetail?.error && <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mt-2"><div className="text-red-400 text-xs uppercase mb-1">错误信息</div><pre className="text-red-300 whitespace-pre-wrap break-all text-xs">{taskDetail.error}</pre></div>}
-                  {!taskDetail?.result && !taskDetail?.error && <div className="text-center py-4 text-gray-500 text-sm">暂无执行结果</div>}
-                </div>
+                <button onClick={() => setResultCollapsed(!resultCollapsed)} className="w-full flex items-center gap-2 px-4 py-2 border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors">
+                  <Award size={14} className="text-amber-400" />
+                  <span className="text-sm font-medium text-gray-200">执行结果</span>
+                  {resultCollapsed ? <ChevronRight size={14} className="ml-auto text-gray-400" /> : <ChevronDown size={14} className="ml-auto text-gray-400" />}
+                </button>
+                {!resultCollapsed && (
+                  <div className="p-4 max-h-[200px] overflow-y-auto">
+                    {taskDetail?.result && <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3"><div className="text-emerald-400 text-xs uppercase mb-1">执行结果</div><pre className="text-gray-200 whitespace-pre-wrap break-all text-xs">{taskDetail.result}</pre></div>}
+                    {taskDetail?.error && <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mt-2"><div className="text-red-400 text-xs uppercase mb-1">错误信息</div><pre className="text-red-300 whitespace-pre-wrap break-all text-xs">{taskDetail.error}</pre></div>}
+                    {!taskDetail?.result && !taskDetail?.error && <div className="text-center py-4 text-gray-500 text-sm">暂无执行结果</div>}
+                  </div>
+                )}
               </div>
 
               {!taskDetail && <div className="text-center py-8 text-gray-500 text-sm">暂无任务详情</div>}

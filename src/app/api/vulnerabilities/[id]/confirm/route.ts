@@ -1,47 +1,34 @@
-// src/app/api/vulnerabilities/[id]/confirm/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
-// POST /api/vulnerabilities/:id/confirm - 确认漏洞
-// 数据隔离：普通用户只能确认自己项目的漏洞，管理员可以确认所有
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.VULNERABILITY_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload, tenant } = auth as AuthSuccessResult;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     const { id } = await params;
 
-    // 检查是否是管理员
-    const userIsAdmin = isAdmin(payload);
+    const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
-    // 验证所有权
-    let where: any = { id };
-    if (!userIsAdmin) {
-      where.Project = { userId: payload.userId };
-    }
-
-    const vulnerability = await prisma.vulnerability.findFirst({ 
-      where,
+    const vulnerability = await prisma.vulnerability.findFirst({
+      where: {
+        id,
+        ...(isPrivileged ? {} : { Project: { userId: payload.userId } }),
+      },
       include: { Project: { select: { userId: true } } },
     });
     if (!vulnerability) {
-      return NextResponse.json({ error: '漏洞不存在' }, { status: 404 });
+      return NextResponse.json({ error: '漏洞不存在或无权限访问' }, { status: 404 });
     }
 
     const updated = await prisma.vulnerability.update({
@@ -53,7 +40,6 @@ export async function POST(
       },
     });
 
-    // 更新关联的执行记录
     if (vulnerability.skillExecutionId) {
       await prisma.skillExecution.update({
         where: { id: vulnerability.skillExecutionId },

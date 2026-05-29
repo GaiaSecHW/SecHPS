@@ -5,6 +5,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import type { HealthCheckResult, SystemHealthReport, HealthStatus, InfrastructureService, InfrastructureInfo } from '@/types/monitoring';
 import { getAllCacheStats } from '@/lib/cache';
 import { parseDatabaseName } from '@/lib/system-info';
+import os from 'os';
 import fs from 'fs';
 
 const START_TIME = Date.now();
@@ -149,17 +150,17 @@ export async function runHealthChecks(): Promise<SystemHealthReport> {
   ]);
 
   const status = calculateOverallStatus(checks);
-  const memoryUsage = process.memoryUsage();
-  const cacheStats = getAllCacheStats();
 
-  const dbCheck = checks.find(c => c.name === 'database')!;
   const infrastructure: InfrastructureInfo = {
-    database: await checkInfrastructureDatabase(dbCheck),
+    database: await checkInfrastructureDatabase(checks[0]),
     redis: await checkRedis(),
     gitea: await checkGitea(),
     minio: await checkMinIO(),
     nfs: await checkNFS(),
   };
+
+  const memDetails = checks[1].details as { heapUsed: number; heapTotal: number };
+  const cacheDetails = checks[2].details as Record<string, { hitRate: number }>;
 
   return {
     status,
@@ -169,12 +170,12 @@ export async function runHealthChecks(): Promise<SystemHealthReport> {
     checks,
     metrics: {
       cpu: 0,
-      memory: memoryUsage.heapUsed / memoryUsage.heapTotal,
+      memory: memDetails.heapUsed / memDetails.heapTotal,
       dbConnections: 0,
-      cacheHitRate: Object.values(cacheStats).reduce(
+      cacheHitRate: Object.values(cacheDetails).reduce(
         (sum, s) => sum + s.hitRate,
         0
-      ) / Object.keys(cacheStats).length,
+      ) / Object.keys(cacheDetails).length,
     },
     infrastructure,
   };
@@ -212,11 +213,30 @@ async function checkDatabase(): Promise<HealthCheckResult> {
 }
 
 /**
+ * 获取系统最大可用内存
+ */
+function getContainerMemoryLimit(): number {
+  try {
+    //
+    const content = fs.readFileSync('/sys/fs/cgroup/memory.max', 'utf8').trim();
+    if (content !== 'max' && content !== '') {
+      const limit = Number(content);
+      if (limit > 0 && Number.isFinite(limit)) return limit;
+    }
+  } catch {}
+  // 当获取不到容器分配内存时，返回宿主机物理内存总量
+  return os.totalmem();
+}
+
+/**
  * 内存健康检查
  */
 async function checkMemory(): Promise<HealthCheckResult> {
   const memory = process.memoryUsage();
+  // 获取当前nodejs进程已使用内存
   const heapUsedMB = memory.heapUsed / 1024 / 1024;
+  // 将nodejs被分配内存上限纠正为容器内实际最大可用内存
+  memory.heapTotal = getContainerMemoryLimit();
   const heapTotalMB = memory.heapTotal / 1024 / 1024;
   const usagePercent = memory.heapUsed / memory.heapTotal;
 

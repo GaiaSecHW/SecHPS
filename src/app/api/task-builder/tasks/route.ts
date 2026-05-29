@@ -3,7 +3,7 @@ import { authenticateRequest, authenticateRequestEnhanced, authErrorResponse } f
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { getTenantIdForCreate } from '@/lib/tenant-filter';
 import { createTaskWithFiles } from '@/lib/task-creation';
@@ -111,10 +111,37 @@ export async function GET(request: NextRequest) {
       prisma.taskInstance.count({ where }),
     ]);
 
+    // 收集所有 codeswarmTaskId，批量查询 Worker 信息
+    const codeswarmTaskIds = tasks
+      .map(t => t.codeswarmTaskId)
+      .filter((id): id is string => id !== null && id !== undefined);
+
+    let workerMap = new Map<string, { workerNodeId: string | null; workerStatus: string | null }>();
+
+    if (codeswarmTaskIds.length > 0) {
+      const workerRows: { taskId: string; workerNodeId: string | null; workerStatus: string | null }[] =
+        await prisma.$queryRaw`
+          SELECT ct."taskId", w."nodeId" as "workerNodeId", w."status" as "workerStatus"
+          FROM "CodeswarmTask" ct
+          LEFT JOIN "CodeswarmWorker" w ON ct."workerId" = w.id
+          WHERE ct."taskId" IN (${Prisma.join(codeswarmTaskIds)})
+        `;
+      for (const row of workerRows) {
+        workerMap.set(row.taskId, { workerNodeId: row.workerNodeId, workerStatus: row.workerStatus });
+      }
+    }
+
+    // 为每个 task 添加 worker 信息
+    const augmentedTasks = tasks.map(task => ({
+      ...task,
+      workerNodeId: task.codeswarmTaskId ? (workerMap.get(task.codeswarmTaskId)?.workerNodeId ?? null) : null,
+      workerStatus: task.codeswarmTaskId ? (workerMap.get(task.codeswarmTaskId)?.workerStatus ?? null) : null,
+    }));
+
     const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({
-      tasks,
+      tasks: augmentedTasks,
       pagination: {
         total,
         page,

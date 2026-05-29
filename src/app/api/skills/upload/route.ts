@@ -159,19 +159,40 @@ export async function POST(request: Request) {
       const zip = new AdmZip(buffer);
       const zipEntries = zip.getEntries();
       
-      const skillMdEntry = zipEntries.find(e => e.entryName === 'SKILL.md');
-      if (!skillMdEntry) {
+      const skillMdEntries = zipEntries.filter(e => !e.isDirectory && e.entryName.endsWith('SKILL.md') && e.entryName.split('/').length <= 2);
+      
+      if (skillMdEntries.length === 0) {
         return NextResponse.json({ 
-          details: { error: 'ZIP 压缩包中未找到 SKILL.md 文件，请确保压缩包直接包含 SKILL.md 文件（不要有额外的文件夹包裹）' } 
+          details: { error: 'ZIP 压缩包中未找到 SKILL.md 文件（仅支持根目录或单层子目录内的 SKILL.md）' } 
         }, { status: 400 });
       }
-      
+
+      if (skillMdEntries.length > 1) {
+        return NextResponse.json({ 
+          details: { error: 'ZIP 包含多个 SKILL.md，请逐个上传' } 
+        }, { status: 400 });
+      }
+
+      const skillMdEntry = skillMdEntries[0];
       skillContent = skillMdEntry.getData().toString('utf-8');
+      
+      const skillMdPath = skillMdEntry.entryName;
+      const skillDirPrefix = skillMdPath.includes('/') ? skillMdPath.substring(0, skillMdPath.lastIndexOf('/') + 1) : '';
       
       zipFiles = new Map();
       for (const entry of zipEntries) {
         if (!entry.isDirectory) {
-          zipFiles.set(entry.entryName, entry.getData());
+          const entryPath = entry.entryName;
+          if (!skillDirPrefix) {
+            if (!entryPath.startsWith('__MACOSX') && !entryPath.includes('.DS_Store')) {
+              zipFiles.set(entryPath, entry.getData());
+            }
+          } else if (entryPath.startsWith(skillDirPrefix)) {
+            const relativePath = entryPath.substring(skillDirPrefix.length);
+            if (relativePath && !relativePath.startsWith('__MACOSX') && !relativePath.includes('.DS_Store')) {
+              zipFiles.set(relativePath, entry.getData());
+            }
+          }
         }
       }
     } else {

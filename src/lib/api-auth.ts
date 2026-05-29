@@ -9,6 +9,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import type { JWTPayload } from '@/lib/auth';
 import type { TenantContext } from '@/lib/tenant';
 import { getTenantContext } from '@/lib/tenant';
+import { buildTenantFilter, withTenantFilter, validateTenantAccess } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -112,16 +113,10 @@ export function authErrorResponse(authResult: { success: false; error: string; s
 
 /**
  * 将认证失败结果转换为 NextResponse（格式 B: { details: { error: 'message' } }）
- * 用于保持与现有 API 的向后兼容
- * 
- * @param authResult - 失败的认证结果
- * @returns NextResponse 错误响应
- * 
- * @example
- * const auth = authenticateRequest(request);
- * if (!auth.success) {
- *   return authErrorResponseNested(auth);
- * }
+ *
+ * @deprecated 请使用 authErrorResponse 代替。此函数保留仅为向后兼容，
+ * 新代码应统一使用 `{ error: string }` 格式。
+ * 迁移计划：逐步替换现有调用后移除。
  */
 export function authErrorResponseNested(authResult: { success: false; error: string; statusCode: number }): NextResponse {
   return NextResponse.json(
@@ -184,6 +179,12 @@ export interface AuthSuccessResult {
   userId: string;
   /** 租户上下文 */
   tenant: TenantContext;
+  /** 预构建的租户过滤条件（基于 payload.roles） */
+  tenantFilter: Record<string, unknown>;
+  /** 便捷方法：将租户过滤合并到现有 WHERE 条件 */
+  withTenantFilter(existingWhere: Record<string, unknown>): Record<string, unknown>;
+  /** 便捷方法：用于 ID 直接访问时的租户验证 */
+  tenantAccessFilter: Record<string, unknown>;
 }
 
 /**
@@ -200,11 +201,19 @@ export function authenticateRequestEnhanced(
   const result = authenticateRequest(request, options);
 
   if (result.success) {
+    const tenant = getTenantContext(result.payload);
+    const userRoles = result.payload.roles;
+    const tenantFilter = buildTenantFilter(tenant, { userRoles });
     return {
       ...result,
       isAdmin: isAdmin(result.payload),
       userId: result.payload.userId,
-      tenant: getTenantContext(result.payload),
+      tenant,
+      tenantFilter,
+      withTenantFilter(existingWhere: Record<string, unknown>) {
+        return withTenantFilter(tenant, existingWhere, { userRoles });
+      },
+      tenantAccessFilter: validateTenantAccess(tenant, { userRoles }),
     };
   }
 

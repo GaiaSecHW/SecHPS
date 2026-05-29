@@ -2,7 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
@@ -10,19 +11,15 @@ import { combineWhereClauses, buildDateRangeFilter, buildStatusFilter } from '@/
 import { generateId } from '@/lib/id-generator';
 
 // GET /api/vulnerabilities - 获取漏洞列表
-// 数据隔离：普通用户只能看到自己项目的漏洞，管理员可以看到所有漏洞
+// 数据隔离：基于租户上下文过滤，普通租户用户只能看到同租户项目的漏洞
 export async function GET(request: Request) {
-  // 使用统一认证中间件
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.VULNERABILITY_READ });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.VULNERABILITY_READ });
   if (!auth.success) {
-    return authErrorResponseNested(auth);
+    return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant, withTenantFilter: applyTenantFilter } = auth as AuthSuccessResult;
 
   try {
-    // 检查是否是管理员
-    const userIsAdmin = isAdmin(payload);
-
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId') || undefined;
     const taskId = searchParams.get('taskId') || undefined;
@@ -39,7 +36,7 @@ export async function GET(request: Request) {
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
 
     // 如果有 skillId，获取 skill 名称用于过滤
-    let skillFilter: any = undefined;
+    let skillFilter: Record<string, unknown> | undefined = undefined;
     if (skillId) {
       const skill = await prisma.skill.findUnique({
         where: { id: skillId },
@@ -50,33 +47,33 @@ export async function GET(request: Request) {
       }
     }
 
-    // 数据隔离：普通用户只能查看自己项目的漏洞
-    let projectFilter: any = undefined;
-    if (!userIsAdmin) {
-      const userProjects = await prisma.project.findMany({
-        where: { userId: payload.userId },
-        select: { id: true },
-      });
-      if (projectId) {
-        // 如果指定了 projectId，检查是否属于用户
-        if (!userProjects.some(p => p.id === projectId)) {
-          return NextResponse.json({ details: { error: '项目不存在' } }, { status: 404 });
-        }
-        projectFilter = { projectId };
-      } else {
-        // 未指定 projectId，查看所有用户项目的漏洞
-        projectFilter = { projectId: { in: userProjects.map(p => p.id) } };
+    // 数据隔离：基于租户上下文过滤项目（替代旧的 userId/isAdmin 逻辑）
+    const projectWhere: Record<string, unknown> = applyTenantFilter({});
+    // 非管理员/非ICSL特权：进一步限定为用户自己的项目
+    if (!tenant.isPlatformAdmin && !(tenant.isIcsTenant && payload.roles.includes('admin'))) {
+      projectWhere.userId = payload.userId;
+    }
+
+    const userProjects = await prisma.project.findMany({
+      where: projectWhere,
+      select: { id: true },
+    });
+
+    let projectFilter: Record<string, unknown> | undefined;
+
+    if (projectId) {
+      if (!userProjects.some(p => p.id === projectId)) {
+        return NextResponse.json({ error: '项目不存在或无权限访问' }, { status: 404 });
       }
+      projectFilter = { projectId };
     } else {
-      // 管理员：可以查看所有项目的漏洞
-      if (projectId) {
-        projectFilter = { projectId };
-      }
+      projectFilter = userProjects.length > 0
+        ? { projectId: { in: userProjects.map(p => p.id) } }
+        : { projectId: 'none' };
     }
 
     const dateRange = buildDateRangeFilter(startDate, endDate);
 
-    // 构建查询条件
     const where = combineWhereClauses(
       projectFilter,
       taskId ? { taskId } : undefined,
@@ -131,19 +128,18 @@ export async function GET(request: Request) {
     return NextResponse.json(createPaginatedResponse(vulnerabilities, total, pageNum, pageLimit));
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞列表错误', { details: { error: String(error) } });
-    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
 
 // POST /api/vulnerabilities - 创建漏洞（内部使用）
-// 数据隔离：普通用户只能在自己项目中创建漏洞，管理员可以在任意项目创建
+// 数据隔离：基于租户上下文验证项目归属
 export async function POST(request: Request) {
-  // 使用统一认证中间件
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.VULNERABILITY_CREATE });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.VULNERABILITY_CREATE });
   if (!auth.success) {
-    return authErrorResponseNested(auth);
+    return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant, tenantAccessFilter } = auth as AuthSuccessResult;
 
   try {
     const body = await request.json();
@@ -162,27 +158,16 @@ export async function POST(request: Request) {
     } = body;
 
     if (!projectId || !title || !description || !type || !severity) {
-      return NextResponse.json(
-        { details: { error: '缺少必填字段' } },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
     }
 
-    // 检查是否是管理员
-    const userIsAdmin = isAdmin(payload);
-
-    // 数据隔离：验证项目所有权
-    let projectWhere: any = { id: projectId };
-    if (!userIsAdmin) {
-      projectWhere.userId = payload.userId;
-    }
-
+    // 数据隔离：验证项目归属（使用租户过滤而非旧 isAdmin 逻辑）
     const project = await prisma.project.findFirst({
-      where: projectWhere,
+      where: { id: projectId, ...tenantAccessFilter },
     });
 
     if (!project) {
-      return NextResponse.json({ details: { error: '项目不存在' } }, { status: 404 });
+      return NextResponse.json({ error: '项目不存在或无权限访问' }, { status: 404 });
     }
 
     const vulnerability = await prisma.vulnerability.create({
@@ -220,6 +205,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ vulnerability }, { status: 201 });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '创建漏洞错误', { details: { error: String(error) } });
-    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

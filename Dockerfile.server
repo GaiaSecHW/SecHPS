@@ -353,6 +353,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/ ./plugins/
 # -- Scripts (migrations, seed, postbuild) --
 COPY --chown=nextjs:nodejs scripts/ ./scripts/
 
+# -- Docs (developer guide used by /api/docs/agent-harness) --
+COPY --chown=nextjs:nodejs docs/ ./docs/
+
 # ---------------------------------------------------------------------------
 # Verify ALL critical native binaries exist (fail build if any missing)
 # In an isolated environment, missing binaries = runtime crash with no recovery

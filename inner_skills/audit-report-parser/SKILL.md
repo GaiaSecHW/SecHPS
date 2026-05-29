@@ -30,7 +30,9 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
    - **校验 JSON 数据格式**：检查 JSON 是否符合预期结构（详见下方"JSON 格式校验"章节）
      - 如果格式校验通过，使用 JSON 数据继续处理
      - 如果格式校验失败，**放弃该 JSON 文件**，转至步骤 3 解析 Markdown 文件
-   - **处理 rawReport 字段**：检查每个漏洞的 rawReport 字段
+- **补全顶层缺失字段**：如果 JSON 中缺少 `evaluationId` 或 `skillExecutionId` 字段，在返回结果中补上这两个字段，值设为空字符串 `""`
+    - **过滤非漏洞条目**：检查每个漏洞对象的 `vulnerable` 字段，如果值为 `false`，表示该条目不是漏洞，**从结果中排除该条目**，不构造到返回的 vulnerabilities 数组中
+    - **处理 rawReport 字段**：检查每个漏洞的 rawReport 字段
      - 如果 rawReport 为空字符串，需要从 location 字段解析文件路径
      - location 字段中可能包含文件路径注解，格式如 `filename:line` 或 `// filename:line -- comment`
      - 提取所有文件名，结合工作区路径构建绝对路径，多个文件用分号分隔
@@ -58,7 +60,7 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
       "skill": "string (可选) - 发现漏洞的 Skill 名称",
       "location": "string (可选) - 漏洞所在的关键源代码内容",
       "POC": "string (可选) - 概念验证代码",
-      "vulnerable": "boolean (可选) - 是否确认存在漏洞 (默认: true)",
+      "vulnerable": "boolean (可选) - 是否确认存在漏洞 (默认: true，值为 false 时该条目不纳入结果)",
       "fixSuggestion": "string (可选) - 修复建议",
       "rawReport": "string (可选) - 漏洞涉及的文件绝对路径，多个文件使用分号分隔"
     }
@@ -81,7 +83,7 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
 | vulnerabilities[].skill | string | 否 | 发现漏洞的 Skill 名称 |
 | vulnerabilities[].location | string | 否 | 漏洞所在的关键源代码内容 |
 | vulnerabilities[].POC | string | 否 | POC 验证代码 |
-| vulnerabilities[].vulnerable | boolean | 否 | 是否确认存在漏洞（默认 true） |
+| vulnerabilities[].vulnerable | boolean | 否 | 是否确认存在漏洞（默认 true，值为 false 时排除该条目不纳入结果） |
 | vulnerabilities[].fixSuggestion | string | 否 | 修复建议 |
 | vulnerabilities[].rawReport | string | 否 | 漏洞涉及的文件绝对路径，多个文件使用分号分隔（如 `E:/project/file1.py;E:/project/file2.js`） |
 
@@ -128,15 +130,15 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
 
 ### 顶层字段
 
-1. **evaluationId**：如果缺失，使用空字符串 `""`
-2. **skillExecutionId**：如果缺失，使用空字符串 `""`
+1. **evaluationId**：如果 JSON 中缺少此字段，补上空字符串 `""`；如果存在则保留原值
+2. **skillExecutionId**：如果 JSON 中缺少此字段，补上空字符串 `""`；如果存在则保留原值
 3. **vulnerabilities**：必须存在，至少包含一个漏洞对象
 
 ### vulnerabilities 数组中的字段
 
 1. **字符串类型可选字段**（description、cwe、skill、location、POC、fixSuggestion）：如果缺失，使用空字符串 `""`
 2. **rawReport 字段**：漏洞涉及的文件绝对路径，多个文件使用分号 `;` 分隔。格式示例：`E:/work/project/ssh_check.py` 或 `E:/work/project/opencode.json;E:/work/project/.opencode/agents/nazhua-audit.md`
-3. **布尔类型可选字段**（vulnerable）：如果缺失，使用默认值 `true`
+3. **布尔类型可选字段**（vulnerable）：如果缺失，使用默认值 `true`；**如果值为 `false`，表示不是漏洞，该条目从结果中排除，不纳入 vulnerabilities 数组**
 4. **severity 字段**：如果缺失，使用默认值 `"medium"`
 5. **必填字段**（title、type）：必须从文档中提取，无法提取时应返回合理推测值或报错
 
@@ -234,7 +236,7 @@ location 字段中可能包含以下格式的文件路径注解：
 3. 若存在 JSON 文件：
    - 仅读取 `<工作区>/Report/*.json` 文件
    - 校验 JSON 数据格式是否符合预期结构（详见"JSON 格式校验"章节）
-   - 若格式校验通过：检查每个漏洞的 rawReport 字段是否为空，若为空从 location 字段解析文件路径，构建绝对路径填充 rawReport
+   - 若格式校验通过：过滤 `vulnerable` 为 `false` 的条目（排除非漏洞），检查剩余漏洞的 rawReport 字段是否为空，若为空从 location 字段解析文件路径，构建绝对路径填充 rawReport
    - 若格式校验失败：放弃该 JSON，回退到 Markdown 解析
 4. 若无 JSON 文件或 JSON 格式不符，使用 Glob 在 `<工作区>/Report/` 下搜索 `*.md` 文件并读取所有找到的 Markdown 文件
 5. 提取报告中发现的所有漏洞
