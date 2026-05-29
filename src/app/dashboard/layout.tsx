@@ -247,7 +247,7 @@ function DashboardLayoutContent({
               </>
             )}
 
-            {user?.roles?.includes('admin') && (
+            {(user?.roles?.includes('developer') || user?.roles?.includes('admin')) && (
               <>
                 {!sidebarCollapsed && (
                   <div className="pt-5 pb-1 px-4">
