@@ -23,22 +23,23 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
    - 仅在工作区根目录下查找名为 `Report` 的文件夹
    - **禁止搜索其他目录或子目录**
 
-2. **检查并处理 JSON 文件（仅限 Report 文件夹内）**：
+2. **检查并处理所有 JSON 文件（仅限 Report 文件夹内）**：
    - 在 `<工作区>/Report/` 目录下使用 Glob 搜索 `*.json` 文件
    - **禁止搜索 Report 文件夹之外的 JSON 文件**
-   - 如果存在 JSON 文件，读取第一个 JSON 文件内容
-   - **校验 JSON 数据格式**：检查 JSON 是否符合预期结构（详见下方"JSON 格式校验"章节）
-     - 如果格式校验通过，使用 JSON 数据继续处理
-     - 如果格式校验失败，**放弃该 JSON 文件**，转至步骤 3 解析 Markdown 文件
-- **补全顶层缺失字段**：如果 JSON 中缺少 `evaluationId` 或 `skillExecutionId` 字段，在返回结果中补上这两个字段，值设为空字符串 `""`
-    - **过滤非漏洞条目**：检查每个漏洞对象的 `vulnerable` 字段，如果值为 `false`，表示该条目不是漏洞，**从结果中排除该条目**，不构造到返回的 vulnerabilities 数组中
-    - **处理 rawReport 字段**：检查每个漏洞的 rawReport 字段
+   - 如果存在 JSON 文件，逐个读取所有 JSON 文件内容
+   - **逐个校验 JSON 数据格式**：检查每个 JSON 是否符合预期结构（详见下方"JSON 格式校验"章节）
+     - 如果格式校验通过，使用该 JSON 数据继续处理
+     - 如果格式校验失败，**放弃该 JSON 文件**，继续校验下一个 JSON 文件
+   - **合并所有校验通过的 JSON 数据**：将所有校验通过的 JSON 文件中的 vulnerabilities 数组合并为一个统一的 vulnerabilities 数组
+   - **补全顶层缺失字段**：如果合并后的结果中缺少 `evaluationId` 或 `skillExecutionId` 字段，补上这两个字段，值设为空字符串 `""`
+   - **过滤非漏洞条目**：检查每个漏洞对象的 `vulnerable` 字段，如果值为 `false`，表示该条目不是漏洞，**从结果中排除该条目**，不构造到返回的 vulnerabilities 数组中
+   - **处理 rawReport 字段**：检查每个漏洞的 rawReport 字段
      - 如果 rawReport 为空字符串，需要从 location 字段解析文件路径
      - location 字段中可能包含文件路径注解，格式如 `filename:line` 或 `// filename:line -- comment`
      - 提取所有文件名，结合工作区路径构建绝对路径，多个文件用分号分隔
-   - 如果不存在 JSON 文件，继续下一步
+   - 如果所有 JSON 文件均校验失败或不存在 JSON 文件，继续下一步
 
-3. **解析 Markdown 文件（仅限 Report 文件夹内，当 JSON 格式不符或无 JSON 时）**：
+3. **解析 Markdown 文件（仅限 Report 文件夹内，当所有 JSON 格式不符或无 JSON 时）**：
    - 在 `<工作区>/Report/` 目录下使用 Glob 搜索 `*.md` 文件
    - **禁止搜索 Report 文件夹之外的 Markdown 文件**
    - 读取 Report 文件夹内找到的所有 Markdown 文件内容
@@ -234,11 +235,12 @@ location 字段中可能包含以下格式的文件路径注解：
 1. **仅在** `<工作区>/Report/` 文件夹内操作
 2. 检查 `<工作区>/Report/` 目录是否存在 JSON 文件
 3. 若存在 JSON 文件：
-   - 仅读取 `<工作区>/Report/*.json` 文件
-   - 校验 JSON 数据格式是否符合预期结构（详见"JSON 格式校验"章节）
-   - 若格式校验通过：过滤 `vulnerable` 为 `false` 的条目（排除非漏洞），检查剩余漏洞的 rawReport 字段是否为空，若为空从 location 字段解析文件路径，构建绝对路径填充 rawReport
-   - 若格式校验失败：放弃该 JSON，回退到 Markdown 解析
-4. 若无 JSON 文件或 JSON 格式不符，使用 Glob 在 `<工作区>/Report/` 下搜索 `*.md` 文件并读取所有找到的 Markdown 文件
+   - 逐个读取 `<工作区>/Report/*.json` 文件
+   - 逐个校验 JSON 数据格式是否符合预期结构（详见"JSON 格式校验"章节）
+   - 合并所有校验通过的 JSON 数据的 vulnerabilities 数组
+   - 过滤 `vulnerable` 为 `false` 的条目（排除非漏洞），检查剩余漏洞的 rawReport 字段是否为空，若为空从 location 字段解析文件路径，构建绝对路径填充 rawReport
+   - 若所有 JSON 格式校验失败：放弃所有 JSON，回退到 Markdown 解析
+4. 若所有 JSON 文件均校验失败或无 JSON 文件，使用 Glob 在 `<工作区>/Report/` 下搜索 `*.md` 文件并读取所有找到的 Markdown 文件
 5. 提取报告中发现的所有漏洞
 6. 按上述格式返回结构化的 JSON 数据，确保所有字段都存在
 
