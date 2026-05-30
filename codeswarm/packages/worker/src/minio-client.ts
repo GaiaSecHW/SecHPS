@@ -1,6 +1,9 @@
 import * as Minio from 'minio';
 import fs from 'node:fs';
 import path from 'node:path';
+import * as tar from 'tar';
+import { Transform, PassThrough } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || '172.31.23.181';
 const MINIO_PORT = parseInt(process.env.MINIO_PORT || '9000', 10);
@@ -285,17 +288,13 @@ export async function downloadAndExtractWorkspace(
   objectKey: string,
   destDir: string
 ): Promise<{ bytes: number }> {
-  const tar = require('tar');
-  const fs = require('fs');
-  const { pipeline } = require('stream/promises');
-
   const client = getClient();
   const dataStream = await client.getObject(WORKSPACE_BUCKET, objectKey);
 
   fs.mkdirSync(destDir, { recursive: true });
 
   let bytes = 0;
-  const countingStream = new (require('stream').Transform)({
+  const countingStream = new Transform({
     transform(chunk: Buffer, _enc: string, cb: Function) {
       bytes += chunk.length;
       cb(null, chunk);
@@ -316,9 +315,6 @@ export async function uploadWorkspaceResult(
   localDir: string,
   objectKey: string
 ): Promise<{ objectKey: string; bytes: number }> {
-  const tar = require('tar');
-  const { PassThrough } = require('stream');
-
   const client = getClient();
   const packStream = tar.c({
     gzip: true,

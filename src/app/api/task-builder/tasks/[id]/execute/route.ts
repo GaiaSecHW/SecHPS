@@ -219,8 +219,15 @@ export async function POST(
     });
 
     // 异步轮询任务结果
-    pollCodeswarmTask(id, codeswarmTaskId).catch(async (error) => {
-      logger.error(LOG_MODULES.AGENT, 'CodeSwarm 任务轮询失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    pollCodeswarmTask(id, codeswarmTaskId).catch(async (error: unknown) => {
+      const errDetail: Record<string, string> = { error: error instanceof Error ? error.stack || error.message : String(error) };
+      if (error instanceof Error) {
+        const sysErr = error as NodeJS.ErrnoException;
+        if (sysErr.code) errDetail.code = sysErr.code;
+        if (sysErr.syscall) errDetail.syscall = sysErr.syscall;
+        if (sysErr.path) errDetail.path = sysErr.path;
+      }
+      logger.error(LOG_MODULES.AGENT, 'CodeSwarm 任务轮询失败', { details: errDetail });
 
       eventBus.emit(`task:${id}`, {
         type: 'error',
@@ -270,20 +277,39 @@ export async function POST(
 }
 
 async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): Promise<void> {
-  if (codeswarmDispatcher.isAvailable) {
-    await pollViaRedis(localTaskId, codeswarmTaskId);
-  } else {
-    await pollViaDB(localTaskId, codeswarmTaskId);
+  logger.info(LOG_MODULES.AGENT, `[poll] 开始轮询 isAvailable=${codeswarmDispatcher.isAvailable} localTaskId=${localTaskId} codeswarmTaskId=${codeswarmTaskId}`);
+  try {
+    if (codeswarmDispatcher.isAvailable) {
+      await pollViaRedis(localTaskId, codeswarmTaskId);
+    } else {
+      await pollViaDB(localTaskId, codeswarmTaskId);
+    }
+    logger.info(LOG_MODULES.AGENT, `[poll] 轮询正常完成 localTaskId=${localTaskId}`);
+  } catch (pollError) {
+    const errDetail: Record<string, string> = { error: pollError instanceof Error ? pollError.stack || pollError.message : String(pollError) };
+    if (pollError instanceof Error) {
+      const sysErr = pollError as NodeJS.ErrnoException;
+      if (sysErr.code) errDetail.code = sysErr.code;
+      if (sysErr.syscall) errDetail.syscall = sysErr.syscall;
+      if (sysErr.path) errDetail.path = sysErr.path;
+    }
+    logger.error(LOG_MODULES.AGENT, `[poll] 轮询抛出异常`, { details: errDetail });
+    throw pollError;
   }
 }
 
 async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promise<void> {
+  logger.info(LOG_MODULES.AGENT, `[pollViaRedis] 开始轮询 localTaskId=${localTaskId}, codeswarmTaskId=${codeswarmTaskId}`);
+
   const Redis = (await import('ioredis')).default;
+  logger.info(LOG_MODULES.AGENT, `[pollViaRedis] ioredis 动态加载完成`);
+
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) throw new Error('REDIS_URL 未配置');
 
   const subscriber = new Redis(redisUrl);
   const channel = `codeswarm:task:${codeswarmTaskId}`;
+  logger.info(LOG_MODULES.AGENT, `[pollViaRedis] Redis subscriber 创建完成, channel=${channel}`);
 
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -292,7 +318,10 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
     }, TASK_TIMEOUT_MS);
 
     subscriber.subscribe(channel);
+    logger.info(LOG_MODULES.AGENT, `[pollViaRedis] 已订阅 channel=${channel}`);
+
     subscriber.on('message', async (_ch: string, data: string) => {
+      logger.info(LOG_MODULES.AGENT, `[pollViaRedis] 收到消息 channel=${_ch}, data=${data.substring(0, 200)}`);
       try {
         const event = JSON.parse(data);
 
@@ -330,11 +359,18 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
 
         // TaskExecutionLog 由 event route 直接创建，无需在 Redis 订阅中重复创建
       } catch (e) {
+        logger.error(LOG_MODULES.AGENT, `[pollViaRedis] message handler catch 错误`, { details: { error: e instanceof Error ? e.stack : String(e) } });
         reject(e);
       }
     });
 
-    subscriber.on('error', (err) => {
+    subscriber.on('error', (err: Error) => {
+      const errDetail: Record<string, string> = { error: err.stack || err.message };
+      const sysErr = err as NodeJS.ErrnoException;
+      if (sysErr.code) errDetail.code = sysErr.code;
+      if (sysErr.syscall) errDetail.syscall = sysErr.syscall;
+      if (sysErr.path) errDetail.path = sysErr.path;
+      logger.error(LOG_MODULES.AGENT, `[pollViaRedis] subscriber error 事件触发`, { details: errDetail });
       clearTimeout(timeout);
       subscriber.disconnect();
       reject(err);
@@ -343,10 +379,9 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
 }
 
 async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<void> {
-  // 总超时与 TASK_TIMEOUT_SEC 对齐，可通过 .env TASK_TIMEOUT_SEC 配置
+  logger.info(LOG_MODULES.AGENT, `[pollViaDB] 开始DB轮询 localTaskId=${localTaskId} codeswarmTaskId=${codeswarmTaskId}`);
   const TIMEOUT_MS = TASK_TIMEOUT_MS;
   const startTime = Date.now();
-  // 渐进退避：2s → 4s → 8s → 10s（上限），减少长时间轮询的 DB 压力
   let interval = 2000;
   const MAX_INTERVAL = 10_000;
 
@@ -362,6 +397,8 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
         error: true,
       },
     });
+
+    logger.info(LOG_MODULES.AGENT, `[pollViaDB] 查询结果 state=${csTask?.state}`);
 
     if (!csTask) throw new Error('CodeSwarm 任务不存在');
 
@@ -381,6 +418,7 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
     }
 
     if (csTask.state === 'failed') {
+      logger.error(LOG_MODULES.AGENT, `[pollViaDB] 任务已失败 error=${csTask.error}`);
       throw new Error(csTask.error || 'CodeSwarm 任务执行失败');
     }
 

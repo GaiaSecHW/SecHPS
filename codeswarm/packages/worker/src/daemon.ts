@@ -12,7 +12,7 @@ import { EnvironmentFactory } from './environment.js';
 import { ProcessManager, type AgentEvent, classifyAcpError, hasSubstantialOutput } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 import { CodedmapManager } from './codedmap-manager.js';
-import { ensureBucket, ensureWorkspaceBucket } from './minio-client.js';
+import { ensureBucket, ensureWorkspaceBucket, uploadWorkspaceResult } from './minio-client.js';
 
 interface WorkerDaemonConfig {
   nodeId: string;
@@ -613,7 +613,6 @@ export class WorkerDaemon {
       let effectiveResultStorageKey: string | undefined = resultStorageKey;
       if (resultStorageKey && status === 'completed') {
         try {
-          const { uploadWorkspaceResult } = require('./minio-client');
           await uploadWorkspaceResult(workspacePath, resultStorageKey);
         } catch (err) {
           // Upload failed: clear key so Server won't attempt to download a non-existent object

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { TaskPayload, MCPService } from '@codeswarm/types';
+import { downloadAndExtractWorkspace } from './minio-client.js';
 
 export interface EnvironmentFactoryConfig {
   workspaceBasePath?: string;
@@ -144,7 +145,6 @@ export class EnvironmentFactory {
       fs.mkdirSync(localPath, { recursive: true });
 
       try {
-        const { downloadAndExtractWorkspace } = require('./minio-client');
         await downloadAndExtractWorkspace(payload.workspaceStorageKey, localPath);
       } catch (err) {
         fs.rmSync(localPath, { recursive: true, force: true });

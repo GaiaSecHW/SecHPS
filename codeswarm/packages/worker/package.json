@@ -19,6 +19,7 @@
     "@codeswarm/types": "workspace:*",
     "fastify": "^5.3.0",
     "minio": "^8.0.7",
+    "tar": "^7.4.3",
     "zod": "^3.24.4"
   },
   "devDependencies": {
