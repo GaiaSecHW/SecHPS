@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { TaskPayload, MCPService } from '@codeswarm/types';
+import { logger, LOG_MODULES } from './logger.js';
 
 export interface EnvironmentFactoryConfig {
   workspaceBasePath?: string;
@@ -137,17 +138,17 @@ export class EnvironmentFactory {
    */
   async build(payload: TaskPayload, onProgress?: BuildProgressCallback, engine?: 'opencode' | 'claudecode'): Promise<BuildResult> {
     const progress = (msg: string) => {
-      console.log(`[Environment] ${msg}`);
+      logger.info(LOG_MODULES.ENV, msg);
       onProgress?.(msg);
     };
     progress(`========== BUILD BEGIN ==========`);
-    console.log(`[Environment] payload.taskId: ${payload.taskId}`);
-    console.log(`[Environment] payload.workspacePath: ${payload.workspacePath}`);
-    console.log(`[Environment] payload.projectPath: ${payload.projectPath}`);
-    console.log(`[Environment] payload.skills: ${payload.skills?.join(', ') || 'none'}`);
-    console.log(`[Environment] payload.agent: ${payload.agent}`);
-    console.log(`[Environment] payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
-    console.log(`[Environment] payload.model: ${payload.model}`);
+    logger.info(LOG_MODULES.ENV, `payload.taskId: ${payload.taskId}`);
+    logger.info(LOG_MODULES.ENV, `payload.workspacePath: ${payload.workspacePath}`);
+    logger.info(LOG_MODULES.ENV, `payload.projectPath: ${payload.projectPath}`);
+    logger.info(LOG_MODULES.ENV, `payload.skills: ${payload.skills?.join(', ') || 'none'}`);
+    logger.info(LOG_MODULES.ENV, `payload.agent: ${payload.agent}`);
+    logger.info(LOG_MODULES.ENV, `payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
+    logger.info(LOG_MODULES.ENV, `payload.model: ${payload.model}`);
     
     // NFS passthrough mode: use the provided workspace path directly
     // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
@@ -173,15 +174,15 @@ export class EnvironmentFactory {
       if (fs.existsSync(instructionPath)) {
         try {
           const fileContent = fs.readFileSync(instructionPath, 'utf-8').trim();
-          console.log(`[Environment] Read instruction.txt success, length: ${fileContent.length}`);
-          console.log(`[Environment] instruction content: "${fileContent.substring(0, 100)}..."`);
+          logger.info(LOG_MODULES.ENV, `Read instruction.txt success, length: ${fileContent.length}`);
+          logger.info(LOG_MODULES.ENV, `instruction content: "${fileContent.substring(0, 100)}..."`);
           resolvedInstruction = fileContent;
         } catch (e) {
-          console.log(`[Environment] Failed to read instruction.txt: ${e}`);
+          logger.info(LOG_MODULES.ENV, `Failed to read instruction.txt: ${e}`);
           resolvedInstruction = payload.instruction ?? undefined;
         }
       } else {
-        console.log(`[Environment] instruction.txt not found, using payload.instruction`);
+        logger.info(LOG_MODULES.ENV, `instruction.txt not found, using payload.instruction`);
         resolvedInstruction = payload.instruction ?? undefined;
       }
 
@@ -446,13 +447,13 @@ export class EnvironmentFactory {
       try {
         fs.accessSync(workspacePath, check.bit);
       } catch {
-        console.warn(`[Environment] ⚠️ 工作区 ${workspacePath} 缺少 ${check.name} 权限 (${check.bit})`);
+        logger.warn(LOG_MODULES.ENV, `⚠️ 工作区 ${workspacePath} 缺少 ${check.name} 权限 (${check.bit})`);
         allOk = false;
       }
     }
 
     if (allOk) {
-      console.log(`[Environment] ✓ 工作区权限检查通过: ${workspacePath}`);
+      logger.info(LOG_MODULES.ENV, `✓ 工作区权限检查通过: ${workspacePath}`);
     }
   }
 }

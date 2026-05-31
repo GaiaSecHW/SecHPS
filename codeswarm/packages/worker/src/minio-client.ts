@@ -1,6 +1,7 @@
 import * as Minio from 'minio';
 import fs from 'node:fs';
 import path from 'node:path';
+import { logger, LOG_MODULES } from './logger.js';
 
 const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || '172.31.23.181';
 const MINIO_PORT = parseInt(process.env.MINIO_PORT || '9000', 10);
@@ -26,7 +27,7 @@ function getClient(): Minio.Client {
       secretKey: MINIO_SECRET_KEY,
       useSSL: MINIO_USE_SSL,
     });
-    console.log(`[MinIO] Client initialized: ${MINIO_ENDPOINT}:${MINIO_PORT} bucket=${MINIO_BUCKET} ssl=${MINIO_USE_SSL}`);
+    logger.info(LOG_MODULES.MINIO, `Client initialized: ${MINIO_ENDPOINT}:${MINIO_PORT} bucket=${MINIO_BUCKET} ssl=${MINIO_USE_SSL}`);
   }
   return clientInstance;
 }
@@ -40,7 +41,7 @@ async function retry<T>(fn: () => Promise<T>, label: string): Promise<T> {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < MAX_RETRIES) {
         const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        console.warn(`[MinIO] ${label} failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms: ${lastError.message}`);
+        logger.warn(LOG_MODULES.MINIO, `${label} failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms: ${lastError.message}`);
         await new Promise(r => setTimeout(r, delay));
       }
     }
@@ -58,13 +59,13 @@ export async function ensureBucket(): Promise<void> {
     const exists = await client.bucketExists(MINIO_BUCKET);
     if (!exists) {
       await client.makeBucket(MINIO_BUCKET);
-      console.log(`[MinIO] Created bucket: ${MINIO_BUCKET}`);
+      logger.info(LOG_MODULES.MINIO, `Created bucket: ${MINIO_BUCKET}`);
     } else {
-      console.log(`[MinIO] Bucket exists: ${MINIO_BUCKET}`);
+      logger.info(LOG_MODULES.MINIO, `Bucket exists: ${MINIO_BUCKET}`);
     }
     bucketEnsured = true;
   } catch (err) {
-    console.error(`[MinIO] ensureBucket failed: ${err instanceof Error ? err.message : String(err)}`);
+    logger.error(LOG_MODULES.MINIO, `ensureBucket failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -105,14 +106,14 @@ export async function downloadFile(objectName: string, destPath: string): Promis
 
     const stat = fs.statSync(destPath);
     if (stat.size === 0) {
-      console.warn(`[MinIO] Downloaded file is empty (0 bytes), treating as failure`);
+      logger.warn(LOG_MODULES.MINIO, 'Downloaded file is empty (0 bytes), treating as failure');
       try { fs.unlinkSync(destPath); } catch { /* best effort */ }
       return false;
     }
-    console.log(`[MinIO] Downloaded ${objectName} → ${destPath} (${(stat.size / 1024 / 1024).toFixed(1)}MB)`);
+    logger.info(LOG_MODULES.MINIO, `Downloaded ${objectName} → ${destPath} (${(stat.size / 1024 / 1024).toFixed(1)}MB)`);
     return true;
   } catch (err) {
-    console.warn(`[MinIO] downloadFile failed for ${objectName}: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(LOG_MODULES.MINIO, `downloadFile failed for ${objectName}: ${err instanceof Error ? err.message : String(err)}`);
     if (fs.existsSync(destPath)) {
       try { fs.unlinkSync(destPath); } catch { /* best effort */ }
     }
@@ -128,18 +129,18 @@ export async function uploadFile(objectName: string, filePath: string): Promise<
 
   try {
     const stat = fs.statSync(filePath);
-    console.log(`[MinIO] Uploading ${filePath} (${(stat.size / 1024 / 1024).toFixed(1)}MB) → ${objectName}...`);
+    logger.info(LOG_MODULES.MINIO, `Uploading ${filePath} (${(stat.size / 1024 / 1024).toFixed(1)}MB) → ${objectName}...`);
 
     await retry(async () => {
       const result = await client.fPutObject(MINIO_BUCKET, objectName, filePath, {
         'Content-Type': 'application/x-sqlite3',
       });
-      console.log(`[MinIO] Upload complete: ${objectName} (etag=${result.etag})`);
+      logger.info(LOG_MODULES.MINIO, `Upload complete: ${objectName} (etag=${result.etag})`);
     }, `upload ${objectName}`);
 
     return true;
   } catch (err) {
-    console.error(`[MinIO] uploadFile failed for ${objectName}: ${err instanceof Error ? err.message : String(err)}`);
+    logger.error(LOG_MODULES.MINIO, `uploadFile failed for ${objectName}: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -160,7 +161,7 @@ export async function uploadDbFiles(
   for (const dbFile of dbFiles) {
     const localPath = path.join(workspaceDir, dbFile);
     if (!fs.existsSync(localPath)) {
-      console.warn(`[MinIO] Local db file not found: ${localPath}`);
+      logger.warn(LOG_MODULES.MINIO, `Local db file not found: ${localPath}`);
       continue;
     }
 
@@ -176,7 +177,7 @@ export async function uploadDbFiles(
     }
   }
 
-  console.log(`[MinIO] Batch upload complete for ${targetProduct}: ${uploaded} uploaded, ${failed} failed`);
+  logger.info(LOG_MODULES.MINIO, `Batch upload complete for ${targetProduct}: ${uploaded} uploaded, ${failed} failed`);
   return { uploaded, failed, files: results };
 }
 
@@ -221,7 +222,7 @@ export async function downloadDbFiles(
     }
   }
 
-  console.log(`[MinIO] Batch download complete for ${targetProduct}: ${downloaded} downloaded, ${failed} not found`);
+  logger.info(LOG_MODULES.MINIO, `Batch download complete for ${targetProduct}: ${downloaded} downloaded, ${failed} not found`);
   return { downloaded, failed, files: results };
 }
 
@@ -249,10 +250,10 @@ export async function listDbFiles(targetProduct: string): Promise<string[]> {
         files.push(relativePath);
       }
     }
-    console.log(`[MinIO] Found ${files.length} db files for ${targetProduct}`);
+    logger.info(LOG_MODULES.MINIO, `Found ${files.length} db files for ${targetProduct}`);
     return files;
   } catch (err) {
-    console.error(`[MinIO] listDbFiles failed: ${err instanceof Error ? err.message : String(err)}`);
+    logger.error(LOG_MODULES.MINIO, `listDbFiles failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { logger, LOG_MODULES, startLogArchive } from './logger.js';
 import {
   TaskPayloadSchema,
   type TaskPayload,
@@ -186,21 +187,22 @@ export class WorkerDaemon {
     await this.server.listen({ port: this.config.port, host: '0.0.0.0' });
     this.checkBinaries();
     this.startHeartbeat();
+    startLogArchive();
     // Ensure MinIO bucket exists at startup
     ensureBucket().catch(err => {
       this.server.log.warn({ error: err }, 'MinIO bucket check failed (non-fatal)');
     });
     this.server.log.info({ config: this.config }, 'Worker daemon started');
-    console.log(`\n${'='.repeat(50)}`);
-    console.log(`  Worker Node: ${this.config.nodeId}`);
-    console.log(`  Port: ${this.config.port}`);
-    console.log(`  Max Concurrent: ${this.config.maxConcurrent}`);
-    console.log(`  Orchestrator: ${this.config.orchestratorUrl}`);
-    console.log(`${'='.repeat(50)}\n`);
+    logger.info(LOG_MODULES.DAEMON, `\n${'='.repeat(50)}`);
+    logger.info(LOG_MODULES.DAEMON, `  Worker Node: ${this.config.nodeId}`);
+    logger.info(LOG_MODULES.DAEMON, `  Port: ${this.config.port}`);
+    logger.info(LOG_MODULES.DAEMON, `  Max Concurrent: ${this.config.maxConcurrent}`);
+    logger.info(LOG_MODULES.DAEMON, `  Orchestrator: ${this.config.orchestratorUrl}`);
+    logger.info(LOG_MODULES.DAEMON, `${'='.repeat(50)}\n`);
   }
 
   async stop(): Promise<void> {
-    console.log(`[Daemon:${this.config.nodeId}] Graceful shutdown initiated, active tasks: ${this.activeTasks.size}`);
+    logger.info(LOG_MODULES.DAEMON, `Graceful shutdown initiated, active tasks: ${this.activeTasks.size}`);
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
@@ -212,7 +214,7 @@ export class WorkerDaemon {
 
     // Notify platform for all active tasks before terminating
     for (const [taskId, payload] of this.activeTasks) {
-      console.log(`[Daemon:${this.config.nodeId}] Notifying platform of interrupted task: ${taskId}`);
+      logger.info(LOG_MODULES.DAEMON, `Notifying platform of interrupted task: ${taskId}`);
       try {
         await this.postResult(payload, {
           taskId,
@@ -221,7 +223,7 @@ export class WorkerDaemon {
           error: 'Worker daemon shutting down, task interrupted',
         });
       } catch (e) {
-        console.error(`[Daemon] Failed to notify platform for task ${taskId}:`, e);
+        logger.error(LOG_MODULES.DAEMON, `Failed to notify platform for task ${taskId}:`, e);
       }
       try {
         await this.processMgr.terminate(taskId);
@@ -233,7 +235,7 @@ export class WorkerDaemon {
     }
 
     await this.server.close();
-    console.log(`[Daemon:${this.config.nodeId}] Graceful shutdown complete`);
+    logger.info(LOG_MODULES.DAEMON, 'Graceful shutdown complete');
   }
 
   private startHeartbeat(): void {
@@ -371,19 +373,20 @@ export class WorkerDaemon {
     let codedmapPromise: Promise<void> | null = null;
 
     try {
-      console.log(`[Daemon] ========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
-      console.log(`[Daemon] [${this.config.nodeId}] taskId: ${taskId}`);
-      console.log(`[Daemon] payload.engine: ${payloadEngine}`);
-      console.log(`[Daemon] payload.agent: ${agent}`);
-      console.log(`[Daemon] payload.model: ${model}`);
-      console.log(`[Daemon] payload.apiKey present: ${!!apiKey}`);
-      console.log(`[Daemon] payload.env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
-      console.log(`[Daemon] payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
-      console.log(`[Daemon] payload.workspacePath: ${payload.workspacePath}`);
-      console.log(`[Daemon] payload.projectPath: ${payload.projectPath}`);
+      logger.info(LOG_MODULES.DAEMON, `========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
+      logger.info(LOG_MODULES.DAEMON, `[${this.config.nodeId}] taskId: ${taskId}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.engine: ${payloadEngine}`);
+      logger.info(LOG_MODULES.AGENT, `payload.agent: ${agent}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.model: ${model}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.apiKey present: ${!!apiKey}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.apiBaseUrl: ${apiBaseUrl || 'none'}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
+      logger.info(LOG_MODULES.DAEMON, `payload.workspacePath: ${payload.workspacePath}`);
+      logger.info(LOG_MODULES.DAEMON, `payload.projectPath: ${payload.projectPath}`);
 
       const onEvent = (event: AgentEvent) => {
-        console.log(`[Daemon] Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
+        logger.info(LOG_MODULES.AGENT, `Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
         this.postEvent(payload, [event]).catch(err => {
           this.server.log.warn({ taskId, event: event.type, error: err }, 'Failed to post event');
         });
@@ -397,7 +400,7 @@ export class WorkerDaemon {
         timestamp: new Date().toISOString(),
       });
 
-      console.log(`[Daemon] Step 1: Building environment...`);
+      logger.info(LOG_MODULES.DAEMON, 'Step 1: Building environment...');
       buildResult = await this.envFactory.build(payload, (msg) => {
         onEvent({
           type: 'log_chunk',
@@ -416,15 +419,15 @@ export class WorkerDaemon {
         timestamp: new Date().toISOString(),
       });
 
-      console.log(`[Daemon] Step 1 DONE: workspacePath=${workspacePath}`);
-      console.log(`[Daemon] Step 1 DONE: resolvedAgent=${resolvedAgent}`);
-      console.log(`[Daemon] Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
-      console.log(`[Daemon] Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
+      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: workspacePath=${workspacePath}`);
+      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: resolvedAgent=${resolvedAgent}`);
+      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
+      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
       this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
 
       // ========== PHASE 1.5: Codedmap 知识图谱预处理（与 Agent 并行） ==========
       if (payload.targetProduct) {
-        console.log(`[Daemon] Step 1.5: Codedmap preprocessing (parallel) for targetProduct=${payload.targetProduct}`);
+        logger.info(LOG_MODULES.DAEMON, `Step 1.5: Codedmap preprocessing (parallel) for targetProduct=${payload.targetProduct}`);
         onEvent({
           type: 'phase_start',
           phase: 'codedmap',
@@ -437,10 +440,10 @@ export class WorkerDaemon {
             ...event,
           });
         }).then(() => {
-          console.log(`[Daemon] Codedmap preprocessing completed for ${payload.targetProduct}`);
+          logger.info(LOG_MODULES.DAEMON, `Codedmap preprocessing completed for ${payload.targetProduct}`);
         }).catch((codedmapErr: unknown) => {
           const errMsg = codedmapErr instanceof Error ? codedmapErr.message : String(codedmapErr);
-          console.error(`[Daemon] Codedmap preprocessing failed: ${errMsg}`);
+          logger.error(LOG_MODULES.DAEMON, `Codedmap preprocessing failed: ${errMsg}`);
           onEvent({
             type: 'phase_complete',
             phase: 'codedmap',
@@ -458,10 +461,10 @@ export class WorkerDaemon {
       // Use instruction directly - environment.ts already handled the short instruction case
       const instruction = resolvedInstruction || payload.instruction || '执行任务';
 
-      console.log(`[Daemon] Step 2: Preparing agent config...`);
-      console.log(`[Daemon] engine: ${engine}`);
-      console.log(`[Daemon] agentName: ${agentName}`);
-      console.log(`[Daemon] final instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
+      logger.info(LOG_MODULES.DAEMON, 'Step 2: Preparing agent config...');
+      logger.info(LOG_MODULES.DAEMON, `engine: ${engine}`);
+      logger.info(LOG_MODULES.AGENT, `agentName: ${agentName}`);
+      logger.info(LOG_MODULES.DAEMON, `final instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
       this.server.log.info({ taskId, agentName, engine, instructionLength: instruction?.length }, 'Using agent');
 
       // ========== PHASE 2: 执行任务 ==========
@@ -477,13 +480,13 @@ export class WorkerDaemon {
         timestamp: new Date().toISOString(),
         level: 'worker',
       });
-      console.log(`[Daemon] Step 3: Starting agent via ${engine}...`);
-      console.log(`[Daemon] Calling processMgr.runAgent with:`);
-      console.log(`[Daemon]   - workspacePath: ${workspacePath}`);
-      console.log(`[Daemon]   - engine: ${engine}`);
-      console.log(`[Daemon]   - agentName: ${agentName}`);
-      console.log(`[Daemon]   - model: ${model}`);
-      console.log(`[Daemon]   - instruction: "${instruction}"`);
+      logger.info(LOG_MODULES.AGENT, `Step 3: Starting agent via ${engine}...`);
+      logger.info(LOG_MODULES.AGENT, `Calling processMgr.runAgent with:`);
+      logger.info(LOG_MODULES.AGENT, `  - workspacePath: ${workspacePath}`);
+      logger.info(LOG_MODULES.AGENT, `  - engine: ${engine}`);
+      logger.info(LOG_MODULES.AGENT, `  - agentName: ${agentName}`);
+      logger.info(LOG_MODULES.AGENT, `  - model: ${model}`);
+      logger.info(LOG_MODULES.AGENT, `  - instruction: "${instruction}"`);
       this.server.log.info({ taskId, engine, agentName }, 'Starting agent');
 
       const result = await this.processMgr.runAgent(
@@ -499,14 +502,14 @@ export class WorkerDaemon {
         apiBaseUrl,
         taskTimeoutMs
       );
-      console.log(`[Daemon] Step 3 DONE: runAgent returned`);
+      logger.info(LOG_MODULES.AGENT, 'Step 3 DONE: runAgent returned');
 
-      console.log(`[Daemon] Step 4: Execution completed`);
-      console.log(`[Daemon] exitCode: ${result.exitCode}`);
-      console.log(`[Daemon] stdout length: ${result.stdout.length}`);
-      console.log(`[Daemon] stderr length: ${result.stderr.length}`);
-      console.log(`[Daemon] stdout preview: "${result.stdout.substring(0, 200)}..."`);
-      console.log(`[Daemon] stderr preview: "${result.stderr.substring(0, 200)}..."`);
+      logger.info(LOG_MODULES.DAEMON, 'Step 4: Execution completed');
+      logger.info(LOG_MODULES.DAEMON, `exitCode: ${result.exitCode}`);
+      logger.info(LOG_MODULES.DAEMON, `stdout length: ${result.stdout.length}`);
+      logger.info(LOG_MODULES.DAEMON, `stderr length: ${result.stderr.length}`);
+      logger.info(LOG_MODULES.DAEMON, `stdout preview: "${result.stdout.substring(0, 200)}..."`);
+      logger.info(LOG_MODULES.DAEMON, `stderr preview: "${result.stderr.substring(0, 200)}..."`);
       this.server.log.info({ taskId, exitCode: result.exitCode, stdoutLen: result.stdout.length }, 'Agent execution completed');
 
       const reportContent = this.collectReport(workspacePath);

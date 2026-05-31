@@ -20,9 +20,12 @@ services:
       - GITEA_CODEDMAP_REPO=${GITEA_CODEDMAP_REPO:-}
       - GITEA_CODEDMAP_TOKEN=${GITEA_CODEDMAP_TOKEN:-}
       - PATH_MAPPING=${PATH_MAPPING:-}
+      - LOG_DIR=${LOG_DIR:-/app/logs}
     volumes:
       # NFS/shared workspace for task execution
       - ${WORKSPACE_MOUNT:-./data/task_workspaces}:/data/task_workspaces
+      # Log persistence
+      - ${LOG_VOLUME:-./logs}:/app/logs
       # Docker socket (if worker needs to spawn containers)
       # - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:

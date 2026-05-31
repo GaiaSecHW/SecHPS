@@ -59,6 +59,26 @@ export function sanitizeRepoName(fileName: string): string {
   return baseName.replace(/[^a-zA-Z0-9_.-]/g, '-').toLowerCase();
 }
 
+/** 获取仓库版本分支列表（仅 update-* 分支） */
+export async function getOrgRepoBranches(repoName: string): Promise<Array<{ name: string; giteaUrl: string }>> {
+  if (!isConfigured()) return [];
+
+  const url = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/branches`;
+  const response = await fetchWithTimeout(url, {
+    headers: { Authorization: `token ${GITEA_ORG_TOKEN}`, Accept: 'application/json' },
+  });
+  if (!response.ok) return [];
+
+  const branches = await response.json() as Array<{ name: string }>;
+  return branches
+    .filter(b => b.name.startsWith('update-'))
+    .map(b => ({
+      name: b.name,
+      giteaUrl: `${GITEA_ORG_URL}/${GITEA_ORG_NAME}/${repoName}/src/branch/${b.name}`,
+    }))
+    .reverse();
+}
+
 /** 查询当天已有版本分支数，生成下一个序号 */
 async function getNextBranchSeq(repoName: string, dateStr: string): Promise<string> {
   try {

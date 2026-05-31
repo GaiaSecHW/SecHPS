@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen, Bot, Terminal, User, Calendar, Play, ShieldAlert, Bell, Percent, Globe, Lock, CheckCircle, Clock, GitPullRequest } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen, Bot, Terminal, User, Calendar, Play, ShieldAlert, Bell, Percent, Globe, Lock, CheckCircle, Clock, GitPullRequest, GitBranch, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
 import { PipelineViewModal } from '@/components/agent-apps/PipelineViewModal';
@@ -31,6 +31,7 @@ interface AgentApp {
     alertCount: number;
     falsePositiveRate: number | null;
   };
+  agentHarnessPath?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +55,8 @@ export default function AgentAppsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingApp, setViewingApp] = useState<AgentApp | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [expandedHarness, setExpandedHarness] = useState<string | null>(null);
+  const [harnessBranches, setHarnessBranches] = useState<Record<string, Array<{ name: string; giteaUrl: string }>>>({});
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -165,6 +168,26 @@ export default function AgentAppsPage() {
       toast.error(error.message || '删除失败，请重试');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const toggleHarness = async (appId: string) => {
+    if (expandedHarness === appId) {
+      setExpandedHarness(null);
+      return;
+    }
+    setExpandedHarness(appId);
+    if (!harnessBranches[appId]) {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/agent-apps/${appId}/branches`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setHarnessBranches(prev => ({ ...prev, [appId]: data.branches }));
+        }
+      } catch {}
     }
   };
 
@@ -486,6 +509,39 @@ export default function AgentAppsPage() {
                     <span><span className="text-gray-600">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
                     <span><span className="text-gray-600">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
                   </div>
+
+                  {/* Harness branches (collapsible) */}
+                  {app.agentHarnessPath && (
+                    <div className="border-t border-gray-700/40" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => toggleHarness(app.id)}
+                        className="w-full px-4 py-2 flex items-center gap-2 text-xs text-cyan-400 hover:bg-gray-800/60 transition-colors"
+                      >
+                        {expandedHarness === app.id ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                        <GitBranch className="w-3 h-3" />
+                        <span>Harness 分支 ({harnessBranches[app.id]?.length ?? '...'})</span>
+                      </button>
+                      {expandedHarness === app.id && harnessBranches[app.id] && (
+                        <div className="px-4 pb-3 space-y-1">
+                          {harnessBranches[app.id].length === 0 ? (
+                            <p className="text-xs text-gray-500 pl-5">暂无版本分支</p>
+                          ) : harnessBranches[app.id].map(branch => (
+                            <a
+                              key={branch.name}
+                              href={branch.giteaUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-300 hover:bg-gray-700/60 hover:text-cyan-300 transition-colors group"
+                            >
+                              <GitBranch className="w-3 h-3 text-gray-500 group-hover:text-cyan-400" />
+                              <span className="flex-1 font-mono truncate">{branch.name}</span>
+                              <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

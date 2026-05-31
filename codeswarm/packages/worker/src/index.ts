@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { WorkerDaemon } from './daemon.js';
+import { logger, LOG_MODULES } from './logger.js';
 
 const DEFAULT_TASK_TIMEOUT_SEC = 7 * 24 * 3600; // 7 days default
 
@@ -14,12 +15,12 @@ const config = {
 
 const daemon = new WorkerDaemon(config);
 daemon.start().catch(err => {
-  console.error('Worker daemon failed:', err);
+  logger.error(LOG_MODULES.DAEMON, 'Worker daemon failed', err);
   process.exit(1);
 });
 
 async function shutdown() {
-  console.log('Shutting down worker...');
+  logger.info(LOG_MODULES.DAEMON, 'Shutting down worker...');
   await daemon.stop();
   process.exit(0);
 }
@@ -28,11 +29,11 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 process.on('unhandledRejection', (reason) => {
-  console.error('[Worker] Unhandled promise rejection:', reason);
+  logger.error(LOG_MODULES.DAEMON, 'Unhandled promise rejection', reason);
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[Worker] Uncaught exception:', err);
+  logger.error(LOG_MODULES.DAEMON, 'Uncaught exception', err);
   shutdown().catch(() => process.exit(1));
 });
 
