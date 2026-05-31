@@ -536,7 +536,7 @@ export default function TaskDetailPage() {
       {/* 执行状态 */}
       {(task.startedAt || task.status === 'running' || codeswarmStatus) && (
         <div className="bg-dark-surface rounded-lg border border-gray-700/50 px-4 py-3">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-center text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-start text-xs">
             <div className="flex items-center gap-2">
               <Cpu size={14} className="text-blue-400 shrink-0" />
               <div className="min-w-0">
@@ -555,7 +555,7 @@ export default function TaskDetailPage() {
               <Clock size={14} className="text-gray-500 shrink-0" />
               <div className="min-w-0">
                 <p className="text-gray-500">时间</p>
-                <p className="text-gray-300 truncate">
+                <p className="text-gray-300 whitespace-normal break-all">
                   {task.startedAt ? formatDate(task.startedAt) : '-'}
                   {task.completedAt
                     ? ` → ${formatDate(task.completedAt)}`

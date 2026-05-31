@@ -226,7 +226,7 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
     tenantId,
     isPublic = false,
     agentId,
-    agentName,
+    agentName: agentNameInitial,
     name,
     notes,
     modelId,
@@ -244,8 +244,14 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   // 获取 Agent 信息
   const agent = await prisma.agentApp.findUnique({
     where: { id: agentId },
-    select: { agentHarnessPath: true, inputRequirements: true },
+    select: { name: true, defaultAgentName: true, agentHarnessPath: true, inputRequirements: true },
   });
+
+  // agentName 未提供时从 Agent 记录回填
+  let agentName = agentNameInitial;
+  if (!agentName && agent) {
+    agentName = agent.defaultAgentName || agent.name;
+  }
 
   // 检查 Agent 是否有文件结构要求，有则校验
   if (files && files.length > 0 && agent?.inputRequirements) {
@@ -293,38 +299,31 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
 
   projectPath = taskDir;
 
-  const task = await prisma.taskInstance.create({
-    data: {
-      id: taskId,
-      userId,
-      tenantId,
-      name,
-      agentId,
-      agentName,
-      modelId,
-      modelName,
-      parameters,
-      filePath,
-      fileName,
-      projectPath,
-      skills,
-      scripts,
-      targetProduct,
-      notes,
-      status: 'pending',
-      isPublic,
-      updatedAt: new Date(),
-    },
-  });
+  // 使用 raw SQL 插入，绕过 Prisma Client 6 checked/unchecked 输入模式不一致问题
+  await prisma.$executeRaw`
+    INSERT INTO "TaskInstance" (
+      id, "userId", "tenantId", name, "agentId", "agentName",
+      "modelId", "modelName", parameters, "filePath", "fileName",
+      "projectPath", skills, scripts, "targetProduct", notes,
+      status, "isPublic", "updatedAt", "createdAt"
+    ) VALUES (
+      ${taskId}, ${userId}, ${tenantId}, ${name}, ${agentId}, ${agentName},
+      ${modelId}, ${modelName}, ${parameters}, ${filePath}, ${fileName},
+      ${projectPath}, ${skills}, ${scripts}, ${targetProduct}, ${notes},
+      'pending', ${isPublic}, ${new Date()}, NOW()
+    )
+  `;
+
+  const task = await prisma.taskInstance.findUnique({ where: { id: taskId } });
 
   return {
     task: {
-      id: task.id,
-      name: task.name,
-      status: task.status,
-      filePath: task.filePath,
-      projectPath: task.projectPath,
-      createdAt: task.createdAt,
+      id: task!.id,
+      name: task!.name,
+      status: task!.status,
+      filePath: task!.filePath,
+      projectPath: task!.projectPath,
+      createdAt: task!.createdAt,
     },
   };
 }

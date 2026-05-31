@@ -105,6 +105,27 @@ export async function POST(
     const mergedSkills = task.mergedSkills || task.skills || undefined;
     const mergedScripts = task.mergedScripts || task.scripts || undefined;
 
+    // 模型验证：在修改任务状态之前验证，避免任务卡在 running
+    let modelConfigForExec: { apiKey?: string; apiBaseUrl?: string; models?: string } | null = null;
+    const effectiveModelIdPre = overrideModelId || task.modelId || null;
+    if (effectiveModelIdPre && effectiveModelIdPre !== task.modelId) {
+      const newModelConfig = await prisma.modelConfig.findUnique({
+        where: {
+          id: effectiveModelIdPre,
+          OR: [
+            { tenantId: null },
+            { tenantId: auth.payload.tenantId ?? undefined },
+            { isPublic: true },
+          ],
+        },
+        select: { apiKey: true, apiBaseUrl: true, models: true },
+      });
+      if (!newModelConfig) {
+        return NextResponse.json({ error: '指定的模型配置不存在或无权使用' }, { status: 403 });
+      }
+      modelConfigForExec = newModelConfig;
+    }
+
     const updateResult = await prisma.taskInstance.updateMany({
       where: { id, status: { in: ['pending', 'completed', 'failed'] }, filesCleanedAt: null },
       data: {
@@ -163,8 +184,9 @@ export async function POST(
     let effectiveModelId = overrideModelId || task.modelId || null;
     let effectiveModelName = overrideModelName || task.modelName || null;
 
-    let modelConfigForExec: { apiKey?: string; apiBaseUrl?: string; models?: string } | null = null;
-    if (effectiveModelId && effectiveModelId !== task.modelId) {
+    // modelConfigForExec 已在 updateMany 之前验证并赋值
+    if (!modelConfigForExec && effectiveModelId && effectiveModelId !== task.modelId) {
+      // 理论上不会走到这里，保留作为防御
       const newModelConfig = await prisma.modelConfig.findUnique({
         where: {
           id: effectiveModelId,
