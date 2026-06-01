@@ -15,6 +15,50 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+export async function GET(
+  request: NextRequest,
+  context: RouteContext
+) {
+  const auth = authenticateRequestEnhanced(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+
+  const { tenant, payload } = auth as AuthSuccessResult;
+
+  try {
+    const params = await context.params;
+    const appId = params.id;
+
+    const whereCondition: Record<string, unknown> = { id: appId };
+    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+      // 普通租户用户：自己的 + 公开的 + 同租户的
+      whereCondition.OR = [
+        { userId: payload.userId },
+        { isPublic: true },
+        { tenantId: tenant.tenantId },
+      ];
+    }
+
+    const app = await prisma.agentApp.findFirst({
+      where: whereCondition,
+      include: {
+        Tenant: { select: { name: true } },
+        User: { select: { name: true, username: true } },
+      },
+    });
+
+    if (!app) {
+      return NextResponse.json({ error: '应用不存在或无权限访问' }, { status: 404 });
+    }
+
+    return NextResponse.json({ app });
+  } catch (error) {
+    logger.errorNoUser(LOG_MODULES.AGENT, '获取应用详情失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ error: '获取应用详情失败' }, { status: 500 });
+  }
+}
+
 export async function PUT(
   request: NextRequest,
   context: RouteContext

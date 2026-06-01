@@ -7,7 +7,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
-import { combineWhereClauses, buildDateRangeFilter, buildStatusFilter } from '@/lib/query-optimizer';
+import { buildDateRangeFilter, buildStatusFilter } from '@/lib/query-optimizer';
 import { generateId } from '@/lib/id-generator';
 
 // GET /api/vulnerabilities - 获取漏洞列表
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload, tenant, withTenantFilter: applyTenantFilter } = auth as AuthSuccessResult;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -47,49 +47,50 @@ export async function GET(request: Request) {
       }
     }
 
-    // 数据隔离：基于租户上下文过滤项目（替代旧的 userId/isAdmin 逻辑）
-    const projectWhere: Record<string, unknown> = applyTenantFilter({});
-    // 非管理员/非ICSL特权：进一步限定为用户自己的项目
-    if (!tenant.isPlatformAdmin && !(tenant.isIcsTenant && payload.roles.includes('admin'))) {
-      projectWhere.userId = payload.userId;
-    }
+    const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
-    const userProjects = await prisma.project.findMany({
-      where: projectWhere,
-      select: { id: true },
-    });
-
-    let projectFilter: Record<string, unknown> | undefined;
-
-    if (projectId) {
-      if (!userProjects.some(p => p.id === projectId)) {
-        return NextResponse.json({ error: '项目不存在或无权限访问' }, { status: 404 });
-      }
-      projectFilter = { projectId };
-    } else {
-      projectFilter = userProjects.length > 0
-        ? { projectId: { in: userProjects.map(p => p.id) } }
-        : { projectId: 'none' };
+    const taskInstanceFilter: Record<string, unknown> = {};
+    if (!isPrivileged) {
+      // Security: 非特权用户只能看自己或同租户的 TaskInstance 产生的漏洞
+      taskInstanceFilter.OR = [
+        { userId: payload.userId },
+        { tenantId: tenant.tenantId },
+      ];
     }
 
     const dateRange = buildDateRangeFilter(startDate, endDate);
 
-    const where = combineWhereClauses(
-      projectFilter,
-      taskId ? { taskId } : undefined,
-      skillFilter,
-      buildStatusFilter(status),
-      severity ? { severity: { in: severity } } : undefined,
-      type ? { type } : undefined,
-      dateRange ? { createdAt: dateRange } : undefined,
-      search ? {
-        OR: [
-          { title: { contains: search } },
-          { description: { contains: search } },
-          { type: { contains: search } },
-        ],
-      } : undefined
-    );
+    const whereParts: Record<string, unknown>[] = [];
+
+    if (projectId) whereParts.push({ projectId });
+
+    if (!isPrivileged && !projectId) {
+      const accessibleTasks = await prisma.taskInstance.findMany({
+        where: taskInstanceFilter,
+        select: { id: true },
+      });
+      whereParts.push(accessibleTasks.length > 0
+        ? { taskId: { in: accessibleTasks.map(t => t.id) } }
+        : { taskId: null, projectId: null }
+      );
+    }
+
+    if (taskId) whereParts.push({ taskId });
+    if (skillFilter) whereParts.push(skillFilter);
+    if (buildStatusFilter(status)) whereParts.push(buildStatusFilter(status)!);
+    if (severity) whereParts.push({ severity: { in: severity } });
+    if (type) whereParts.push({ type });
+    if (dateRange) whereParts.push({ createdAt: dateRange });
+    if (search) whereParts.push({
+      OR: [
+        { title: { contains: search } },
+        { description: { contains: search } },
+        { type: { contains: search } },
+      ],
+    });
+    const where = whereParts.length > 0
+      ? whereParts.length === 1 ? whereParts[0] : { AND: whereParts }
+      : {};
 
     const [vulnerabilities, total] = await Promise.all([
       prisma.vulnerability.findMany({

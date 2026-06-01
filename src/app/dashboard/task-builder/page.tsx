@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server, X, Check, ChevronDown } from 'lucide-react';
@@ -49,6 +49,13 @@ const statusConfig: Record<string, { bg: string; text: string; label: string }> 
   failed:    { bg: 'bg-red-500/20',   text: 'text-red-400',   label: '执行失败' },
 };
 
+// Agent 引擎 → 兼容的 Model providerType 映射
+const ENGINE_PROVIDER_MAP: Record<string, string[]> = {
+  claudecode: ['claude'],
+  opencode: ['openai'],
+  agentflow: ['openai', 'claude'],
+};
+
 const PAGE_SIZE_OPTIONS = [12, 24, 36, 100];
 const DEFAULT_PAGE_SIZE = 12;
 
@@ -81,10 +88,27 @@ export default function TaskBuilderPage() {
   const [rerunModal, setRerunModal] = useState<{ isOpen: boolean; taskId: string | null; taskName: string; modelId: string; modelName: string }>({
     isOpen: false, taskId: null, taskName: '', modelId: '', modelName: '',
   });
-  const [rerunModels, setRerunModels] = useState<{ modelId: string; modelName: string; key: string }[]>([]);
+  const [rerunModels, setRerunModels] = useState<{ modelId: string; modelName: string; key: string; providerType: string }[]>([]);
   const [rerunSelectedKey, setRerunSelectedKey] = useState('');
   const [rerunDropdownOpen, setRerunDropdownOpen] = useState(false);
+  const [rerunAgentEngine, setRerunAgentEngine] = useState('');
   const rerunDropdownRef = useRef<HTMLDivElement>(null);
+
+  const rerunFilteredModels = useMemo(() => {
+    const compatibleTypes = ENGINE_PROVIDER_MAP[rerunAgentEngine];
+    if (!compatibleTypes) return rerunModels;
+    return rerunModels.filter(m => compatibleTypes.includes(m.providerType));
+  }, [rerunModels, rerunAgentEngine]);
+
+  const getProviderColor = (providerType: string) => {
+    const type = providerType.toLowerCase();
+    if (type === 'anthropic') return 'text-orange-400 bg-orange-500/20 border-orange-500/50';
+    if (type === 'openai') return 'text-green-400 bg-green-500/20 border-green-500/50';
+    if (type === 'deepseek') return 'text-blue-400 bg-blue-500/20 border-blue-500/50';
+    if (type === 'google') return 'text-purple-400 bg-purple-500/20 border-purple-500/50';
+    if (type === 'azure') return 'text-cyan-400 bg-cyan-500/20 border-cyan-500/50';
+    return 'text-gray-400 bg-gray-500/20 border-gray-500/50';
+  };
 
   useEffect(() => {
     if (!rerunDropdownOpen) return;
@@ -520,21 +544,30 @@ export default function TaskBuilderPage() {
                         onClick={(e) => {
                           e.stopPropagation();
                           const token = localStorage.getItem('token');
-                          fetch('/api/models', { headers: { Authorization: `Bearer ${token}` } })
-                            .then(r => r.json())
-                            .then(data => {
-                              const models = (data.models || data || []).flatMap((m: any) => {
-                                try {
-                                  return (m.models ? JSON.parse(m.models) : []).map((name: string) => ({
-                                    modelId: m.id, modelName: name, key: `${m.id}:${name}`,
-                                  }));
-                                } catch {
-                                  return [];
+                          Promise.all([
+                            fetch('/api/models?isActive=true&forEvaluation=true', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+                            fetch(`/api/agent-apps/${task.agentId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({ app: null })),
+                          ])
+                            .then(([modelData, agentData]) => {
+                              const configs = modelData.models || [];
+                              const models: { modelId: string; modelName: string; key: string; providerType: string }[] = [];
+                              for (const cfg of configs) {
+                                for (const modelName of cfg.models || []) {
+                                  models.push({
+                                    modelId: cfg.id,
+                                    modelName,
+                                    key: `${cfg.id}::${modelName}`,
+                                    providerType: cfg.providerType || '',
+                                  });
                                 }
-                              });
+                              }
+                              const engine = agentData?.app?.engine || '';
+                              const compatibleTypes = ENGINE_PROVIDER_MAP[engine];
+                              const filtered = compatibleTypes ? models.filter(m => compatibleTypes.includes(m.providerType)) : models;
                               setRerunModels(models);
-                              const defaultKey = task.modelId && task.modelName ? `${task.modelId}:${task.modelName}` : '';
-                              setRerunSelectedKey(models.find((m: { key: string }) => m.key === defaultKey)?.key || models[0]?.key || '');
+                              setRerunAgentEngine(engine);
+                              const defaultKey = task.modelId && task.modelName ? `${task.modelId}::${task.modelName}` : '';
+                              setRerunSelectedKey(filtered.find(m => m.key === defaultKey)?.key || filtered[0]?.key || '');
                               setRerunModal({ isOpen: true, taskId: task.id, taskName: task.name, modelId: task.modelId || '', modelName: task.modelName || '' });
                             })
                             .catch(() => {
@@ -665,26 +698,54 @@ export default function TaskBuilderPage() {
                 <p className="text-sm text-white mt-1">{rerunModal.taskName}</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">选择模型</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">选择模型
+                  {rerunAgentEngine && ENGINE_PROVIDER_MAP[rerunAgentEngine] && <span className="ml-2 text-xs text-blue-400 font-normal">已按引擎({rerunAgentEngine})过滤</span>}
+                </label>
                 <div className="relative" ref={rerunDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setRerunDropdownOpen(!rerunDropdownOpen)}
                     className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-bg text-left text-sm text-white flex items-center justify-between hover:border-gray-500"
                   >
-                    <span className="truncate">{rerunModels.find(m => m.key === rerunSelectedKey)?.modelName || '选择模型'}</span>
+                    {rerunSelectedKey ? (
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const opt = rerunFilteredModels.find(m => m.key === rerunSelectedKey);
+                          if (!opt) return <span className="text-gray-200">选择模型</span>;
+                          return (
+                            <>
+                              <span className={`px-1.5 py-0.5 text-xs font-medium rounded border ${getProviderColor(opt.providerType)}`}>
+                                {opt.providerType || 'unknown'}
+                              </span>
+                              <span className="text-gray-200 truncate">{opt.modelName}</span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">
+                        {rerunFilteredModels.length === 0 ? '无兼容模型' : '选择模型'}
+                      </span>
+                    )}
                     <ChevronDown size={14} className="text-gray-400 flex-shrink-0 ml-2" />
                   </button>
-                  {rerunDropdownOpen && rerunModels.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                      {rerunModels.map(m => (
+                  {rerunDropdownOpen && rerunFilteredModels.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {rerunFilteredModels.map(m => (
                         <button
                           key={m.key}
                           type="button"
                           onClick={() => { setRerunSelectedKey(m.key); setRerunDropdownOpen(false); }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between"
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between ${
+                            m.key === rerunSelectedKey ? 'bg-blue-900/40' : ''
+                          }`}
                         >
-                          <span className={m.key === rerunSelectedKey ? 'text-blue-400' : 'text-white'}>{m.modelName}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded border ${getProviderColor(m.providerType)}`}>
+                              {m.providerType || 'unknown'}
+                            </span>
+                            <span className={m.key === rerunSelectedKey ? 'text-blue-300' : 'text-gray-200'}>{m.modelName}</span>
+                          </div>
                           {m.key === rerunSelectedKey && <Check size={14} className="text-blue-400 flex-shrink-0" />}
                         </button>
                       ))}
@@ -702,7 +763,7 @@ export default function TaskBuilderPage() {
               </button>
               <button
                 onClick={() => {
-                  const selected = rerunModels.find(m => m.key === rerunSelectedKey);
+                  const selected = rerunFilteredModels.find(m => m.key === rerunSelectedKey);
                   if (rerunModal.taskId && selected) {
                     setRerunModal(prev => ({ ...prev, isOpen: false }));
                     handleRunTask(rerunModal.taskId, selected.modelId, selected.modelName);

@@ -12,41 +12,32 @@ export async function GET(request: Request) {
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload, tenant, withTenantFilter: applyTenantFilter } = auth as AuthSuccessResult;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const { searchParams } = new URL(request.url);
-    const projectId = searchParams.get('projectId');
     const taskId = searchParams.get('taskId');
 
     const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
-    // 构建项目查询条件（基于租户过滤）
-    const projectWhere: Record<string, unknown> = applyTenantFilter({});
-    if (!isPrivileged) {
-      projectWhere.userId = payload.userId;
-    }
-
-    // 查询用户可访问的项目
-    const userProjects = await prisma.project.findMany({
-      where: projectWhere,
-      select: { id: true },
-    });
-
     const where: Record<string, unknown> = {};
 
-    if (projectId) {
-      if (!userProjects.some(p => p.id === projectId)) {
-        return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+    if (!isPrivileged) {
+      // Security: 非特权用户只能看自己或同租户 TaskInstance 的漏洞
+      const accessibleTasks = await prisma.taskInstance.findMany({
+        where: {
+          OR: [
+            { userId: payload.userId },
+            { tenantId: tenant.tenantId },
+          ],
+        },
+        select: { id: true },
+      });
+      if (accessibleTasks.length > 0) {
+        where.taskId = { in: accessibleTasks.map(t => t.id) };
+      } else {
+        where.taskId = null;
       }
-      where.projectId = projectId;
-    } else if (!isPrivileged) {
-      if (userProjects.length === 0) {
-        return NextResponse.json({
-          stats: { total: 0, byStatus: {}, bySeverity: {}, byType: {}, trend: [] },
-        });
-      }
-      where.projectId = { in: userProjects.map(p => p.id) };
     }
 
     if (taskId) {

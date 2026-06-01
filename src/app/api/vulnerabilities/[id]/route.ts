@@ -27,7 +27,7 @@ export async function GET(
           select: { id: true, name: true, tenantId: true, userId: true, isPublic: true },
         },
         TaskInstance: {
-          select: { id: true, name: true },
+          select: { id: true, name: true, userId: true, tenantId: true },
         },
       },
     });
@@ -36,25 +36,23 @@ export async function GET(
       return NextResponse.json({ error: 'Vulnerability not found' }, { status: 404 });
     }
 
-    // 验证项目访问权限（基于租户上下文）
-    const project = vulnerability.Project;
     const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
     if (!isPrivileged) {
-      if (!project) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-      const hasProjectAccess = project.userId === payload.userId || project.isPublic || project.tenantId === tenant.tenantId;
-      if (!hasProjectAccess) {
+      // Security: 通过 TaskInstance 或 Project 验证访问权限
+      const task = vulnerability.TaskInstance;
+      const project = vulnerability.Project;
+      const hasTaskAccess = task && (task.userId === payload.userId || task.tenantId === tenant.tenantId);
+      const hasProjectAccess = project && (project.userId === payload.userId || project.isPublic || project.tenantId === tenant.tenantId);
+      if (!hasTaskAccess && !hasProjectAccess) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    // 脱离内部嵌套字段
     const result = {
       ...vulnerability,
-      Project: project ? { id: project.id, name: project.name } : null,
-      TaskInstance: vulnerability.TaskInstance,
+      Project: vulnerability.Project ? { id: vulnerability.Project.id, name: vulnerability.Project.name } : null,
+      TaskInstance: vulnerability.TaskInstance ? { id: vulnerability.TaskInstance.id, name: vulnerability.TaskInstance.name } : null,
     };
 
     return NextResponse.json({ vulnerability: result });
@@ -85,6 +83,7 @@ export async function PATCH(
       where: { id },
       include: {
         Project: { select: { id: true, userId: true, tenantId: true, isPublic: true } },
+        TaskInstance: { select: { id: true, userId: true, tenantId: true } },
       },
     });
 
@@ -95,11 +94,11 @@ export async function PATCH(
     const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
     if (!isPrivileged) {
-      if (!vulnerability.Project) {
-        return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-      }
-      const hasProjectAccess = vulnerability.Project.userId === payload.userId || vulnerability.Project.isPublic || vulnerability.Project.tenantId === tenant.tenantId;
-      if (!hasProjectAccess) {
+      const task = vulnerability.TaskInstance;
+      const project = vulnerability.Project;
+      const hasTaskAccess = task && (task.userId === payload.userId || task.tenantId === tenant.tenantId);
+      const hasProjectAccess = project && (project.userId === payload.userId || project.isPublic || project.tenantId === tenant.tenantId);
+      if (!hasTaskAccess && !hasProjectAccess) {
         return NextResponse.json({ error: '禁止访问' }, { status: 403 });
       }
     }
@@ -140,6 +139,7 @@ export async function DELETE(
       where: { id },
       include: {
         Project: { select: { id: true, userId: true, tenantId: true, isPublic: true } },
+        TaskInstance: { select: { id: true, userId: true, tenantId: true } },
       },
     });
 
@@ -150,7 +150,11 @@ export async function DELETE(
     const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
     if (!isPrivileged) {
-      if (!vulnerability.Project || vulnerability.Project.userId !== payload.userId) {
+      const task = vulnerability.TaskInstance;
+      const project = vulnerability.Project;
+      const hasTaskAccess = task && (task.userId === payload.userId || task.tenantId === tenant.tenantId);
+      const hasProjectAccess = project && (project.userId === payload.userId || project.isPublic || project.tenantId === tenant.tenantId);
+      if (!hasTaskAccess && !hasProjectAccess) {
         return NextResponse.json({ error: '禁止访问' }, { status: 403 });
       }
     }
