@@ -128,6 +128,8 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 - Worker 独立配置: `codeswarm/.env.example`
 - Worker 回调地址: `NEXT_PUBLIC_BASE_URL`（主服务器侧配置）
 - 本地测试: `src/app/api/codeswarm/local-test/`
+- **任务输入子目录**: 用户上传文件统一放入 `TASK_INPUT_DIR` 子目录（默认 `vlu_scan_code`），不在工作区根目录散布
+- Worker 环境构建时自动排除输入子目录，防止误判为项目子目录
 
 ### CodeMap（代码分析引擎）
 
@@ -179,6 +181,7 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 - `PORT` — Web 应用端口（默认 3000，Worker 端口在启动命令硬编码为 8090）
 - `GITEA_*` — Gitea 文件同步
 - `MINIO_*` — MinIO 对象存储
+- `TASK_INPUT_DIR` — 任务输入子目录名（默认 `vlu_scan_code`），主服务器和 Worker 必须一致
 
 ## Linux 部署
 

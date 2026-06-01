@@ -515,7 +515,21 @@ export class WorkerDaemon {
       const reportContent = this.collectReport(workspacePath);
 
       const isCancelled = this.cancelledTasks.has(taskId);
-      const status: TaskResultStatus = isCancelled ? 'failed' : (result.exitCode === 0 ? 'completed' : 'failed');
+      let status: TaskResultStatus;
+      if (isCancelled) {
+        status = 'failed';
+      } else if (result.exitCode !== 0) {
+        status = 'failed';
+      } else if (reportContent && hasSubstantialOutput(result.stdout)) {
+        status = 'completed';
+      } else {
+        const stderrLines = (result.stderr || '').split('\n').filter(l => l.trim());
+        const hasCriticalStderr = stderrLines.some(line => {
+          const classified = classifyAcpError(line);
+          return classified.isCritical;
+        });
+        status = hasCriticalStderr ? 'failed' : 'completed';
+      }
 
       // ========== PHASE COMPLETE: 执行任务 ==========
       onEvent({
@@ -526,77 +540,22 @@ export class WorkerDaemon {
         timestamp: new Date().toISOString(),
       });
 
-      // ========== 推送 stderr 中的 LLM/API 错误事件 ==========
-      // ACP 协议的 error handler 可能不会捕获 LLM rate limit 等错误，
-      // 这些错误只在 opencode 进程的 stderr 中出现。解析并推送，确保前端可见。
-      // 异常隔离：如果 stdout 有实质内容且错误非关键（标题生成/rate limit），降级为 phase_error
-      if (!isCancelled && result.stderr) {
-        const stderrLines = result.stderr.split('\n').filter(line => line.trim());
-        const matchedLabels: string[] = [];
-        const stdoutHasContent = hasSubstantialOutput(result.stdout || '');
+      // ========== stderr 兜底：推送未被实时分类捕获的剩余内容 ==========
+      // 实时 stderr 分类已在 ProcessManager.registerEventHandlers.stderr 中处理（进程崩溃、速率限制、认证、配额、网络）
+      // 这里只推送 status=failed 时未被实时覆盖的兜底 stderr
+      if (!isCancelled && result.stderr && status === 'failed') {
+        const alreadyHandledPatterns = /Rate limit exceeded|FreeUsageLimitError|429|AuthenticationError|API key.*invalid|401|quota exceeded|ECONNREFUSED|ENOTFOUND|timeout.*exceeded|process exited with|terminated by signal|Failed to write to process stdin|\[进程崩溃\]|\[LLM 速率限制\]|\[认证错误\]|\[配额超限\]|\[网络错误\]/i;
+        const remainingLines = result.stderr.split('\n')
+          .filter(line => line.trim())
+          .filter(line => !alreadyHandledPatterns.test(line));
 
-        for (const line of stderrLines) {
-          const classified = classifyAcpError(line);
-          const isNonCriticalAfterOutput = stdoutHasContent && !classified.isCritical;
-
-          if (classified.category === 'title_generation' || isNonCriticalAfterOutput) {
-            onEvent({
-              type: 'phase_error',
-              message: `[${classified.category}] ${line.trim()}`,
-              phase: classified.category,
-              timestamp: new Date().toISOString(),
-              level: 'worker',
-            });
-            matchedLabels.push(classified.category);
-          } else if (/Rate limit exceeded|FreeUsageLimitError|429/i.test(line)) {
-            onEvent({
-              type: 'error',
-              message: `[LLM 速率限制] ${line.trim()}`,
-              timestamp: new Date().toISOString(),
-              level: 'worker',
-            });
-            matchedLabels.push('LLM 速率限制');
-          } else if (/AuthenticationError|API key.*invalid/i.test(line)) {
-            onEvent({
-              type: 'error',
-              message: `[认证错误] ${line.trim()}`,
-              timestamp: new Date().toISOString(),
-              level: 'worker',
-            });
-            matchedLabels.push('认证错误');
-          } else if (/quota exceeded/i.test(line)) {
-            onEvent({
-              type: 'error',
-              message: `[配额超限] ${line.trim()}`,
-              timestamp: new Date().toISOString(),
-              level: 'worker',
-            });
-            matchedLabels.push('配额超限');
-          } else if (/ECONNREFUSED|ENOTFOUND/i.test(line)) {
-            onEvent({
-              type: 'error',
-              message: `[网络错误] ${line.trim()}`,
-              timestamp: new Date().toISOString(),
-              level: 'worker',
-            });
-            matchedLabels.push('网络错误');
-          } else if (/timeout.*exceeded/i.test(line)) {
-            onEvent({
-              type: 'error',
-              message: `[超时] ${line.trim()}`,
-              timestamp: new Date().toISOString(),
-              level: 'worker',
-            });
-            matchedLabels.push('超时');
-          }
-        }
-
-        if (matchedLabels.length === 0 && result.stderr.trim().length > 10 && status === 'failed') {
+        if (remainingLines.length > 0) {
           onEvent({
             type: 'error',
-            message: `任务执行失败 (exitCode=${result.exitCode}): ${result.stderr.substring(0, 500)}`,
-            timestamp: new Date().toISOString(),
+            message: `未分类的 stderr 输出 (exitCode=${result.exitCode}): ${remainingLines.join('\n').substring(0, 500)}`,
             level: 'worker',
+            stream: 'stderr',
+            timestamp: new Date().toISOString(),
           });
         }
       } else if (status === 'failed' && !isCancelled && !result.stderr) {

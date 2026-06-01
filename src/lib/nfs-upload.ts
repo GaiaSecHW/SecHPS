@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { TASK_INPUT_DIR } from '@/lib/task-creation';
 
 interface NfsConfig {
   mountPath: string;
@@ -34,7 +35,7 @@ export async function uploadFileToRemote(
     throw new Error('NFS configuration is incomplete. Please check NFS_MOUNT_PATH environment variable.');
   }
 
-  const remoteDirPath = path.join(config.mountPath, taskId);
+  const remoteDirPath = path.join(config.mountPath, taskId, TASK_INPUT_DIR);
   const remoteFilePath = path.join(remoteDirPath, fileName);
 
   fs.mkdirSync(remoteDirPath, { recursive: true });
@@ -116,7 +117,7 @@ export async function uploadAndExtractArchive(
     throw new Error('NFS configuration is incomplete. Please check NFS_MOUNT_PATH environment variable.');
   }
 
-  const remoteDirPath = targetDir || path.join(config.mountPath, taskId);
+  const remoteDirPath = targetDir || path.join(config.mountPath, taskId, TASK_INPUT_DIR);
   const remoteFilePath = path.join(remoteDirPath, fileName);
 
   fs.mkdirSync(remoteDirPath, { recursive: true });
@@ -160,7 +161,7 @@ export async function uploadFilesToRemote(
 
   const baseDirPath = targetSubDir
     ? path.join(config.mountPath, taskId, targetSubDir)
-    : path.join(config.mountPath, taskId);
+    : path.join(config.mountPath, taskId, TASK_INPUT_DIR);
 
   fs.mkdirSync(baseDirPath, { recursive: true });
 

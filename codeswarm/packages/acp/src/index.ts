@@ -30,6 +30,8 @@ export interface ACPClientEvents {
   toolCallUpdate: (output: string) => void;
   /** Error from agent */
   error: (message: string) => void;
+  /** Agent stderr output chunk (ACP spec: "Clients MAY capture, forward, or ignore this logging") */
+  stderr: (content: string) => void;
   /** Raw unparsed output */
   raw: (data: string) => void;
 }
@@ -142,7 +144,10 @@ export class ACPClient {
     }
 
     this.process.stderr.on('data', (data: Buffer) => {
-      console.error(`[ACP stderr] ${data.toString().trim()}`);
+      const raw = data.toString();
+      const cleaned = raw.replace(/\x1b\[[0-9;]*m/g, '');
+      console.error(`[ACP stderr] ${cleaned.trim()}`);
+      this.eventHandlers.stderr?.(cleaned);
     });
 
     this.process.on('exit', (code) => {

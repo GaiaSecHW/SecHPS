@@ -90,6 +90,7 @@ export async function scanWorkspaceReports(
   };
 
   // 默认扫描路径 - 使用 outputs 替代 .claude
+  const taskInputDir = process.env.TASK_INPUT_DIR || 'vlu_scan_code';
   const scanPaths = [
     workspacePath,
     path.join(workspacePath, 'reports'),
@@ -97,6 +98,9 @@ export async function scanWorkspaceReports(
     path.join(workspacePath, 'vulnerabilities'),
     path.join(workspacePath, 'outputs'),
     path.join(workspacePath, 'outputs', 'reports'),
+    path.join(workspacePath, taskInputDir),
+    path.join(workspacePath, taskInputDir, 'reports'),
+    path.join(workspacePath, taskInputDir, 'report'),
     ...additionalPaths || [],
   ];
 

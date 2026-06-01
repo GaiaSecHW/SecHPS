@@ -636,7 +636,7 @@ function inferSkillNameFromContext(textBuffer: string[]): string | null {
 
 export interface ClassifiedError {
   isCritical: boolean;
-  category: 'title_generation' | 'rate_limit' | 'task_logic' | 'unknown';
+  category: 'title_generation' | 'rate_limit' | 'task_logic' | 'agent_info_log' | 'unknown';
   rawMessage: string;
 }
 
@@ -656,6 +656,14 @@ export function classifyAcpError(message: string): ClassifiedError {
   // If occurs after substantial output, treat as non-critical (likely post-task)
   if (/AI_RetryError|RetryError|rate.*limit|429|FreeUsageLimitError/i.test(message)) {
     return { isCritical: false, category: 'rate_limit', rawMessage: message };
+  }
+
+  // Agent SDK INFO/DEBUG runtime logs → non-critical
+  // Claude Agent SDK emits session/bus/compaction status logs to stderr; these are
+  // normal operational output, not errors. Without this exemption, any INFO line in
+  // stderr causes exitCode=0 tasks to be misclassified as "failed".
+  if (/^\s*INFO\b|^\s*DEBUG\b|service=session\b|service=bus\b|service=compaction\b/i.test(message)) {
+    return { isCritical: false, category: 'agent_info_log', rawMessage: message };
   }
 
   // Default: treat unknown errors as critical (conservative)
@@ -920,6 +928,40 @@ function registerEventHandlers(
           timestamp: new Date().toISOString(),
         });
       }
+    },
+    
+    stderr: (content: string) => {
+      const line = content.trim();
+      if (!line) return;
+      if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
+        clearTimeout(state.inactivityTimer);
+        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
+      }
+      state.stderr += line + '\n';
+      logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
+      if (!onEvent) return;
+
+      if (/process exited with|terminated by signal|Failed to write to process stdin/i.test(line)) {
+        onEvent({ type: 'error', message: `[进程崩溃] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        return;
+      }
+      if (/Rate limit exceeded|FreeUsageLimitError|429/i.test(line)) {
+        onEvent({ type: 'error', message: `[LLM 速率限制] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        return;
+      }
+      if (/AuthenticationError|API key.*invalid|401/i.test(line)) {
+        onEvent({ type: 'error', message: `[认证错误] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        return;
+      }
+      if (/quota exceeded/i.test(line)) {
+        onEvent({ type: 'error', message: `[配额超限] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        return;
+      }
+      if (/ECONNREFUSED|ENOTFOUND/i.test(line)) {
+        onEvent({ type: 'error', message: `[网络错误] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        return;
+      }
+      onEvent({ type: 'log_chunk', content: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
     },
     
     raw: (data: string) => {

@@ -198,6 +198,9 @@ export async function copyAgentHarnessFromLocal(repoName: string, destDir: strin
 
 const SHARED_WORKSPACE_BASE = process.env.NFS_MOUNT_PATH || process.env.SHARED_WORKSPACE_PATH || '/data/shared-workspace';
 
+/** 任务输入子目录名，用户上传文件统一放入此子目录（默认 vlu_scan_code，可通过 .env TASK_INPUT_DIR 配置） */
+export const TASK_INPUT_DIR = process.env.TASK_INPUT_DIR || 'vlu_scan_code';
+
 interface CreateTaskParams {
   taskId: string;
   userId: string;
@@ -274,20 +277,24 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   let fileName: string | null = null;
   let projectPath: string | null = null;
 
+  const inputDir = join(taskDir, TASK_INPUT_DIR);
+
   if (files && files.length > 0) {
+    await mkdir(inputDir, { recursive: true });
+
     for (const file of files) {
       const lowerName = file.name.toLowerCase();
       fileName = file.name;
 
       if (lowerName.endsWith('.zip')) {
-        serverLog.info(`[TaskCreation] 检测到压缩文件 ${file.name}，开始解压`);
+        serverLog.info(`[TaskCreation] 检测到压缩文件 ${file.name}，解压到 ${TASK_INPUT_DIR}/`);
         const zip = new AdmZip(file.buffer);
         const zipEntries = zip.getEntries();
 
         for (const entry of zipEntries) {
           if (!entry.isDirectory) {
-            const entryPath = join(taskDir, entry.entryName);
-            const entryDir = join(taskDir, entry.entryName.split('/').slice(0, -1).join('/'));
+            const entryPath = join(inputDir, entry.entryName);
+            const entryDir = join(inputDir, entry.entryName.split('/').slice(0, -1).join('/'));
             if (entry.entryName.includes('/')) {
               await mkdir(entryDir, { recursive: true });
             }
@@ -295,9 +302,9 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
             serverLog.info(`[TaskCreation] 解压文件: ${entryPath}`);
           }
         }
-        serverLog.info(`[TaskCreation] 解压完成，已解压 ${zipEntries.filter(e => !e.isDirectory).length} 个文件`);
+        serverLog.info(`[TaskCreation] 解压完成，已解压 ${zipEntries.filter(e => !e.isDirectory).length} 个文件到 ${TASK_INPUT_DIR}/`);
       } else {
-        const destPath = join(taskDir, file.name);
+        const destPath = join(inputDir, file.name);
         await writeFile(destPath, file.buffer);
         filePath = destPath;
         serverLog.info(`[TaskCreation] 写入上传文件: ${destPath}`);

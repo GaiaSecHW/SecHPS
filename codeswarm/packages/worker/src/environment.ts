@@ -123,13 +123,25 @@ function mapRemotePathToLocal(remotePath: string): string {
   return remotePath;
 }
 
+const TASK_INPUT_DIR = process.env.TASK_INPUT_DIR || 'vlu_scan_code';
+
 export class EnvironmentFactory {
   private readonly workspaceBasePath: string;
   private readonly skillsRegistryPath: string;
+  private readonly excludeDirs: Set<string>;
 
   constructor(config: EnvironmentFactoryConfig = {}) {
     this.workspaceBasePath = path.resolve(config.workspaceBasePath || './data/task_workspaces');
     this.skillsRegistryPath = path.resolve(config.skillsRegistryPath || './shared/skills_registry');
+    this.excludeDirs = new Set([
+      TASK_INPUT_DIR,
+      '.opencode',
+      '.claude',
+      'outputs',
+      'vulnerabilities',
+      'reports',
+      'node_modules',
+    ]);
   }
 
   /**
@@ -221,7 +233,7 @@ export class EnvironmentFactory {
         } else {
           progress(`Step 2b: 检查子目录...`);
           const subdirs = fs.readdirSync(localWorkspacePath, { withFileTypes: true })
-            .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+            .filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && !this.excludeDirs.has(entry.name))
             .map(entry => entry.name);
 
           progress(`子目录列表: ${subdirs.join(', ')} (${subdirs.length}个)`);

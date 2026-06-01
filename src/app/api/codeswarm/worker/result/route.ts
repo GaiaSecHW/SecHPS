@@ -465,7 +465,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
     }
 
-    const finalState = status === 'completed' ? 'completed' : 'failed';
+    // Worker may send status='failed' due to stderr misclassification (Agent SDK INFO logs).
+    // If reportContent exists, the task produced real output — override to 'completed'.
+    const finalState = (status === 'completed' || (reportContent && !error)) ? 'completed' : 'failed';
 
     // Atomically update CodeswarmTask + TaskInstance in one transaction
     const txResult = await prisma.$transaction(async (tx) => {

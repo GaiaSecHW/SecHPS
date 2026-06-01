@@ -89,12 +89,14 @@ my-pipeline.zip
 
 ```
 {workspacePath}/
-├── <AgentHarness 全部文件>     # 从 MinIO 下载
-├── <用户上传的待扫描文件包>    # ZIP 解压后的文件，与 Harness 并列
-└── instruction.txt             # 执行指令（如存在）
+├── vlu_scan_code/                # 用户上传的待扫描文件（TASK_INPUT_DIR，默认 vlu_scan_code）
+│   ├── <解压后的源码文件>
+│   └── ...
+├── <AgentHarness 全部文件>      # 从 MinIO 下载（opencode.json 等）
+└── instruction.txt              # 执行指令（如存在）
 ```
 
-用户上传的 ZIP 文件会被**直接解压**到工作空间根目录，与 AgentHarness 文件并列。
+用户上传的 ZIP 文件会被**解压到 `vlu_scan_code/` 子目录**（可通过环境变量 `TASK_INPUT_DIR` 配置），与 AgentHarness 文件隔离。Agent 需在 `vlu_scan_code/` 目录中查找待分析的源码。
 
 ### 3.2 启动命令（startCommand）
 
@@ -297,8 +299,8 @@ POST /api/v1/vulnerabilities 写入漏洞数据库
 用户上传源码包 → 创建任务
         │
         ▼
-平台从 MinIO 下载 AgentHarness 到工作空间
-解压用户源码到同一工作空间
+平台从 MinIO 下载 AgentHarness 到工作空间根目录
+解压用户源码到工作空间的 vlu_scan_code/ 子目录（与 Harness 隔离）
 （可选）LLM 校验文件结构是否符合 inputRequirements
         │
         ▼
@@ -447,3 +449,4 @@ GET /api/task-builder/tasks/{taskId}/report-files
 - [ ] 租户绑定已选择（或设置为公开共享）
 - [ ] 报告摘要输出到 `reports.jsonl`（工作空间根目录，任务详情页展示）
 - [ ] 漏洞报告文件输出到 `Report/` 目录（触发平台异步解析入库）
+- [ ] Agent 指令中引用待扫描代码时使用 `vlu_scan_code/` 目录（可通过 `TASK_INPUT_DIR` 配置）
