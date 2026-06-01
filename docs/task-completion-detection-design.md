@@ -43,17 +43,27 @@ executeTask()
   ├─ PHASE 1: build 环境
   ├─ PHASE 1.5: codedmap（并行）
   ├─ PHASE 2: runAgent() → 返回 { exitCode, stdout, stderr }
-  ├─ PHASE 2.5 (新增): waitForReport()  ← 轮询 Report 目录
-  │     ├── Report 目录有 json/md 文件 → reportReady = true
-  │     └── 超时仍无 → reportReady = false
-  ├─ 状态判定: exitCode=0 && reportReady → completed; 否则 → failed
-  ├─ collectReport() → 收集内容用于上报
-  └─ postResult()
+  ├─ PHASE 2.5 (新增): Report 产物验证
+  │     ├── skipReportCheck=true → reportReady=true（跳过验证）
+  │     ├── exitCode≠0 → 快照收集一次，不轮询（避免7天空转浪费semaphore）
+  │     └── exitCode=0 → waitForReport() 轮询 Report 目录（含取消检查）
+  │           ├── Report 目录有有效 json/md 文件 → reportReady=true
+  │           └── 超时仍无 / 任务被取消 → reportReady=false
+  ├─ 状态判定:
+  │     ├── cancelled → failed
+  │     ├── exitCode≠0 → failed
+  │     ├── reportReady=true + exitCode=0 → 检查 stderr critical → completed/failed
+  │     ├── reportReady=false + reportContent非空 + stdout有实质性输出 → completed（兜底）
+  │     └── 其他 → failed
+  ├─ collectReport() → 收集内容用于上报（9候选路径 + 5种扩展名）
+  └─ postResult() → Server 侧接收后：
+        ├── finalState=completed → 触发漏洞解析管道
+        └─ finalState=failed + reportContent非空 → 兜底触发漏洞解析管道
 ```
 
 ### Report 候选路径
 
-与 Server 侧 `findReportFolder`（`src/lib/minio-vulnerability.ts`）保持一致，**同时统一 `daemon.ts` 原有的 `collectReport` 方法**（原来只查 `Report/`，现在扩展到6个候选）：
+与 Server 侧 `findReportFolder`（`src/lib/minio-vulnerability.ts`）**完全一致**（含 `TASK_INPUT_DIR` 子目录），**同时统一 `daemon.ts` 原有的 `collectReport` 方法**（原来只查 `Report/`，现在扩展到9个候选）：
 
 ```
 {workspace}/Report
@@ -62,7 +72,12 @@ executeTask()
 {workspace}/cc_agent/reports
 {workspace}/.security
 {workspace}/code/reports
+{workspace}/{TASK_INPUT_DIR}/Report
+{workspace}/{TASK_INPUT_DIR}/report
+{workspace}/{TASK_INPUT_DIR}/reports
 ```
+
+> **注意**：`TASK_INPUT_DIR` 环境变量默认值为 `vlu_scan_code`（与 Server 侧 `minio-vulnerability.ts` 一致）。Worker 和 Server 必须使用相同的 `TASK_INPUT_DIR` 值，否则路径不对齐会导致 Worker 漏检 Report。
 
 ### 新增环境变量
 
@@ -78,9 +93,13 @@ executeTask()
 
 /** 查找 Report 候选目录，与 Server 侧 findReportFolder 保持一致 */
 private findReportFolder(workspace: string): string | null {
+  const taskInputDir = process.env.TASK_INPUT_DIR || 'vlu_scan_code';
   const candidates = [
     'Report', 'report', 'reports',
     'cc_agent/reports', '.security', 'code/reports',
+    path.join(taskInputDir, 'Report'),
+    path.join(taskInputDir, 'report'),
+    path.join(taskInputDir, 'reports'),
   ];
   for (const rel of candidates) {
     const p = path.join(workspace, rel);
@@ -89,14 +108,20 @@ private findReportFolder(workspace: string): string | null {
   return null;
 }
 
-/** 检查目录中是否存在 json 或 md 文件 */
+/** 检查目录中是否存在有效（内容非空）的 json 或 md 文件 */
 private hasReportFile(folder: string): string | null {
   const entries = fs.readdirSync(folder);
   for (const f of entries) {
     const fullPath = path.join(folder, f);
     if (!fs.statSync(fullPath).isFile()) continue;
     const ext = path.extname(f).toLowerCase();
-    if (ext === '.json' || ext === '.md') return fullPath;
+    if (ext === '.json' || ext === '.md') {
+      // 与 collectReport 验证标准一致：检查内容非空
+      try {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        if (content.trim().length > 0) return fullPath;
+      } catch { continue; }
+    }
   }
   return null;
 }
@@ -110,6 +135,7 @@ private async waitForReport(
   workspace: string,
   taskStartTime: number,
   taskTimeoutMs: number,
+  taskId: string,  // 传入 taskId 用于取消检查
   onEvent?: (event: AgentEvent) => void,
 ): Promise<boolean> {
   const REPORT_WAIT_TIMEOUT_MS = parseInt(process.env.REPORT_WAIT_TIMEOUT_MS || '604800000');
@@ -123,6 +149,12 @@ private async waitForReport(
   logger.info(LOG_MODULES.DAEMON, `waitForReport: timeout=${timeoutMs/1000}s, remaining=${remainingMs/1000}s`);
 
   while (Date.now() < deadline) {
+    // 检查任务是否已被取消，避免已取消任务继续占用 semaphore
+    if (this.cancelledTasks.has(taskId)) {
+      logger.info(LOG_MODULES.DAEMON, `waitForReport cancelled for task ${taskId}`);
+      return false;
+    }
+
     const folder = this.findReportFolder(workspace);
     if (folder && this.hasReportFile(folder)) {
       logger.info(LOG_MODULES.DAEMON, `Report ready: ${folder}`);
@@ -157,43 +189,67 @@ private async executeTask(payload: TaskPayload): Promise<void> {
     const result = await this.processMgr.runAgent(/* ... */);
 
     // ========== PHASE 2.5: 等待 Report 产物就绪 ==========  ← 新增
-    onEvent({
-      type: 'phase_start',
-      phase: 'report_waiting',
-      message: '等待 Report 产物就绪...',
-      timestamp: new Date().toISOString(),
-    });
+    // 仅对预期产出 Report 的任务执行验证
+    // 设计决策：waitForReport 独立为 PHASE 2.5 而非融合到 PHASE 2 (runAgent) 内，
+    // 因为 Report 是 Agent spawn 的扫描器子进程写入的（独立进程），Agent 继续对话无法加速扫描器产出。
+    // 放在 daemon 层做文件系统轮询是零 API 消耗、零 Agent 交互的最优方式。
+    let reportReady: boolean;
+    if (payload.skipReportCheck) {
+      reportReady = true;  // 跳过验证，视为已就绪
+      logger.info(LOG_MODULES.DAEMON, `skipReportCheck=true, skipping waitForReport`);
+    } else if (result.exitCode !== 0) {
+      // Agent 崩溃：跳过7天轮询，只做一次快照收集
+      // 理由：Agent 已死，扫描器大概率也未启动。7天轮询白白占用 semaphore slot。
+      // 但仍做 collectReport 快照：如果扫描器在 Agent 崩溃前已产出部分结果，可以附带上报。
+      reportReady = !!this.collectReport(workspacePath);
+      logger.info(LOG_MODULES.DAEMON, `exitCode=${result.exitCode}, skip waitForReport polling, snapshot reportReady=${reportReady}`);
+    } else {
+      onEvent({
+        type: 'phase_start',
+        phase: 'report_waiting',
+        message: '等待 Report 产物就绪...',
+        timestamp: new Date().toISOString(),
+      });
 
-    const reportReady = await this.waitForReport(
-      workspacePath,
-      taskStartTime,
-      taskTimeoutMs,
-      onEvent,
-    );
+      reportReady = await this.waitForReport(
+        workspacePath,
+        taskStartTime,
+        taskTimeoutMs,
+        taskId,  // 传入 taskId 用于取消检查
+        onEvent,
+      );
 
-    onEvent({
-      type: 'phase_complete',
-      phase: 'report_waiting',
-      success: reportReady,
-      message: reportReady ? 'Report 产物已就绪' : 'Report 等待超时，无产物',
-      timestamp: new Date().toISOString(),
-    });
+      onEvent({
+        type: 'phase_complete',
+        phase: 'report_waiting',
+        success: reportReady,
+        message: reportReady ? 'Report 产物已就绪' : 'Report 等待超时，无产物',
+        timestamp: new Date().toISOString(),
+      });
+    }
 
-    // ========== 状态判定 ==========  ← 修改：reportReady 优先
+    // ========== 状态判定 ==========  ← 修改：reportReady 优先，保留 stderr critical 检查
     const reportContent = this.collectReport(workspacePath);
     const isCancelled = this.cancelledTasks.has(taskId);
     let status: TaskResultStatus;
     if (isCancelled) {
       status = 'failed';
-    } else if (result.exitCode === 0 && reportReady) {
-      // Report 产物就绪 + exitCode=0 → 一定是 completed
-      status = 'completed';
     } else if (result.exitCode !== 0) {
       status = 'failed';
+    } else if (reportReady) {
+      // Report 产物就绪 + exitCode=0 → completed（但需排除 stderr critical errors）
+      const stderrLines = (result.stderr || '').split('\n').filter(l => l.trim());
+      const hasCriticalStderr = stderrLines.some(line => {
+        const classified = classifyAcpError(line);
+        return classified.isCritical;
+      });
+      status = hasCriticalStderr ? 'failed' : 'completed';
+    } else if (reportContent && hasSubstantialOutput(result.stdout)) {
+      // Report 目录未就绪（waitForReport 超时），但 collectReport 找到内容且有实质性输出
+      // 兜底：可能 Agent 在 stdout 中输出了分析结果，Report 文件是空的或格式不符
+      status = 'completed';
     } else {
-      // exitCode=0 但无 Report（waitForReport 超时）
-      // 这里不会走到，因为 waitForReport 返回 false 时 exitCode=0 也判 failed
-      // 但作为防御性兜底保留
+      // exitCode=0 但无 Report + 无实质性输出 → failed
       status = 'failed';
     }
 
@@ -205,15 +261,22 @@ private async executeTask(payload: TaskPayload): Promise<void> {
   }
 }
 
-// ====== collectReport 修改：扩展搜索范围和文件类型 ======
+// ====== collectReport 修改：扩展搜索范围（与 findReportFolder 一致），上报范围保留原 5 种扩展名 ======
 
-/** 从 workspace 中读取 Report 文件内容（用于上报）。搜索范围与 findReportFolder 一致。 */
+/** 从 workspace 中读取 Report 文件内容（用于上报）。搜索范围与 findReportFolder 一致。
+ *  注意：上报范围保留 .json/.md/.jsonl/.txt/.html 5 种扩展名（与 waitForReport 的验证职责不同）。
+ *  waitForReport 验证"Report 是否就绪"只需 .json/.md；
+ *  collectReport 收集"上报内容"应覆盖更多格式，避免丢失有效报告。 */
 private collectReport(workspace: string): string | undefined {
+  const taskInputDir = process.env.TASK_INPUT_DIR || 'vlu_scan_code';
   const candidates = [
     'Report', 'report', 'reports',
     'cc_agent/reports', '.security', 'code/reports',
+    path.join(taskInputDir, 'Report'),
+    path.join(taskInputDir, 'report'),
+    path.join(taskInputDir, 'reports'),
   ];
-  const reportFileExts = ['.json', '.md'];
+  const reportFileExts = ['.json', '.md', '.jsonl', '.txt', '.html'];
 
   for (const rel of candidates) {
     const reportDir = path.join(workspace, rel);
@@ -238,23 +301,141 @@ private collectReport(workspace: string): string | undefined {
 }
 ```
 
+### skipReportCheck — 非 Report 任务跳过验证
+
+**问题**：不产生 Report 的合法任务（纯代码生成、重构、文档编写等）会被 `waitForReport` 阻塞轮询直到超时（默认最长 7 天），占用 Worker semaphore slot，最终被判 `failed`。这不是边缘场景 — `engine: 'opencode' | 'claudecode'` 支持多种 Agent，其中很多不写 Report。
+
+**方案**：在 `TaskPayload` 中增加 `skipReportCheck` 标记，Worker 侧据此跳过 PHASE 2.5。
+
+#### 1. TaskPayload Schema 变更
+
+`codeswarm/packages/types/src/index.ts`：
+
+```typescript
+export const TaskPayloadSchema = z.object({
+  // ... 现有字段 ...
+  // 跳过 Report 产物验证（用于不预期产出 Report 的任务，如代码生成、重构等）
+  skipReportCheck: z.boolean().optional().default(false),
+});
+```
+
+#### 2. daemon.ts executeTask 逻辑变更
+
+```typescript
+// ========== PHASE 2.5: 等待 Report 产物就绪 ==========
+// 仅对预期产出 Report 的任务执行验证，skipReportCheck=true 时跳过
+let reportReady: boolean;
+if (payload.skipReportCheck) {
+  reportReady = true;  // 跳过验证，视为已就绪
+  logger.info(LOG_MODULES.DAEMON, `skipReportCheck=true, skipping waitForReport`);
+} else {
+  onEvent({
+    type: 'phase_start',
+    phase: 'report_waiting',
+    message: '等待 Report 产物就绪...',
+    timestamp: new Date().toISOString(),
+  });
+
+  reportReady = await this.waitForReport(
+    workspacePath,
+    taskStartTime,
+    taskTimeoutMs,
+    taskId,  // 传入 taskId 用于取消检查
+    onEvent,
+  );
+
+  onEvent({
+    type: 'phase_complete',
+    phase: 'report_waiting',
+    success: reportReady,
+    message: reportReady ? 'Report 产物已就绪' : 'Report 等待超时，无产物',
+    timestamp: new Date().toISOString(),
+  });
+}
+```
+
+#### 3. Server 侧任务类型自动映射
+
+Server 侧创建任务时，根据任务类型/Agent 名称自动设置 `skipReportCheck`：
+
+| 任务类型 | skipReportCheck | 理由 |
+|----------|----------------|------|
+| 安全扫描类（含 `scan`、`audit`、`vuln` 关键词） | `false` | 必须产出 Report |
+| 代码生成/重构类（含 `build`、`refactor`、`generate` 关键词） | `true` | 不预期 Report |
+| 评估类（含 `eval` 关键词） | `false` | 评估结果写入 Report |
+| 默认/未指定 | `false` | 保守策略：要求 Report |
+
+Server 侧在 `/api/codeswarm/tasks` POST 和 `/api/task-builder/tasks/[id]/execute` POST 中，根据 Agent 名称或任务指令自动推断 `skipReportCheck` 值，并写入 `TaskPayload`。
+
 ### 改动范围
 
 - **daemon.ts**：
-  - 新增 `findReportFolder` + `hasReportFile` + `waitForReport` 三个私有方法（约 50 行）
-  - 修改 `executeTask`：新增 PHASE 2.5（约 20 行），修改状态判定逻辑（约 10 行）
-  - 修改 `collectReport`：扩展搜索范围从 1 个目录到 6 个候选，文件类型从 5 种缩减为 `.json/.md`
+  - 新增 `findReportFolder` + `hasReportFile` + `waitForReport` 三个私有方法（约 60 行）
+  - 修改 `executeTask`：新增 PHASE 2.5 含 skipReportCheck + exitCode!=0 快照优化（约 35 行），修改状态判定逻辑保留 stderr critical 检查 + hasSubstantialOutput 兜底（约 20 行）
+  - 修改 `collectReport`：搜索范围从 1 个目录扩展到 9 个候选（含 TASK_INPUT_DIR），上报文件类型保留原 5 种（`.json/.md/.jsonl/.txt/.html`）
   - executeTask 方法顶部新增 `taskStartTime` 变量（1 行）
+  - `waitForReport` 增加 `taskId` 参数用于取消检查
 - **process-manager.ts**：**不改**，`end_turn` 保持原逻辑返回 `exitCode=0`
-- 不引入外部依赖，不改动 Server 侧代码
+- **codeswarm/packages/types/src/index.ts**：新增 `skipReportCheck` 字段到 `TaskPayloadSchema`
+- **Server 侧 `worker/result/route.ts`**：新增漏洞解析兜底 — `failed + reportContent` 时仍触发解析管道
+- **Server 侧任务创建路由**：根据 Agent 类型自动设置 `skipReportCheck`
 
 ---
 
 ## 注意事项
 
-- **开发规范约束**：所有需要产物校验的任务，Agent 必须将报告写入上述候选路径之一。不产生 Report 的任务（纯代码生成等）不在此方案覆盖范围内，由开发规范约束。
+- **开发规范约束**：所有需要产物校验的任务，Agent 必须将报告写入上述候选路径之一。不产生 Report 的任务通过 `skipReportCheck=true` 跳过验证。
+- **PHASE 2.5 定位理由**：waitForReport 独立于 PHASE 2 (runAgent)，是因为 Report 是 Agent spawn 的扫描器子进程写入的独立产物，Agent 继续对话（推续推 prompt）无法加速扫描器产出。放在 daemon 层做文件系统轮询是零 API 消耗、零 Agent 交互的最优方式。融合进 PHASE 2 的唯一效果是让已 destroy 的 ACP client 无法复用，需要重建 client 发无意义 prompt，徒增复杂度。
+- **exitCode != 0 快照优化**：Agent 崩溃时（exitCode≠0），跳过 7 天轮询直接做一次 collectReport 快照。理由：Agent 已死，扫描器大概率也未启动，7天空转白白占用 Worker semaphore slot。快照收集确保扫描器在崩溃前已产出部分结果时仍可附带上报。
 - **超时上限**：`waitForReport` 的实际等待时间 = `min(REPORT_WAIT_TIMEOUT_MS, 任务剩余整体超时)`，不会超出任务整体超时（`taskTimeoutMs`），不会无限等待。
-- **判定条件**：只有 Report 目录中出现 `.json` 或 `.md` 文件才视为产物就绪，其他文件类型（如临时日志、lock 文件、`.txt`、`.html`）不算。
+- **判定条件**：`waitForReport` 验证"Report 是否就绪"只认 `.json/.md`（核心产物格式）；`collectReport` 上报内容保留 `.json/.md/.jsonl/.txt/.html` 5 种（避免丢失有效报告数据）。两者职责不同，判定范围不应统一缩减。
 - **两个 end_turn 出口统一覆盖**：无论从正常 prompt 完成（出口 A）还是 cancel 流程完成（出口 B），daemon 层都做同样的 Report 验证，不需要分别处理。
-- **与 collectReport 的统一**：原有 `collectReport` 只查 `Report/` 目录且接受 5 种文件类型，现统一为6个候选目录 + 只接受 `.json/.md`，与 `waitForReport` 的判定条件完全一致。
-- **不影响不产生 Report 的任务**：对于纯代码生成等不写 Report 的任务，`waitForReport` 会超时返回 `false`，导致 `exitCode=0` 也被判 `failed`。这些任务应通过 Agent 配置或指令明确声明"不预期 Report 产物"，后续可考虑增加 `skipReportCheck` 标记来跳过此验证。
+- **与 Server 侧候选路径一致**：Worker 的 `findReportFolder` 9 个候选路径与 Server 侧 `minio-vulnerability.ts` 的 `findReportFolder` 完全一致（含 `TASK_INPUT_DIR` 子目录），确保 Worker 和 Server 对 Report 的判定不会产生矛盾。`TASK_INPUT_DIR` 环境变量必须在 Worker 和 Server 两侧配置一致。
+- **状态判定保留防御层**：`reportReady=true + exitCode=0` 不直接判 `completed`，仍检查 stderr 是否有 critical errors（认证失败、配额超限等）。同时保留 `hasSubstantialOutput(stdout)` 兜底 — Agent 可能未写正式 Report 文件但在 stdout 中输出了有效分析结果。
+- **skipReportCheck 解决非 Report 任务**：对于纯代码生成等不写 Report 的任务，设置 `skipReportCheck=true` 跳过 PHASE 2.5，避免阻塞轮询浪费 Worker slot。Server 侧根据 Agent 类型自动推断此值。
+- **取消支持**：`waitForReport` 轮询循环中检查 `cancelledTasks`，已取消任务立即返回 `false`，避免继续占用 semaphore。
+
+---
+
+## Server 侧协调变更
+
+### 漏洞解析兜底 — failed + reportContent 时仍触发解析
+
+**问题**：现有 `worker/result/route.ts` 中，漏洞解析管道只在 `finalState === 'completed'` 时触发。如果 Worker 误判 `failed`（如 waitForReport 超时但 Report 实际存在），即使 `reportContent` 有内容，漏洞解析也不会执行，导致功能损失。
+
+**方案**：在 `worker/result/route.ts` 的漏洞解析触发逻辑中，增加兜底条件：
+
+```typescript
+// 原逻辑：仅在 completed 时触发
+// if (finalState === 'completed') { executeVulnerabilityParseAsync(...) }
+
+// 新逻辑：completed 时触发，或 failed 但有 reportContent 时兜底触发
+if (finalState === 'completed' || (finalState === 'failed' && reportContent)) {
+  executeVulnerabilityParseAsync(taskId, projectPath, taskInstanceId, { productName, taskName });
+}
+```
+
+**理由**：`reportContent` 非空说明 Worker 的 `collectReport` 找到了文件内容，即使 `waitForReport` 超时或状态判定为 `failed`，漏洞数据仍然存在。解析管道不应因状态标记问题而丢失数据。
+
+### Server 侧状态修正机制 — 与 Worker 侧判定逻辑协调
+
+Server 侧 `worker/result/route.ts` 已有状态修正逻辑：
+
+```typescript
+// Worker may send status='failed' due to stderr misclassification
+const finalState = (status === 'completed' || (reportContent && !error)) ? 'completed' : 'failed';
+```
+
+**协调要点**：
+
+| Worker 报告 | Server 修正条件 | 最终状态 | 是否正确 |
+|------------|----------------|---------|---------|
+| `completed` | 不修正 | `completed` | ✅ |
+| `failed` + `reportContent` + **无** `error` | 修正为 `completed` | `completed` | ✅（stderr 误分类场景） |
+| `failed` + `reportContent` + **有** `error` | 不修正（有 error） | `failed` | ⚠️ 需配合漏洞解析兜底 |
+| `failed` + 无 `reportContent` + 有 `error` | 不修正 | `failed` | ✅ |
+
+**关键交互**：Worker `waitForReport` 超时返回 `failed` 时总会附带 `error`（如 "Report wait timeout"），Server 的修正条件 `reportContent && !error` 无法触发修正。因此：
+1. Worker 侧的 `collectReport` 必须尽力查找所有候选路径（含 TASK_INPUT_DIR），确保 `reportContent` 非空
+2. Server 侧的漏洞解析兜底（`failed + reportContent`）确保即使状态未修正，漏洞数据仍入库
+3. 两层防御互补，不依赖单一路径
