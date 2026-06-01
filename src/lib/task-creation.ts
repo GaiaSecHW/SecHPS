@@ -4,6 +4,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import AdmZip from 'adm-zip';
 import { serverLog } from '@/lib/server-log';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 验证上传文件的目录结构是否符合 Agent 要求
@@ -161,14 +162,21 @@ export async function copyAgentHarnessFromLocal(repoName: string, destDir: strin
   const agentHarnessBase = process.env.AGENT_HARNESS_LOCAL_PATH || './AgentHarness';
   const sourceDir = join(process.cwd(), agentHarnessBase, repoName);
 
-  // 始终先从 Gitea 拉取最新版本，确保本地缓存不陈旧
-  const { cloneOrPullOrgRepo, isConfigured } = await import('@/lib/gitea-org-repo');
+  const { cloneOrPullOrgRepo, isConfigured, checkHarnessVersionConsistency } = await import('@/lib/gitea-org-repo');
   if (isConfigured()) {
     const syncResult = await cloneOrPullOrgRepo(repoName);
     if (syncResult.success) {
       serverLog.info(`[TaskCreation] AgentHarness 同步成功: ${repoName} (${syncResult.method})`);
+      const versionCheck = await checkHarnessVersionConsistency(repoName);
+      if (versionCheck.consistent) {
+        logger.info(LOG_MODULES.AGENT, `AgentHarness 版本与 Gitea 一致: ${versionCheck.message} (repoName=${repoName})`);
+      } else {
+        logger.warn(LOG_MODULES.AGENT, `AgentHarness 版本与 Gitea 不一致: ${versionCheck.message} (repoName=${repoName})`);
+      }
     } else if (existsSync(sourceDir)) {
       serverLog.error(`[TaskCreation] AgentHarness 拉取失败，降级使用本地缓存: ${syncResult.error}`);
+      const versionCheck = await checkHarnessVersionConsistency(repoName);
+      logger.warn(LOG_MODULES.AGENT, `AgentHarness 拉取失败，无法确认版本一致性: ${versionCheck.message} (repoName=${repoName})`);
     } else {
       serverLog.error(`[TaskCreation] AgentHarness 拉取失败且无本地缓存: ${syncResult.error}`);
       return false;

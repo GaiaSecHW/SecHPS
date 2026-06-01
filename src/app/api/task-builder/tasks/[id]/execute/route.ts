@@ -6,6 +6,7 @@ import { prisma, withRetry } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import { copyAgentHarnessFromLocal } from '@/lib/task-creation';
+import { checkHarnessVersionConsistency } from '@/lib/gitea-org-repo';
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 

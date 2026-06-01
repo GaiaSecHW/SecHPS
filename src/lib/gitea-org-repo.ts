@@ -650,6 +650,96 @@ export async function syncAllAgentHarnessFromGitea(): Promise<{
   };
 }
 
+/**
+ * 通过 Gitea API 获取远端仓库指定分支的最新 commit SHA
+ */
+export async function getOrgRepoLatestCommitSha(repoName: string, branch: string = 'main'): Promise<string | null> {
+  if (!isConfigured()) return null;
+
+  const url = `${GITEA_ORG_URL}/api/v1/repos/${GITEA_ORG_NAME}/${repoName}/branches/${branch}`;
+
+  try {
+    const response = await fetchWithTimeout(url, {
+      headers: { Authorization: `token ${GITEA_ORG_TOKEN}`, Accept: 'application/json' },
+    }, 10000);
+
+    if (!response.ok) return null;
+
+    const data = await response.json() as { commit?: { id?: string } };
+    return data.commit?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 通过 simple-git 获取本地 AgentHarness 仓库的 HEAD commit SHA
+ */
+export async function getLocalRepoCommitSha(repoName: string): Promise<string | null> {
+  const localPath = join(process.cwd(), AGENT_HARNESS_LOCAL_PATH, repoName);
+  const gitDir = join(localPath, '.git');
+
+  if (!existsSync(gitDir)) return null;
+
+  try {
+    const git: SimpleGit = simpleGit(localPath);
+    const sha = await git.revparse(['HEAD']);
+    return sha.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 对比本地与远端 commit SHA，返回版本一致性检测结果
+ */
+export async function checkHarnessVersionConsistency(repoName: string, branch: string = 'main'): Promise<{
+  consistent: boolean;
+  localSha: string | null;
+  remoteSha: string | null;
+  message: string;
+}> {
+  const localSha = await getLocalRepoCommitSha(repoName);
+  const remoteSha = await getOrgRepoLatestCommitSha(repoName, branch);
+
+  if (!localSha && !remoteSha) {
+    return {
+      consistent: false,
+      localSha: null,
+      remoteSha: null,
+      message: '无法确认版本一致性: 本地无 .git 且远端查询失败',
+    };
+  }
+
+  if (!remoteSha) {
+    return {
+      consistent: false,
+      localSha,
+      remoteSha: null,
+      message: `无法确认版本一致性: 远端 SHA 查询失败 (local=${localSha?.substring(0, 7)})`,
+    };
+  }
+
+  if (!localSha) {
+    return {
+      consistent: false,
+      localSha: null,
+      remoteSha,
+      message: `无法确认版本一致性: 本地无 .git (remote=${remoteSha?.substring(0, 7)})`,
+    };
+  }
+
+  const consistent = localSha === remoteSha;
+  return {
+    consistent,
+    localSha,
+    remoteSha,
+    message: consistent
+      ? `版本一致: local=${localSha.substring(0, 7)}, remote=${remoteSha.substring(0, 7)}`
+      : `版本不一致: local=${localSha.substring(0, 7)}, remote=${remoteSha.substring(0, 7)}`,
+  };
+}
+
 export function getRepoUrl(repoName: string): string {
   return `${GITEA_ORG_URL}/${GITEA_ORG_NAME}/${repoName}`;
 }
