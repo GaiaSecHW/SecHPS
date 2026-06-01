@@ -465,9 +465,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
     }
 
-    // Worker may send status='failed' due to stderr misclassification (Agent SDK INFO logs).
-    // If reportContent exists, the task produced real output — override to 'completed'.
-    const finalState = (status === 'completed' || (reportContent && !error)) ? 'completed' : 'failed';
+    // Worker owns 业务完成判定：以 Report/AUDIT_REPORT.* 为准（参见 docs/plans/2026-06-01-audit-report-completion-design.md）。
+    // Server 信任 Worker 上报的 status，不再用 reportContent 反推 completed，避免非最终报告导致假完成。
+    const finalState = status === 'completed' ? 'completed' : 'failed';
 
     // Atomically update CodeswarmTask + TaskInstance in one transaction
     const txResult = await prisma.$transaction(async (tx) => {
