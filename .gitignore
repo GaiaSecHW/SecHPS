@@ -87,3 +87,6 @@ dev.db
 
 # Python cache
 __pycache__/
+
+# Worker 运行时状态目录
+codeswarm/packages/worker/.acpx-state/
