@@ -781,7 +781,7 @@ this.server.get('/health', async () => ({
   /** Read security report files from the workspace. */
   private collectReport(workspace: string): string | undefined {
     const reportDir = path.join(workspace, 'Report');
-    const reportFileExts = [ '.json','.md', '.jsonl', '.txt', '.html'];
+    const reportFileExts = [ '.json','.md'];
     
     if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) {
       return undefined;
