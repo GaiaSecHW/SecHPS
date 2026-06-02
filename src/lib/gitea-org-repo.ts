@@ -72,11 +72,11 @@ export async function getOrgRepoBranches(repoName: string): Promise<Array<{ name
   const branches = await response.json() as Array<{ name: string }>;
   return branches
     .filter(b => b.name.startsWith('update-'))
+    .sort((a, b) => b.name.localeCompare(a.name)) // 降序：最新分支排在最前（update-YYYYMMDD-seq 格式天然适合字符串排序）
     .map(b => ({
       name: b.name,
       giteaUrl: `${GITEA_ORG_URL}/${GITEA_ORG_NAME}/${repoName}/src/branch/${b.name}`,
-    }))
-    .reverse();
+    }));
 }
 
 /** 分支选择逻辑：优先传入 branch → 自动找最新 update-* 分支 → fallback 到 main */
