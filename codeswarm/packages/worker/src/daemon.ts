@@ -648,7 +648,7 @@ this.server.get('/health', async () => ({
       // 实时 stderr 分类已在 ProcessManager.registerEventHandlers.stderr 中处理（进程崩溃、速率限制、认证、配额、网络）
       // 这里只推送 status=failed 时未被实时覆盖的兜底 stderr
       if (!isCancelled && result.stderr && status === 'failed') {
-        const alreadyHandledPatterns = /Rate limit exceeded|FreeUsageLimitError|429|AuthenticationError|API key.*invalid|401|quota exceeded|ECONNREFUSED|ENOTFOUND|timeout.*exceeded|process exited with|terminated by signal|Failed to write to process stdin|\[进程崩溃\]|\[LLM 速率限制\]|\[认证错误\]|\[配额超限\]|\[网络错误\]/i;
+        const alreadyHandledPatterns = /Rate limit exceeded|FreeUsageLimitError|HTTP.*429|status.*429|429[ :]|AuthenticationError|API key.*invalid|HTTP.*401|status.*401|401[ :]|unauthorized|quota exceeded|ECONNREFUSED|ENOTFOUND|timeout.*exceeded|process exited with|terminated by signal|Failed to write to process stdin|\[进程崩溃\]|\[LLM 速率限制\]|\[认证错误\]|\[配额超限\]|\[网络错误\]/i;
         const remainingLines = result.stderr.split('\n')
           .filter(line => line.trim())
           .filter(line => !alreadyHandledPatterns.test(line));

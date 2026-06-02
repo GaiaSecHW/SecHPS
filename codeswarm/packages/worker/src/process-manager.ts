@@ -945,11 +945,11 @@ function registerEventHandlers(
         onEvent({ type: 'error', message: `[进程崩溃] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
-      if (/Rate limit exceeded|FreeUsageLimitError|429/i.test(line)) {
+      if (/Rate limit exceeded|FreeUsageLimitError|HTTP.*429|status.*429|429[ :]/i.test(line)) {
         onEvent({ type: 'error', message: `[LLM 速率限制] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
-      if (/AuthenticationError|API key.*invalid|401/i.test(line)) {
+      if (/AuthenticationError|API key.*invalid|HTTP.*401|status.*401|401[ :]|unauthorized/i.test(line)) {
         onEvent({ type: 'error', message: `[认证错误] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
