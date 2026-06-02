@@ -79,6 +79,23 @@ export async function getOrgRepoBranches(repoName: string): Promise<Array<{ name
     .reverse();
 }
 
+/** 分支选择逻辑：优先传入 branch → 自动找最新 update-* 分支 → fallback 到 main */
+async function resolveLatestBranch(repoName: string, branch?: string): Promise<string> {
+  if (branch) {
+    logger.info(GITEA, `使用传入分支: ${branch} (${repoName})`);
+    return branch;
+  }
+
+  const updateBranches = await getOrgRepoBranches(repoName);
+  if (updateBranches.length > 0) {
+    logger.info(GITEA, `自动发现最新版本分支: ${updateBranches[0].name} (${repoName})`);
+    return updateBranches[0].name;
+  }
+
+  logger.info(GITEA, `无 update-* 分支，fallback 到 main (${repoName})`);
+  return 'main';
+}
+
 /** 查询当天已有版本分支数，生成下一个序号 */
 async function getNextBranchSeq(repoName: string, dateStr: string): Promise<string> {
   try {
@@ -281,7 +298,7 @@ async function writeFilesToLocalDir(repoName: string, files: Map<string, Buffer>
 export async function pushToOrgRepoViaGit(
   repoName: string,
   files: Map<string, Buffer>
-): Promise<{ success: boolean; method: string; error?: string }> {
+): Promise<{ success: boolean; method: string; error?: string; mergedToMain?: boolean }> {
   if (!isConfigured()) {
     return { success: false, method: 'git', error: 'Gitea 配置不完整' };
   }
@@ -355,7 +372,7 @@ export async function pushToOrgRepoViaGit(
 
     if (status.files.length === 0) {
       logger.info(GITEA, `无变更需要提交: ${repoName}`);
-      return { success: true, method: 'git' };
+      return { success: true, method: 'git', mergedToMain: true };
     }
 
     await git.addConfig('user.email', 'sechps-bot@SecHPS.local');
@@ -388,7 +405,7 @@ export async function pushToOrgRepoViaGit(
       logger.warn(GITEA, `版本分支 ${versionBranch} 合入 ${remoteBranch} 失败，分支已保留`);
     }
 
-    return { success: true, method: 'git' };
+    return { success: true, method: 'git', mergedToMain: mergeResult };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error(GITEA, `Git push 失败: ${repoName}`, { details: { error: errorMsg } });
@@ -458,11 +475,11 @@ export async function uploadFilesToOrgRepo(
 export async function pushOrUpdateOrgRepo(
   repoName: string,
   files: Map<string, Buffer>
-): Promise<{ success: boolean; method: string }> {
+): Promise<{ success: boolean; method: string; mergedToMain?: boolean }> {
   const gitResult = await pushToOrgRepoViaGit(repoName, files);
   
   if (gitResult.success) {
-    return { success: true, method: 'git' };
+    return { success: true, method: 'git', mergedToMain: gitResult.mergedToMain };
   }
   
   logger.error(GITEA, `Git push 失败，回退到 API 上传: ${gitResult.error}`);
@@ -527,11 +544,13 @@ export async function deleteOrgRepo(repoName: string): Promise<boolean> {
  */
 export async function cloneOrPullOrgRepo(
   repoName: string,
-  branch: string = 'main'
-): Promise<{ success: boolean; method: string; error?: string }> {
+  branch?: string
+): Promise<{ success: boolean; method: string; error?: string; branch: string }> {
   if (!isConfigured()) {
-    return { success: false, method: 'clone', error: 'Gitea 配置不完整' };
+    return { success: false, method: 'clone', error: 'Gitea 配置不完整', branch: branch ?? 'main' };
   }
+
+  const resolvedBranch = await resolveLatestBranch(repoName, branch);
 
   const localPath = join(process.cwd(), AGENT_HARNESS_LOCAL_PATH, repoName);
   const gitDir = join(localPath, '.git');
@@ -549,24 +568,30 @@ export async function cloneOrPullOrgRepo(
     try {
       await git.remote(['set-url', 'origin', repoUrl]);
 
+      await git.fetch('origin');
+
       const currentBranch = await git.revparse(['--abbrev-ref', 'HEAD']);
-      if (currentBranch.trim() !== branch) {
+      if (currentBranch.trim() !== resolvedBranch) {
         try {
-          await git.checkout(branch);
+          await git.checkout(resolvedBranch);
         } catch {
-          await git.checkoutLocalBranch(branch);
+          try {
+            await git.raw(['checkout', '-b', resolvedBranch, `origin/${resolvedBranch}`]);
+          } catch {
+            await git.checkoutLocalBranch(resolvedBranch);
+          }
         }
       }
 
-      const result = await git.pull('origin', branch);
+      const result = await git.pull('origin', resolvedBranch);
       const changes = result.summary?.changes || 0;
 
-      logger.info(GITEA, `pull 成功: ${repoName} (${changes} 个变更)`);
-      return { success: true, method: 'pull' };
+      logger.info(GITEA, `pull 成功: ${repoName}@${resolvedBranch} (${changes} 个变更)`);
+      return { success: true, method: 'pull', branch: resolvedBranch };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error(GITEA, `pull 失败: ${repoName}`, { details: { error: errorMsg } });
-      return { success: false, method: 'pull', error: errorMsg };
+      logger.error(GITEA, `pull 失败: ${repoName}@${resolvedBranch}`, { details: { error: errorMsg } });
+      return { success: false, method: 'pull', error: errorMsg, branch: resolvedBranch };
     }
   }
 
@@ -574,20 +599,20 @@ export async function cloneOrPullOrgRepo(
     await mkdir(join(process.cwd(), AGENT_HARNESS_LOCAL_PATH), { recursive: true });
 
     const git: SimpleGit = simpleGit();
-    await git.clone(repoUrl, localPath, ['-b', branch]);
+    await git.clone(repoUrl, localPath, ['-b', resolvedBranch]);
 
-    logger.info(GITEA, `clone 成功: ${repoName} -> ${localPath}`);
-    return { success: true, method: 'clone' };
+    logger.info(GITEA, `clone 成功: ${repoName}@${resolvedBranch} -> ${localPath}`);
+    return { success: true, method: 'clone', branch: resolvedBranch };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(GITEA, `clone 失败: ${repoName}`, { details: { error: errorMsg } });
+    logger.error(GITEA, `clone 失败: ${repoName}@${resolvedBranch}`, { details: { error: errorMsg } });
 
     try {
       await rm(localPath, { recursive: true, force: true });
     } catch {
     }
 
-    return { success: false, method: 'clone', error: errorMsg };
+    return { success: false, method: 'clone', error: errorMsg, branch: resolvedBranch };
   }
 }
 
@@ -693,14 +718,15 @@ export async function getLocalRepoCommitSha(repoName: string): Promise<string | 
 /**
  * 对比本地与远端 commit SHA，返回版本一致性检测结果
  */
-export async function checkHarnessVersionConsistency(repoName: string, branch: string = 'main'): Promise<{
+export async function checkHarnessVersionConsistency(repoName: string, branch?: string): Promise<{
   consistent: boolean;
   localSha: string | null;
   remoteSha: string | null;
   message: string;
 }> {
+  const resolvedBranch = await resolveLatestBranch(repoName, branch);
   const localSha = await getLocalRepoCommitSha(repoName);
-  const remoteSha = await getOrgRepoLatestCommitSha(repoName, branch);
+  const remoteSha = await getOrgRepoLatestCommitSha(repoName, resolvedBranch);
 
   if (!localSha && !remoteSha) {
     return {
@@ -735,8 +761,8 @@ export async function checkHarnessVersionConsistency(repoName: string, branch: s
     localSha,
     remoteSha,
     message: consistent
-      ? `版本一致: local=${localSha.substring(0, 7)}, remote=${remoteSha.substring(0, 7)}`
-      : `版本不一致: local=${localSha.substring(0, 7)}, remote=${remoteSha.substring(0, 7)}`,
+      ? `版本一致@${resolvedBranch}: local=${localSha.substring(0, 7)}, remote=${remoteSha.substring(0, 7)}`
+      : `版本不一致@${resolvedBranch}: local=${localSha.substring(0, 7)}, remote=${remoteSha.substring(0, 7)}`,
   };
 }
 
