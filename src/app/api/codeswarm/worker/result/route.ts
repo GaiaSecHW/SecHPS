@@ -469,8 +469,18 @@ export async function POST(request: Request) {
     // Server 信任 Worker 上报的 status，不再用 reportContent 反推 completed，避免非最终报告导致假完成。
     const finalState = status === 'completed' ? 'completed' : 'failed';
 
-    // Atomically update CodeswarmTask + TaskInstance in one transaction
+    // Atomically update CodeswarmTask + TaskInstance + Worker.currentTasks in one transaction
     const txResult = await prisma.$transaction(async (tx) => {
+      // 先查询 CodeswarmTask 获取 workerId（用于递减 Worker.currentTasks）
+      const codeswarmTask = await tx.codeswarmTask.findUnique({
+        where: { taskId },
+        select: { id: true, workerId: true },
+      });
+
+      if (!codeswarmTask) {
+        return { alreadyTerminal: true, taskInstance: null, workerId: null };
+      }
+
       const updateResult = await tx.$executeRaw`
         UPDATE "CodeswarmTask"
         SET state = ${finalState},
@@ -484,7 +494,18 @@ export async function POST(request: Request) {
       `;
 
       if (updateResult === 0) {
-        return { alreadyTerminal: true, taskInstance: null };
+        return { alreadyTerminal: true, taskInstance: null, workerId: codeswarmTask.workerId };
+      }
+
+      // 在同一事务内递减 Worker.currentTasks（条件更新防止负数）
+      if (codeswarmTask.workerId) {
+        await tx.codeswarmWorker.updateMany({
+          where: {
+            id: codeswarmTask.workerId,
+            currentTasks: { gt: 0 },
+          },
+          data: { currentTasks: { decrement: 1 } },
+        });
       }
 
       const taskInstance = await tx.taskInstance.findFirst({
@@ -506,14 +527,14 @@ export async function POST(request: Request) {
         });
       }
 
-      return { alreadyTerminal: false, taskInstance };
+      return { alreadyTerminal: false, taskInstance, workerId: codeswarmTask.workerId };
     });
 
     if (txResult.alreadyTerminal) {
-      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
-      if (nodeId) {
-        await codeswarmDispatcher.onTaskCompleted(nodeId);
-      }
+      // 任务已处于终态（超时/取消/掉线重调度），result 回调被忽略
+      // 重要：不再调用 onTaskCompleted()，因为超时/掉线处理已释放了 Worker 槽位
+      // 避免双重递减导致 currentTasks 虚低
+      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled), Worker slot already released`);
       return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_already_terminal' });
     }
 
@@ -543,9 +564,10 @@ export async function POST(request: Request) {
       });
     }
 
+    // Worker.currentTasks 的 DB decrement 已在事务中完成，这里只更新内存
+    // 使用事务返回的 workerId 查找 nodeId 进行内存递减
     if (nodeId) {
-      await codeswarmDispatcher.onTaskCompleted(nodeId);
-      // 事件驱动：Worker 释放 slot 后立即尝试分发队列中的下一个任务
+      codeswarmDispatcher.decrementWorkerMemoryLoad(nodeId);
       codeswarmDispatcher.tryDispatchNext().catch(e =>
         logger.warn(LOG_MODULES.CODESWARM, '触发下一任务分发失败', { details: { error: e instanceof Error ? e.message : String(e) } })
       );

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, Prisma } from '@/lib/prisma';
+import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
 export async function GET(
   request: Request,
@@ -95,6 +96,10 @@ export async function PATCH(
       where: { nodeId },
       data,
     });
+
+    if (maxConcurrent !== undefined) {
+      codeswarmDispatcher.updateWorkerMaxConcurrent(nodeId, Math.max(1, Math.min(50, maxConcurrent)));
+    }
 
     return NextResponse.json({ success: true, worker });
   } catch (error) {

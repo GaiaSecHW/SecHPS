@@ -262,24 +262,24 @@ const taskPayload = JSON.stringify({
     });
   }
 
-  // 任务完成：释放 Worker 槽位（内存 + DB 同步递减，幂等性检查）
+  // 任务完成：仅更新内存负载（DB decrement 已在调用方的事务中处理）
+  // 保留此方法供超时处理等场景使用，但不再执行 DB decrement
   async onTaskCompleted(nodeId: string) {
     const worker = this.workers.get(nodeId);
     if (!worker) return;
 
-    // 内存递减：幂等性检查，避免负数
+    // 仅内存递减：幂等性检查，避免负数
     if (worker.currentTasks > 0) {
       worker.currentTasks--;
     }
+  }
 
-    // DB 递减：使用条件更新避免负数（与超时处理保持一致）
-    await prisma.codeswarmWorker.updateMany({
-      where: {
-        id: worker.id,
-        currentTasks: { gt: 0 },
-      },
-      data: { currentTasks: { decrement: 1 } },
-    }).catch(() => {});
+  // 内存负载递减：供 result 回调等场景使用（DB decrement 已在事务中完成）
+  decrementWorkerMemoryLoad(nodeId: string) {
+    const worker = this.workers.get(nodeId);
+    if (worker && worker.currentTasks > 0) {
+      worker.currentTasks--;
+    }
   }
 
   /** 同步 Worker 负载到内存（DB fallback 路径使用） */
@@ -287,6 +287,15 @@ const taskPayload = JSON.stringify({
     const worker = this.workers.get(nodeId);
     if (worker) {
       worker.currentTasks = Math.max(worker.currentTasks, currentTasks);
+    }
+  }
+
+  /** 更新 Worker 的最大并发数（admin 在 Dashboard 修改时立即生效） */
+  updateWorkerMaxConcurrent(nodeId: string, maxConcurrent: number) {
+    const worker = this.workers.get(nodeId);
+    if (worker) {
+      worker.maxConcurrent = maxConcurrent;
+      logger.info(LOG_MODULES.CODESWARM, `Worker ${nodeId} maxConcurrent 更新为 ${maxConcurrent}`);
     }
   }
 
@@ -922,53 +931,66 @@ const taskPayload = JSON.stringify({
       if (timeouted.length === 0) return;
 
       for (const dbTaskId of timeouted) {
-        // 使用原子性条件更新：只有 running/dispatched 状态的任务才能被标记为超时
-        // 这避免了与正常完成路径的竞态条件
-        const updateResult = await prisma.codeswarmTask.updateMany({
-          where: {
-            id: dbTaskId,
-            state: { in: ['running', 'dispatched'] },
-          },
-          data: {
-            state: 'failed',
-            error: 'Task timeout',
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          },
-        });
+        // 使用事务原子性更新：任务状态 + Worker.currentTasks decrement
+        // 这避免了与正常完成路径的竞态条件和双重递减问题
+        try {
+          const txResult = await prisma.$transaction(async (tx) => {
+            // 先查询任务获取 workerId
+            const task = await tx.codeswarmTask.findUnique({
+              where: { id: dbTaskId },
+              select: { taskId: true, workerId: true, state: true },
+            });
 
-        // 如果更新成功（count > 0），说明任务确实被我们标记为超时
-        // 此时需要释放 Worker 槽位
-        if (updateResult.count > 0) {
-          // 获取 workerId 用于释放槽位
-          const task = await prisma.codeswarmTask.findUnique({
-            where: { id: dbTaskId },
-            select: { taskId: true, workerId: true },
-          });
+            if (!task) {
+              return { updated: false, workerId: null, taskId: null };
+            }
 
-          if (task) {
-            logger.warn(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 超时，标记为 failed`);
+            // 条件更新：只有 running/dispatched 状态的任务才能被标记为超时
+            const updateResult = await tx.codeswarmTask.updateMany({
+              where: {
+                id: dbTaskId,
+                state: { in: ['running', 'dispatched'] },
+              },
+              data: {
+                state: 'failed',
+                error: 'Task timeout',
+                completedAt: new Date(),
+                updatedAt: new Date(),
+              },
+            });
 
-            // 释放 Worker 槽位（幂等性检查）
+            if (updateResult.count === 0) {
+              return { updated: false, workerId: task.workerId, taskId: task.taskId };
+            }
+
+            // 在同一事务内递减 Worker.currentTasks
             if (task.workerId) {
-              const workerEntry = [...this.workers.values()].find(w => w.id === task.workerId);
-              // 内存递减：幂等性检查，避免负数
-              if (workerEntry && workerEntry.currentTasks > 0) {
-                workerEntry.currentTasks--;
-              }
-              // DB 递减：使用条件更新避免负数
-              await prisma.codeswarmWorker.updateMany({
+              await tx.codeswarmWorker.updateMany({
                 where: {
                   id: task.workerId,
                   currentTasks: { gt: 0 },
                 },
                 data: { currentTasks: { decrement: 1 } },
-              }).catch(() => {});
+              });
             }
 
-            // 发布超时事件
-            await this.publishTaskEvent(task.taskId, { type: 'task_timeout', status: 'failed' });
+            return { updated: true, workerId: task.workerId, taskId: task.taskId };
+          });
+
+          // 如果更新成功，释放内存槽位
+          if (txResult.updated && txResult.workerId) {
+            const workerEntry = [...this.workers.values()].find(w => w.id === txResult.workerId);
+            if (workerEntry && workerEntry.currentTasks > 0) {
+              workerEntry.currentTasks--;
+            }
           }
+
+          if (txResult.updated && txResult.taskId) {
+            logger.warn(LOG_MODULES.CODESWARM, `任务 ${txResult.taskId} 超时，标记为 failed`);
+            await this.publishTaskEvent(txResult.taskId, { type: 'task_timeout', status: 'failed' });
+          }
+        } catch (txErr) {
+          logger.error(LOG_MODULES.CODESWARM, '超时处理事务失败', { details: { error: txErr instanceof Error ? txErr.message : String(txErr) } });
         }
 
         // 无论是否成功标记超时，都移除超时记录（已完成的任务也需要清理）

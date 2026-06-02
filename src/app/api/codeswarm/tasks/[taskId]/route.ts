@@ -110,18 +110,29 @@ export async function DELETE(
       }
     }
 
-    // 释放 Worker 负载
+    // 释放 Worker 负载：在同一事务中递减 currentTasks + 删除任务
     if (task?.workerId) {
       const worker = await prisma.codeswarmWorker.findUnique({
         where: { id: task.workerId },
         select: { nodeId: true },
       });
       if (worker) {
-        await codeswarmDispatcher.onTaskCompleted(worker.nodeId);
+        codeswarmDispatcher.decrementWorkerMemoryLoad(worker.nodeId);
       }
     }
 
     await prisma.$transaction(async (tx) => {
+      // 事务内递减 Worker.currentTasks（原子性保证）
+      if (task?.workerId) {
+        await tx.codeswarmWorker.updateMany({
+          where: {
+            id: task.workerId,
+            currentTasks: { gt: 0 },
+          },
+          data: { currentTasks: { decrement: 1 } },
+        });
+      }
+
       await tx.codeswarmEvent.deleteMany({ where: { taskId } });
       await tx.codeswarmTask.delete({ where: { taskId } });
 

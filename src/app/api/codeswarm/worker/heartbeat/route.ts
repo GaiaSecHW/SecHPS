@@ -31,7 +31,6 @@ export async function POST(request: Request) {
         systemType: systemType || null,
         arch: arch || null,
         status: 'online',
-        maxConcurrent: maxConcurrent || 5,
         lastHeartbeat: new Date(),
         updatedAt: new Date(),
       },
@@ -112,9 +111,18 @@ export async function POST(request: Request) {
       nodeId,
       id: worker.id,
       address: address || worker.address,
-      maxConcurrent: maxConcurrent || 5,
+      maxConcurrent: worker.maxConcurrent,
       currentTasks,
     });
+
+    // 如果 DB 中的 maxConcurrent（可能被 admin 在 dashboard 修改过）与 worker 上报值不同，
+    // 返回 maxConcurrentOverride 让 worker 动态调整 Semaphore
+    const dbMax = worker.maxConcurrent;
+    const reportedMax = maxConcurrent || 5;
+    const response: Record<string, any> = { success: true, nodeId, token: workerToken };
+    if (dbMax !== reportedMax) {
+      response.maxConcurrentOverride = dbMax;
+    }
 
     // DB 模式 fallback：Redis 不可用时仍用心跳触发分发
     if (!codeswarmDispatcher.isAvailable) {
@@ -123,7 +131,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, nodeId, token: workerToken });
+    return NextResponse.json(response);
   } catch (error) {
     logger.error(LOG_MODULES.CODESWARM, 'Heartbeat error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
