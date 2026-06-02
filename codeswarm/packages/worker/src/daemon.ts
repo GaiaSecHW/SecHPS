@@ -22,7 +22,7 @@ interface AuditReportCandidate {
 }
 
 const AUDIT_REPORT_BASENAME = 'AUDIT_REPORT';
-const AUDIT_REPORT_TEMP_EXTS = new Set(['.tmp', '.partial', '.lock']);
+const AUDIT_REPORT_ACCEPTED_EXTS = new Set(['.json', '.md']);
 const DEFAULT_REPORT_POLL_INTERVAL_SEC = 600;
 const REPORT_NOT_GENERATED_ERROR = '任务执行失败，报告未生成。';
 
@@ -39,8 +39,8 @@ export function findAuditReportCandidate(workspace: string): AuditReportCandidat
       if (!entry.isFile()) continue;
 
       const parsed = path.parse(entry.name);
-      if (parsed.name !== AUDIT_REPORT_BASENAME) continue;
-      if (AUDIT_REPORT_TEMP_EXTS.has(parsed.ext.toLowerCase())) continue;
+      if (!parsed.name.startsWith(AUDIT_REPORT_BASENAME)) continue;
+      if (!AUDIT_REPORT_ACCEPTED_EXTS.has(parsed.ext.toLowerCase())) continue;
 
       const filePath = path.join(reportDir, entry.name);
       const stat = fs.statSync(filePath);
