@@ -20,6 +20,7 @@ import {
   User,
   Key,
   Brain,
+  Copy,
 } from 'lucide-react';
 
 // ModelConfig 数据结构
@@ -419,6 +420,27 @@ export default function ModelsPage() {
     }
   };
 
+  // 复制模型
+  const handleDuplicateModel = async (model: ModelConfig) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/models/${model.id}/duplicate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || '复制失败');
+      }
+      setSuccess(`已复制模型 "${model.name}"`);
+      setTimeout(() => setSuccess(null), 3000);
+      fetchModels();
+    } catch (err: any) {
+      setError(err.message || '复制模型失败');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
   // 检查是否可以编辑/删除模型
   const canEditModel = (model: ModelConfig) => {
     return isIcsOrAdmin || model.userId === user?.id;
@@ -720,6 +742,13 @@ export default function ModelsPage() {
                               <Edit2 size={16} />
                             </button>
                           )}
+                          <button
+                            onClick={() => handleDuplicateModel(model)}
+                            className="p-1.5 text-gray-400 hover:text-cyan-400 hover:bg-cyan-600/10 rounded-md transition-colors"
+                            title="复制"
+                          >
+                            <Copy size={16} />
+                          </button>
                           {canEditModel(model) && (
                             <button
                               onClick={() => handleDeleteClick(model)}
