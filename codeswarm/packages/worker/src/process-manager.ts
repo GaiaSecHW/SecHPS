@@ -641,32 +641,23 @@ export interface ClassifiedError {
 }
 
 /**
- * Classify ACP/LLM errors to distinguish critical task errors from non-critical
- * post-task operations (e.g., title generation failures).
- *
- * Non-critical errors should NOT cascade to affect the main task status.
+ * Classify ACP/LLM errors. Non-critical errors must not cascade to task status.
+ * Check order matters: INFO exemption before rate_limit, since git hashes embed "429".
  */
 export function classifyAcpError(message: string): ClassifiedError {
-  // Title generation related errors → non-critical
+  if (/^\s*INFO\b|^\s*DEBUG\b|service=session\b|service=bus\b|service=compaction\b|service=snapshot\b/i.test(message)) {
+    return { isCritical: false, category: 'agent_info_log', rawMessage: message };
+  }
+
   if (/title.*generat|generat.*title|session.*title|title.*generator/i.test(message)) {
     return { isCritical: false, category: 'title_generation', rawMessage: message };
   }
 
-  // AI Retry / Rate limit / FreeUsageLimitError → context-dependent
-  // If occurs after substantial output, treat as non-critical (likely post-task)
-  if (/AI_RetryError|RetryError|rate.*limit|429|FreeUsageLimitError/i.test(message)) {
+  // Bare `429` removed: 40-char git hashes frequently contain "429" as hex substring.
+  if (/AI_RetryError|RetryError|rate[_ ]?limit|HTTP.*429|status.*429|FreeUsageLimitError/i.test(message)) {
     return { isCritical: false, category: 'rate_limit', rawMessage: message };
   }
 
-  // Agent SDK INFO/DEBUG runtime logs → non-critical
-  // Claude Agent SDK emits session/bus/compaction status logs to stderr; these are
-  // normal operational output, not errors. Without this exemption, any INFO line in
-  // stderr causes exitCode=0 tasks to be misclassified as "failed".
-  if (/^\s*INFO\b|^\s*DEBUG\b|service=session\b|service=bus\b|service=compaction\b/i.test(message)) {
-    return { isCritical: false, category: 'agent_info_log', rawMessage: message };
-  }
-
-  // Default: treat unknown errors as critical (conservative)
   return { isCritical: true, category: 'unknown', rawMessage: message };
 }
 
