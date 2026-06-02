@@ -80,7 +80,32 @@ export default function AgentAppsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setApps(data.apps || []);
+        const appsList = data.apps || [];
+        setApps(appsList);
+
+        // 预加载有 Harness 的应用分支数量
+        const withHarness = appsList.filter((a: AgentApp) => a.agentHarnessPath);
+        if (withHarness.length > 0) {
+          const token2 = localStorage.getItem('token');
+          Promise.all(withHarness.map(async (a: AgentApp) => {
+            try {
+              const res = await fetch(`/api/agent-apps/${a.id}/branches`, {
+                headers: { Authorization: `Bearer ${token2}` },
+              });
+              if (res.ok) {
+                const bData = await res.json();
+                return { id: a.id, branches: bData.branches };
+              }
+            } catch {}
+            return null;
+          })).then(results => {
+            const map: Record<string, Array<{ name: string; giteaUrl: string }>> = {};
+            for (const r of results) {
+              if (r) map[r.id] = r.branches;
+            }
+            setHarnessBranches(prev => ({ ...prev, ...map }));
+          });
+        }
       } else {
         const errorData = await response.json().catch(() => ({ error: '未知错误' }));
         console.error('获取Agent列表失败:', errorData);
