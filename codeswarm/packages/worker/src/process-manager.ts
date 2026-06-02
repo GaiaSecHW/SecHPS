@@ -933,23 +933,23 @@ function registerEventHandlers(
       if (!onEvent) return;
 
       if (/process exited with|terminated by signal|Failed to write to process stdin/i.test(line)) {
-        onEvent({ type: 'error', message: `[进程崩溃] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        onEvent({ type: 'error', message: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
       if (/Rate limit exceeded|FreeUsageLimitError|HTTP.*429|status.*429|429[ :]/i.test(line)) {
-        onEvent({ type: 'error', message: `[LLM 速率限制] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        onEvent({ type: 'error', message: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
       if (/AuthenticationError|API key.*invalid|HTTP.*401|status.*401|401[ :]|unauthorized/i.test(line)) {
-        onEvent({ type: 'error', message: `[认证错误] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        onEvent({ type: 'error', message: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
       if (/quota exceeded/i.test(line)) {
-        onEvent({ type: 'error', message: `[配额超限] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        onEvent({ type: 'error', message: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
       if (/ECONNREFUSED|ENOTFOUND/i.test(line)) {
-        onEvent({ type: 'error', message: `[网络错误] ${line}`, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
+        onEvent({ type: 'error', message: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
         return;
       }
       onEvent({ type: 'log_chunk', content: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
