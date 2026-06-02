@@ -44,14 +44,14 @@ ACP 协议中 `end_turn` 后 **session 不关闭**，可以在同一 session 继
 
 ### 核心思路
 
-`end_turn` 不再是任务完成的终点，而是**对话轮次结束的中间事件**。任务完成的唯一判定标准：**Report 目录有内容非空的 .json/.md 文件**。
+`end_turn` 不再是任务完成的终点，而是**对话轮次结束的中间事件**。任务完成的唯一判定标准：**Report 目录有文件名前缀为 `AUDIT_REPORT` 且后缀为 `.json` 或 `.md` 的非空文件**。
 
 ### 关键判断点
 
 | 事件 | 判断逻辑 | 行为 |
 |------|---------|------|
 | **end_turn 出现** | Agent 说"这轮对话结束了"，不代表任务完成 | **不 destroy client，不退出 runAgent**，转入 Report 轮询 |
-| **Report 有内容非空的 .json/.md** | 扫描器已产出有效报告 → 任务真正完成 | destroy client → completed |
+| **Report 有 AUDIT_REPORT\*.json 或 AUDIT_REPORT\*.md 且非空** | 扫描器已产出有效报告 → 任务真正完成 | destroy client → completed |
 | **15分钟无 Agent 活动 + 无 Report** | Agent 虚假完成（扫描器没启动） | 同 session 发续推 prompt → Agent 继续工作 |
 | **7天超时仍无 Report** | 任务彻底失败 | destroy client → failed |
 | **任务被取消** | 用户主动取消 | destroy client → failed |
@@ -79,7 +79,7 @@ executeTask()
   │     ├─ [对话轮结束] Agent 发 end_turn（出口 A 或出口 B）
   │     │     ├── 不 destroy client，不退出 runAgent
   │     │     ├── 启动 Report 轮询（每10分钟）
-  │     │     │     ├── Report 有 .json/.md → destroy → 返回 { exitCode: 0, reportReady: true }
+  │     │     │     ├── Report 有 AUDIT_REPORT\*.json/.md → destroy → 返回 { exitCode: 0, reportReady: true }
   │     │     │     ├── 15分钟无 Agent 活动 + 无 Report → 同 session 续推
   │     │     │     │     ├── Agent 继续 → 可能又发 end_turn → 继续轮询
   │     │     │     │     ├── Agent 不响应 → destroy → 返回 { exitCode: 0, reportReady: false }
@@ -97,7 +97,7 @@ executeTask()
   │     ├── reportReady=true → 检查 stderr critical → completed/failed
   │     ├── reportReady=false + reportContent非空 + stdout有实质性输出 → completed（兜底）
   │     └── 其他 → failed
-  ├─ collectReport() → 收集内容用于上报（仅 Report 目录 + .json/.md）
+  ├─ collectReport() → 收集内容用于上报（仅 Report 目录 + AUDIT_REPORT*.json/.md）
   └─ postResult() → Server 侧接收后：
         ├── finalState=completed → 触发漏洞解析管道
         └─ finalState=failed + reportContent非空 → 兜底触发漏洞解析管道
@@ -184,7 +184,7 @@ if (cancelStopReason === 'end_turn') {
  * end_turn 后的核心逻辑：轮询 Report 产物，同时保留续推能力。
  *
  * 判断流程：
- * 1. 每 REPORT_POLL_INTERVAL_MS 检查 Report 目录是否有 .json/.md
+ * 1. 每 REPORT_POLL_INTERVAL_MS 检查 Report 目录是否有 AUDIT_REPORT*.json/.md
  * 2. 如果 Report 出现 → 任务完成，返回 reportReady=true
  * 3. 如果 15 分钟无 Agent 活动 + 无 Report → 同 session 续推
  *    - 续推 prompt 告知 Agent "扫描器是否已启动？如果没有请继续"
@@ -223,7 +223,7 @@ private async waitForReportOrContinue(
       return { reportReady: false, reportPath: null };
     }
 
-    // ===== 判断点 2: Report 目录是否有内容非空的 .json/.md =====
+    // ===== 判断点 2: Report 目录是否有 AUDIT_REPORT*.json/.md 且非空 =====
     const folder = this.findReportFolder(workspace);
     if (folder) {
       const reportFile = this.hasReportFile(folder);
@@ -274,7 +274,7 @@ private async waitForReportOrContinue(
 
     onEvent?.({
       type: 'log_chunk',
-      message: `等待 Report 目录中的 .json/.md 文件...`,
+      message: `等待 Report 目录中的 AUDIT_REPORT*.json/.md 文件...`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
@@ -296,14 +296,15 @@ private findReportFolder(workspace: string): string | null {
   return null;
 }
 
-/** 检查 Report 目录是否有内容非空的 .json/.md 文件 */
+/** 检查 Report 目录是否有文件名前缀 AUDIT_REPORT 且后缀 .json/.md 的非空文件 */
 private hasReportFile(folder: string): string | null {
   const entries = fs.readdirSync(folder);
   for (const f of entries) {
     const fullPath = path.join(folder, f);
     if (!fs.statSync(fullPath).isFile()) continue;
     const ext = path.extname(f).toLowerCase();
-    if (ext === '.json' || ext === '.md') {
+    const name = path.basename(f, ext);
+    if ((ext === '.json' || ext === '.md') && name.startsWith('AUDIT_REPORT')) {
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
         if (content.trim().length > 0) return fullPath;
@@ -383,12 +384,13 @@ private async executeTask(payload: TaskPayload): Promise<void> {
 #### collectReport（保持与之前一致）
 
 ```typescript
-/** 从 workspace 中读取 Report 文件内容（用于上报）。搜索范围仅 Report 目录，扩展名仅 .json/.md。 */
+/** 从 workspace 中读取 Report 文件内容（用于上报）。搜索范围仅 Report 目录，文件名前缀 AUDIT_REPORT + 后缀 .json/.md。 */
 private collectReport(workspace: string): string | undefined {
   const reportDir = path.join(workspace, 'Report');
   if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) return undefined;
 
   const reportFileExts = ['.json', '.md'];
+  const reportFilePrefix = 'AUDIT_REPORT';
 
   try {
     const entries = fs.readdirSync(reportDir, { withFileTypes: true });
@@ -396,6 +398,8 @@ private collectReport(workspace: string): string | undefined {
       if (!entry.isFile()) continue;
       const ext = path.extname(entry.name).toLowerCase();
       if (!reportFileExts.includes(ext)) continue;
+      const nameWithoutExt = path.basename(entry.name, ext);
+      if (!nameWithoutExt.startsWith(reportFilePrefix)) continue;
       const filePath = path.join(reportDir, entry.name);
       try {
         const content = fs.readFileSync(filePath, 'utf-8');
@@ -420,7 +424,7 @@ private collectReport(workspace: string): string | undefined {
   - 续推逻辑调整：end_turn 后的不活跃超时触发同 session 续推（而非 cancel + destroy）
 - **daemon.ts**：
   - 修改 `executeTask` 状态判定：简化为 reportContent → 检查 stderr → completed/failed
-  - `collectReport` 保持不变（仅 Report 目录 + .json/.md）
+  - `collectReport` 保持不变（仅 Report 目录 + AUDIT_REPORT*.json/.md）
 - **Server 侧 `worker/result/route.ts`**：新增漏洞解析兜底 — `failed + reportContent` 时仍触发解析管道
 
 ---
@@ -464,7 +468,7 @@ private collectReport(workspace: string): string | undefined {
   | 终止 | 超过 `CONTINUE_MAX_ATTEMPTS`（5 次） | destroy → exitCode=1（任务失败） |
 - **Report 轮询与 Agent 续推并行**：轮询每 10 分钟检查一次 Report 目录。续推在不活跃 15 分钟后触发。两者互不干扰：轮询是文件系统检查（零 API 消耗），续推是 ACP prompt（有 API 消耗但仅在必要时触发）。
 - **超时上限**：`waitForReportOrContinue` 的实际等待时间 = `min(REPORT_WAIT_TIMEOUT_MS, 任务剩余整体超时)`，不会超出任务整体超时，不会无限等待。
-- **判定条件统一**：`waitForReportOrContinue` 和 `collectReport` 都只认 `.json/.md`，职责一致。
+- **判定条件统一**：`waitForReportOrContinue` 和 `collectReport` 都只认 `AUDIT_REPORT*.json/.md`，职责一致。
 - **与 Server 侧候选路径一致**：Worker 的 `findReportFolder` 仅检查 `Report` 目录，与 Server 侧 `minio-vulnerability.ts` 一致。
 - **取消支持**：Report 轮询中检查 `cancelledTasks`，已取消任务立即返回 `reportReady=false`。
 - **主流方案参考**：
@@ -514,6 +518,6 @@ const finalState = (status === 'completed' || (reportContent && !error)) ? 'comp
 | `failed` + 无 `reportContent` + 有 `error` | 不修正 | `failed` | ✅ |
 
 **关键交互**：Worker Report 轮询超时返回 `failed` 时总会附带 `error`（如 "Report polling timeout"），Server 的修正条件 `reportContent && !error` 无法触发修正。因此：
-1. Worker 侧的 `collectReport` 必须尽力查找 `Report` 目录中的 `.json/.md` 文件，确保 `reportContent` 非空
+1. Worker 侧的 `collectReport` 必须尽力查找 `Report` 目录中的 `AUDIT_REPORT*.json/.md` 文件，确保 `reportContent` 非空
 2. Server 侧的漏洞解析兜底（`failed + reportContent`）确保即使状态未修正，漏洞数据仍入库
 3. 两层防御互补，不依赖单一路径
