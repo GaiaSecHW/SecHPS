@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { ArchiveExtractError, extractArchiveToMap } from '@/lib/archive-extract';
 import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
 import {
   pushOrUpdateOrgRepo,
@@ -144,13 +144,16 @@ export async function PUT(
 
       if (fileType === 'archive' && agentHarnessFile) {
         const fileBuffer = Buffer.from(await agentHarnessFile.arrayBuffer());
-        const zip = new AdmZip(fileBuffer);
-        const zipEntries = zip.getEntries();
-
-        for (const entry of zipEntries) {
-          if (!entry.isDirectory) {
-            filesMap.set(entry.entryName, entry.getData());
+        try {
+          const extractedFiles = await extractArchiveToMap(agentHarnessFile.name, fileBuffer);
+          for (const [filePath, content] of extractedFiles) {
+            filesMap.set(filePath, content);
           }
+        } catch (error) {
+          if (error instanceof ArchiveExtractError) {
+            return NextResponse.json({ error: error.message }, { status: 400 });
+          }
+          throw error;
         }
       } else if (fileType === 'folder' && filesJson && formData) {
         const filesInfo = JSON.parse(filesJson);

@@ -149,8 +149,8 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           files: Array.from(files),
         });
       } else {
-        if (!firstFile.name.match(/\.(zip|rar|7z|tar\.gz)$/)) {
-          toast.error('请上传压缩包（zip/rar/7z/tar.gz）或文件夹');
+        if (!firstFile.name.match(/\.(zip|7z|tar|tar\.gz|tgz)$/i)) {
+          toast.error('请上传 ZIP、TAR、TAR.GZ、TGZ、7Z 压缩包或文件夹；暂不支持 RAR');
           return;
         }
         setAgentHarnessFile({
@@ -247,7 +247,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".zip,.rar,.7z,.tar.gz"
+                    accept=".zip,.7z,.tar,.tar.gz,.tgz"
                     onChange={handleFileSelect}
                     className="hidden"
                     disabled={isSubmitting}

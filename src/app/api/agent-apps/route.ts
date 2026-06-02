@@ -3,8 +3,8 @@ import { authenticateRequestAsync, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
-import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { ArchiveExtractError, extractArchiveToMap } from '@/lib/archive-extract';
 import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
 import {
   sanitizeRepoName,
@@ -165,13 +165,16 @@ export async function POST(request: NextRequest) {
     if (fileType === 'archive' && agentHarnessFile && agentHarnessFile.size > 0) {
       repoName = sanitizeRepoName(agentHarnessFile.name);
       const fileBuffer = Buffer.from(await agentHarnessFile.arrayBuffer());
-      const zip = new AdmZip(fileBuffer);
-      const zipEntries = zip.getEntries();
-      
-      for (const entry of zipEntries) {
-        if (!entry.isDirectory) {
-          filesMap.set(entry.entryName, entry.getData());
+      try {
+        const extractedFiles = await extractArchiveToMap(agentHarnessFile.name, fileBuffer);
+        for (const [filePath, content] of extractedFiles) {
+          filesMap.set(filePath, content);
         }
+      } catch (error) {
+        if (error instanceof ArchiveExtractError) {
+          return NextResponse.json({ error: error.message }, { status: 400 });
+        }
+        throw error;
       }
     } else if (fileType === 'folder' && filesJson) {
       const filesInfo: { key: string; relativePath: string }[] = JSON.parse(filesJson);

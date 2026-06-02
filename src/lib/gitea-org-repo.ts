@@ -55,7 +55,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeout: numb
 }
 
 export function sanitizeRepoName(fileName: string): string {
-  const baseName = fileName.replace(/\.(zip|rar|7z|tar\.gz|tar)$/i, '');
+  const baseName = fileName.replace(/\.(tar\.gz|zip|rar|7z|tgz|tar)$/i, '');
   return baseName.replace(/[^a-zA-Z0-9_.-]/g, '-').toLowerCase();
 }
 
