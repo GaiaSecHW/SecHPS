@@ -6,8 +6,10 @@ const mockTaskInstanceFindFirst = vi.fn();
 const mockTaskInstanceUpdate = vi.fn();
 const mockTaskExecutionLogUpsert = vi.fn();
 const mockCodeswarmTaskFindUnique = vi.fn();
+const mockCodeswarmTaskFindUniqueInTx = vi.fn();
+const mockCodeswarmWorkerUpdateMany = vi.fn();
 const mockEventEmit = vi.fn();
-const mockOnTaskCompleted = vi.fn();
+const mockDecrementWorkerMemoryLoad = vi.fn();
 const mockTryDispatchNext = vi.fn();
 const mockPublishTaskEvent = vi.fn();
 
@@ -22,6 +24,12 @@ vi.mock('@/lib/prisma', () => ({
       mockTransaction(fn) ??
       fn({
         $executeRaw: mockExecuteRaw,
+        codeswarmTask: {
+          findUnique: mockCodeswarmTaskFindUniqueInTx,
+        },
+        codeswarmWorker: {
+          updateMany: mockCodeswarmWorkerUpdateMany,
+        },
         taskInstance: {
           findFirst: mockTaskInstanceFindFirst,
           update: mockTaskInstanceUpdate,
@@ -40,7 +48,7 @@ vi.mock('@/lib/event-bus', () => ({
 
 vi.mock('@/services/codeswarm-dispatcher', () => ({
   codeswarmDispatcher: {
-    onTaskCompleted: mockOnTaskCompleted,
+    decrementWorkerMemoryLoad: mockDecrementWorkerMemoryLoad,
     tryDispatchNext: mockTryDispatchNext,
     publishTaskEvent: mockPublishTaskEvent,
   },
@@ -73,7 +81,9 @@ describe('worker/result POST finalState', () => {
     mockTaskInstanceUpdate.mockResolvedValue(undefined);
     mockTaskExecutionLogUpsert.mockResolvedValue(undefined);
     mockCodeswarmTaskFindUnique.mockResolvedValue(null);
-    mockOnTaskCompleted.mockResolvedValue(undefined);
+    mockCodeswarmTaskFindUniqueInTx.mockResolvedValue({ id: 'db-1', workerId: 'worker-1' });
+    mockCodeswarmWorkerUpdateMany.mockResolvedValue({ count: 1 });
+    mockDecrementWorkerMemoryLoad.mockReturnValue(undefined);
     mockTryDispatchNext.mockResolvedValue(undefined);
     mockPublishTaskEvent.mockResolvedValue(undefined);
     mockTransaction.mockImplementation(() => undefined);
