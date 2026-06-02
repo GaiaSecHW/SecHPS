@@ -190,10 +190,10 @@ export class WorkerDaemon {
     });
 
     // Health check
-    this.server.get('/health', async () => ({
+this.server.get('/health', async () => ({
       nodeId: this.config.nodeId,
       available: this.semaphore.available,
-      maxConcurrent: this.config.maxConcurrent,
+      maxConcurrent: this.semaphore.max,
     }));
 
     // Root info
@@ -202,7 +202,7 @@ export class WorkerDaemon {
       nodeId: this.config.nodeId,
       status: 'running',
       available: this.semaphore.available,
-      maxConcurrent: this.config.maxConcurrent,
+      maxConcurrent: this.semaphore.max,
     }));
 
     // Cancel task endpoint
@@ -381,13 +381,14 @@ export class WorkerDaemon {
       const address = this.getHeartbeatAddress();
       const systemType = os.platform() === 'win32' ? 'windows' : os.platform() === 'darwin' ? 'darwin' : 'linux';
       const arch = os.arch() === 'x64' ? 'x64' : os.arch() === 'arm64' ? 'arm64' : os.arch();
+      const currentMax = this.semaphore.max;
       const resp = await fetch(`${this.config.orchestratorUrl}/api/codeswarm/worker/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nodeId: this.config.nodeId,
-          maxConcurrent: this.config.maxConcurrent,
-          currentTasks: this.config.maxConcurrent - this.semaphore.available,
+          maxConcurrent: currentMax,
+          currentTasks: currentMax - this.semaphore.available,
           address,
           systemType,
           arch,
@@ -396,6 +397,17 @@ export class WorkerDaemon {
       });
       
       if (resp.ok) {
+        try {
+          const data = await resp.json() as { maxConcurrentOverride?: number };
+          if (typeof data.maxConcurrentOverride === 'number' && data.maxConcurrentOverride !== currentMax) {
+            this.semaphore.resize(data.maxConcurrentOverride);
+            this.server.log.info(
+              { previousMax: currentMax, newMax: data.maxConcurrentOverride },
+              `maxConcurrent dynamically adjusted via server override`
+            );
+          }
+        } catch { /* non-critical: heartbeat succeeded, response body parsing optional */ }
+
         const activeTaskIds = [...this.activeTasks.keys()];
         this.server.log.info(
           { activeTaskIds, count: activeTaskIds.length },
