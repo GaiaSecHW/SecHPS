@@ -411,7 +411,11 @@ const taskPayload = JSON.stringify({
         worker = this.selectWorker();
       }
       if (!worker) {
-        logger.info(LOG_MODULES.CODESWARM, '无可用 Worker，任务保持排队', { details: { taskId: task.taskId } });
+        const now = Date.now();
+        if (now - this.lastNoWorkerLogTime > 300_000) {
+          this.lastNoWorkerLogTime = now;
+          logger.info(LOG_MODULES.CODESWARM, '无可用 Worker，任务保持排队', { details: { taskId: task.taskId } });
+        }
         return false;
       }
 
@@ -565,6 +569,7 @@ const taskPayload = JSON.stringify({
     }
   }
 
+  private lastNoWorkerLogTime = 0;
   private lastDbErrorTaskId: string | null = null;
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
   private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
