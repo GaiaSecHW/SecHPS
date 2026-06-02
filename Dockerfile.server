@@ -231,6 +231,8 @@ RUN apt-get update && \
         # tzdata: timezone database
         #   - Required for correct date/time handling across timezones
         tzdata \
+        #opencodoe扫描的工具
+        ripgrep \
     && rm -rf /var/lib/apt/lists/* \
     && localedef -i en_US -f UTF-8 en_US.UTF-8 \
     && localedef -i zh_CN -f UTF-8 zh_CN.UTF-8
