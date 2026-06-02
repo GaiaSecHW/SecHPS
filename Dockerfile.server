@@ -485,7 +485,8 @@ RUN mkdir -p /app/data/skills \
               /app/outputs \
               /app/tmp && \
     chown -R nextjs:nodejs /app/data /app/uploads /app/skill_management \
-                            /app/AgentHarness /app/backups /app/outputs /app/tmp
+                            /app/AgentHarness /app/backups /app/outputs /app/tmp && \
+    git config --global --add safe.directory "*"
 
 EXPOSE 3000
 
