@@ -174,7 +174,7 @@ export class ProcessManager {
     apiBaseUrl?: string,
     timeoutMs?: number,
   ): Promise<RunAgentResult> {
-    const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '900000');
+    const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '1500000');
     const CONTINUE_MAX_ATTEMPTS = parseInt(process.env.CONTINUE_MAX_ATTEMPTS || '5');
     const CANCEL_WAIT_MS = parseInt(process.env.CANCEL_WAIT_MS || '10000');
     const TASK_TIMEOUT_SEC = parseInt(process.env.TASK_TIMEOUT_SEC || '604800');
