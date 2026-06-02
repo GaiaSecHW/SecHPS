@@ -21,6 +21,10 @@ export const LOG_MODULES = {
 
 let logDirReady = false;
 let LOG_DIR = '';
+let taskLogDirReady = false;
+
+// taskId -> absolute log file path
+const taskLogFiles = new Map<string, string>();
 
 function dateStr(): string {
   const now = new Date();
@@ -40,10 +44,38 @@ async function ensureLogDir() {
   logDirReady = true;
 }
 
+async function ensureTaskLogDir() {
+  if (taskLogDirReady) return;
+  await ensureLogDir();
+  const taskDir = join(LOG_DIR, 'tasks');
+  if (!existsSync(taskDir)) {
+    await mkdir(taskDir, { recursive: true });
+  }
+  taskLogDirReady = true;
+}
+
+export async function setTaskLogFile(taskId: string): Promise<void> {
+  await ensureTaskLogDir();
+  const filePath = join(LOG_DIR, 'tasks', `worker-task-${taskId}.log`);
+  taskLogFiles.set(taskId, filePath);
+}
+
+export function clearTaskLogFile(taskId: string): void {
+  taskLogFiles.delete(taskId);
+}
+
 async function writeToFile(message: string) {
   try {
     await ensureLogDir();
     await appendFile(join(LOG_DIR, `worker-${dateStr()}.log`), `${message}\n`);
+  } catch {}
+}
+
+async function writeToTaskFile(taskId: string, message: string) {
+  const filePath = taskLogFiles.get(taskId);
+  if (!filePath) return;
+  try {
+    await appendFile(filePath, `${message}\n`);
   } catch {}
 }
 
@@ -54,7 +86,7 @@ function formatDetails(details?: any): string {
   return ` ${JSON.stringify(details)}`;
 }
 
-function log(level: LogLevel, module: string, message: string, details?: any) {
+function log(level: LogLevel, module: string, message: string, details?: any, taskId?: string) {
   const timestamp = formatTimestamp();
   const logMessage = `[${timestamp}] [${level.toUpperCase()}] [${module}] ${message}${formatDetails(details)}`;
 
@@ -71,6 +103,7 @@ function log(level: LogLevel, module: string, message: string, details?: any) {
 
   if (level !== 'debug' || process.env.NODE_ENV === 'development') {
     writeToFile(logMessage);
+    if (taskId) writeToTaskFile(taskId, logMessage);
   }
 }
 
@@ -79,6 +112,9 @@ export const logger = {
   warn: (module: string, message: string, details?: any) => log('warn', module, message, details),
   error: (module: string, message: string, details?: any) => log('error', module, message, details),
   debug: (module: string, message: string, details?: any) => log('debug', module, message, details),
+  taskInfo: (taskId: string, module: string, message: string, details?: any) => log('info', module, message, details, taskId),
+  taskWarn: (taskId: string, module: string, message: string, details?: any) => log('warn', module, message, details, taskId),
+  taskError: (taskId: string, module: string, message: string, details?: any) => log('error', module, message, details, taskId),
 };
 
 // ========== Log Archive (每周一 03:00 CST 归档上周日志) ==========
@@ -148,6 +184,25 @@ async function archiveLastWeekLogs() {
       const filePath = join(archiveDir, file);
       const fileStat = await stat(filePath);
       if (now - fileStat.mtimeMs > archiveMs) {
+        await unlink(filePath);
+      }
+    }
+
+    // 删除超过保留天数的任务日志
+    await cleanupTaskLogs(now, archiveMs);
+  } catch {}
+}
+
+async function cleanupTaskLogs(now: number, maxAgeMs: number) {
+  try {
+    const taskDir = join(LOG_DIR, 'tasks');
+    if (!existsSync(taskDir)) return;
+    const files = await readdir(taskDir);
+    for (const file of files) {
+      if (!file.startsWith('worker-task-')) continue;
+      const filePath = join(taskDir, file);
+      const fileStat = await stat(filePath);
+      if (now - fileStat.mtimeMs > maxAgeMs) {
         await unlink(filePath);
       }
     }

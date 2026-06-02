@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { logger, LOG_MODULES, startLogArchive } from './logger.js';
+import { logger, LOG_MODULES, startLogArchive, setTaskLogFile, clearTaskLogFile } from './logger.js';
 import {
   TaskPayloadSchema,
   type TaskPayload,
@@ -436,22 +436,23 @@ this.server.get('/health', async () => ({
     let buildResult = null;
     let codedmapPromise: Promise<void> | null = null;
 
+    await setTaskLogFile(taskId);
     try {
       const taskStartTime = Date.now();
-      logger.info(LOG_MODULES.DAEMON, `========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
-      logger.info(LOG_MODULES.DAEMON, `[${this.config.nodeId}] taskId: ${taskId}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.engine: ${payloadEngine}`);
-      logger.info(LOG_MODULES.AGENT, `payload.agent: ${agent}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.model: ${model}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.apiKey present: ${!!apiKey}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.apiBaseUrl: ${apiBaseUrl || 'none'}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
-      logger.info(LOG_MODULES.DAEMON, `payload.workspacePath: ${payload.workspacePath}`);
-      logger.info(LOG_MODULES.DAEMON, `payload.projectPath: ${payload.projectPath}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[${this.config.nodeId}] taskId: ${taskId}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.engine: ${payloadEngine}`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `payload.agent: ${agent}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.model: ${model}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.apiKey present: ${!!apiKey}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.apiBaseUrl: ${apiBaseUrl || 'none'}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.workspacePath: ${payload.workspacePath}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.projectPath: ${payload.projectPath}`);
 
       const onEvent = (event: AgentEvent) => {
-        logger.info(LOG_MODULES.AGENT, `Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
+        logger.taskInfo(taskId, LOG_MODULES.AGENT, `Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
         this.postEvent(payload, [event]).catch(err => {
           this.server.log.warn({ taskId, event: event.type, error: err }, 'Failed to post event');
         });
@@ -465,7 +466,7 @@ this.server.get('/health', async () => ({
         timestamp: new Date().toISOString(),
       });
 
-      logger.info(LOG_MODULES.DAEMON, 'Step 1: Building environment...');
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, 'Step 1: Building environment...');
       buildResult = await this.envFactory.build(payload, (msg) => {
         onEvent({
           type: 'log_chunk',
@@ -484,15 +485,15 @@ this.server.get('/health', async () => ({
         timestamp: new Date().toISOString(),
       });
 
-      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: workspacePath=${workspacePath}`);
-      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: resolvedAgent=${resolvedAgent}`);
-      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
-      logger.info(LOG_MODULES.DAEMON, `Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: workspacePath=${workspacePath}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: resolvedAgent=${resolvedAgent}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
       this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
 
       // ========== PHASE 1.5: Codedmap 知识图谱预处理（与 Agent 并行） ==========
       if (payload.targetProduct) {
-        logger.info(LOG_MODULES.DAEMON, `Step 1.5: Codedmap preprocessing (parallel) for targetProduct=${payload.targetProduct}`);
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1.5: Codedmap preprocessing (parallel) for targetProduct=${payload.targetProduct}`);
         onEvent({
           type: 'phase_start',
           phase: 'codedmap',
@@ -505,10 +506,10 @@ this.server.get('/health', async () => ({
             ...event,
           });
         }).then(() => {
-          logger.info(LOG_MODULES.DAEMON, `Codedmap preprocessing completed for ${payload.targetProduct}`);
+          logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Codedmap preprocessing completed for ${payload.targetProduct}`);
         }).catch((codedmapErr: unknown) => {
           const errMsg = codedmapErr instanceof Error ? codedmapErr.message : String(codedmapErr);
-          logger.error(LOG_MODULES.DAEMON, `Codedmap preprocessing failed: ${errMsg}`);
+          logger.taskError(taskId, LOG_MODULES.DAEMON, `Codedmap preprocessing failed: ${errMsg}`);
           onEvent({
             type: 'phase_complete',
             phase: 'codedmap',
@@ -526,10 +527,10 @@ this.server.get('/health', async () => ({
       // Use instruction directly - environment.ts already handled the short instruction case
       const instruction = resolvedInstruction || payload.instruction || '执行任务';
 
-      logger.info(LOG_MODULES.DAEMON, 'Step 2: Preparing agent config...');
-      logger.info(LOG_MODULES.DAEMON, `engine: ${engine}`);
-      logger.info(LOG_MODULES.AGENT, `agentName: ${agentName}`);
-      logger.info(LOG_MODULES.DAEMON, `final instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, 'Step 2: Preparing agent config...');
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `engine: ${engine}`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `agentName: ${agentName}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `final instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
       this.server.log.info({ taskId, agentName, engine, instructionLength: instruction?.length }, 'Using agent');
 
       // ========== PHASE 2: 执行任务 ==========
@@ -545,13 +546,13 @@ this.server.get('/health', async () => ({
         timestamp: new Date().toISOString(),
         level: 'worker',
       });
-      logger.info(LOG_MODULES.AGENT, `Step 3: Starting agent via ${engine}...`);
-      logger.info(LOG_MODULES.AGENT, `Calling processMgr.runAgent with:`);
-      logger.info(LOG_MODULES.AGENT, `  - workspacePath: ${workspacePath}`);
-      logger.info(LOG_MODULES.AGENT, `  - engine: ${engine}`);
-      logger.info(LOG_MODULES.AGENT, `  - agentName: ${agentName}`);
-      logger.info(LOG_MODULES.AGENT, `  - model: ${model}`);
-      logger.info(LOG_MODULES.AGENT, `  - instruction: "${instruction}"`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `Step 3: Starting agent via ${engine}...`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `Calling processMgr.runAgent with:`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `  - workspacePath: ${workspacePath}`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `  - engine: ${engine}`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `  - agentName: ${agentName}`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `  - model: ${model}`);
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, `  - instruction: "${instruction}"`);
       this.server.log.info({ taskId, engine, agentName }, 'Starting agent');
 
       const result = await this.processMgr.runAgent(
@@ -567,14 +568,14 @@ this.server.get('/health', async () => ({
         apiBaseUrl,
         taskTimeoutMs
       );
-      logger.info(LOG_MODULES.AGENT, 'Step 3 DONE: runAgent returned');
+      logger.taskInfo(taskId, LOG_MODULES.AGENT, 'Step 3 DONE: runAgent returned');
 
-      logger.info(LOG_MODULES.DAEMON, 'Step 4: Execution completed');
-      logger.info(LOG_MODULES.DAEMON, `exitCode: ${result.exitCode}`);
-      logger.info(LOG_MODULES.DAEMON, `stdout length: ${result.stdout.length}`);
-      logger.info(LOG_MODULES.DAEMON, `stderr length: ${result.stderr.length}`);
-      logger.info(LOG_MODULES.DAEMON, `stdout preview: "${result.stdout.substring(0, 200)}..."`);
-      logger.info(LOG_MODULES.DAEMON, `stderr preview: "${result.stderr.substring(0, 200)}..."`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, 'Step 4: Execution completed');
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `exitCode: ${result.exitCode}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `stdout length: ${result.stdout.length}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `stderr length: ${result.stderr.length}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `stdout preview: "${result.stdout.substring(0, 200)}..."`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `stderr preview: "${result.stderr.substring(0, 200)}..."`);
       this.server.log.info({ taskId, exitCode: result.exitCode, stdoutLen: result.stdout.length }, 'Agent execution completed');
 
       let isCancelled = this.cancelledTasks.has(taskId);
@@ -705,6 +706,7 @@ this.server.get('/health', async () => ({
         this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed (non-blocking)');
       });
     } finally {
+      clearTaskLogFile(taskId);
       this.cancelledTasks.delete(taskId);
       // Codedmap is fully async — do NOT await it here.
       // Errors are handled inside the promise chain (lines 232-243).

@@ -208,7 +208,7 @@ export class ProcessManager {
     const handleInactivityTimeout = () => {
       if (!continuationEnabled || state.inactivityTimeoutReject === null) return;
       const timeoutSecs = INACTIVITY_TIMEOUT_MS / 1000;
-      logger.info(LOG_MODULES.PROCESS, `Inactivity timeout detected (no events for ${timeoutSecs}s)`);
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout detected (no events for ${timeoutSecs}s)`);
       state.inactivityTimeoutTriggered = true;
       state.inactivityTimeoutReject(new Error(`Inactivity timeout: no events for ${timeoutSecs}s`));
     };
@@ -220,7 +220,7 @@ export class ProcessManager {
       registerEventHandlers(c, state, ctx, {
         INACTIVITY_TIMEOUT_MS,
         handleInactivityTimeout,
-      }, onEvent);
+      }, onEvent, taskId);
       this.processes.set(taskId, { client: c, workspace, sessionId: sid, createdAt: Date.now() });
       if (onEvent) {
         onEvent({ type: 'session_created', message: sid, timestamp: new Date().toISOString() });
@@ -228,21 +228,21 @@ export class ProcessManager {
       return c;
     };
 
-    logger.info(LOG_MODULES.PROCESS, `========== RUN AGENT START ==========`);
-    logger.info(LOG_MODULES.PROCESS, `taskId: ${taskId}`);
-    logger.info(LOG_MODULES.PROCESS, `workspace: ${workspace}`);
-    logger.info(LOG_MODULES.PROCESS, `engine: ${engine}`);
-    logger.info(LOG_MODULES.PROCESS, `agentName: ${agentName}`);
-    logger.info(LOG_MODULES.PROCESS, `model: ${model}`);
-    logger.info(LOG_MODULES.PROCESS, `apiKey present: ${!!apiKey}`);
-    logger.info(LOG_MODULES.PROCESS, `instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
-    logger.info(LOG_MODULES.PROCESS, `env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
-    logger.info(LOG_MODULES.PROCESS, `INACTIVITY_TIMEOUT_MS: ${INACTIVITY_TIMEOUT_MS}`);
-    logger.info(LOG_MODULES.PROCESS, `CONTINUE_MAX_ATTEMPTS: ${CONTINUE_MAX_ATTEMPTS}`);
-    logger.info(LOG_MODULES.PROCESS, `continuationEnabled: ${continuationEnabled}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== RUN AGENT START ==========`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `taskId: ${taskId}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `workspace: ${workspace}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `engine: ${engine}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `agentName: ${agentName}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `model: ${model}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `apiKey present: ${!!apiKey}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `INACTIVITY_TIMEOUT_MS: ${INACTIVITY_TIMEOUT_MS}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `CONTINUE_MAX_ATTEMPTS: ${CONTINUE_MAX_ATTEMPTS}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `continuationEnabled: ${continuationEnabled}`);
 
     try {
-      logger.info(LOG_MODULES.PROCESS, 'Step A: Merging environment...');
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step A: Merging environment...');
       const mergedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
 
       if (engine === 'claudecode') {
@@ -265,7 +265,7 @@ export class ProcessManager {
         mergedEnv.CLAUDE_API_KEY = mergedEnv.ANTHROPIC_API_KEY;
       }
 
-      logger.info(LOG_MODULES.PROCESS, 'Step B: Creating and starting client...');
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step B: Creating and starting client...');
       clientConfig = {
         cwd: workspace,
         env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
@@ -280,13 +280,13 @@ export class ProcessManager {
       while (ctx.continueAttempt <= CONTINUE_MAX_ATTEMPTS) {
         const elapsed = Date.now() - taskStartTime;
         if (elapsed >= effectiveTimeoutMs) {
-          logger.info(LOG_MODULES.PROCESS, `Task overall timeout (${effectiveTimeoutMs/1000}s), terminating`);
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Task overall timeout (${effectiveTimeoutMs/1000}s), terminating`);
           break;
         }
         const remainingTimeoutMs = effectiveTimeoutMs - elapsed;
 
         if (ctx.lastStrategy === 'destroy_new_session' && ctx.continueAttempt > 0) {
-          logger.info(LOG_MODULES.PROCESS, 'Rebuilding client (destroy_new_session strategy)');
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Rebuilding client (destroy_new_session strategy)');
           client = await createAndStartClient();
         }
 
@@ -294,7 +294,7 @@ export class ProcessManager {
           ? ctx.originalInstruction
           : buildContinuationPrompt(ctx);
 
-        logger.info(LOG_MODULES.PROCESS, `Sending prompt (attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS})`);
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Sending prompt (attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS})`);
 
         if (continuationEnabled && INACTIVITY_TIMEOUT_MS > 0) {
           if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
@@ -321,7 +321,7 @@ export class ProcessManager {
           if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
           state.inactivityTimeoutReject = null;
 
-          logger.info(LOG_MODULES.PROCESS, `Prompt completed with stopReason=${stopReason}`);
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Prompt completed with stopReason=${stopReason}`);
 
           if (state.currentSkill && onEvent) {
             ctx.completedSkills.push(state.currentSkill);
@@ -330,14 +330,14 @@ export class ProcessManager {
           }
 
           if (stopReason === 'end_turn') {
-            logger.info(LOG_MODULES.PROCESS, 'end_turn - destroying client');
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'end_turn - destroying client');
             await client!.destroy();
-            logger.info(LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
             return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
           }
 
           if (stopReason === 'cancelled') {
-            logger.info(LOG_MODULES.PROCESS, 'Cancel returned, same session continuation');
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel returned, same session continuation');
             ctx.lastStrategy = 'cancel_same_session';
             ctx.continueAttempt = 0;
             ctx.eventsSinceContinuation = 0;
@@ -352,14 +352,14 @@ export class ProcessManager {
             continue;
           }
 
-          logger.info(LOG_MODULES.PROCESS, `Waiting for exitCode (stopReason=${stopReason})...`);
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Waiting for exitCode (stopReason=${stopReason})...`);
           const exitCode = await Promise.race([
             client!.exitCode,
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for exit')), 30000)),
           ]);
-          logger.info(LOG_MODULES.PROCESS, `exitCode = ${exitCode}`);
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `exitCode = ${exitCode}`);
           await client!.destroy();
-          logger.info(LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
           return { exitCode: exitCode ?? 1, stdout: state.stdout, stderr: state.stderr };
 
         } catch (error) {
@@ -371,7 +371,7 @@ export class ProcessManager {
 
           if (!isInactivityTimeout) {
             const classified = classifyAcpError(errorMsg);
-            logger.info(LOG_MODULES.PROCESS, `Error: ${errorMsg} (category=${classified.category}, isCritical=${classified.isCritical})`);
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Error: ${errorMsg} (category=${classified.category}, isCritical=${classified.isCritical})`);
 
             if (!state.inactivityTimeoutTriggered) state.stderr += errorMsg;
 
@@ -380,7 +380,7 @@ export class ProcessManager {
             }
 
             if (hasSubstantialOutput(state.stdout) && !classified.isCritical) {
-              logger.info(LOG_MODULES.PROCESS, 'Non-critical error after substantial output');
+              logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Non-critical error after substantial output');
               if (state.currentSkill && onEvent) {
                 ctx.completedSkills.push(state.currentSkill);
                 onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
@@ -395,10 +395,10 @@ export class ProcessManager {
           }
 
           ctx.continueAttempt++;
-          logger.info(LOG_MODULES.PROCESS, `Inactivity timeout, attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS}`);
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout, attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS}`);
 
           if (ctx.continueAttempt > CONTINUE_MAX_ATTEMPTS) {
-            logger.info(LOG_MODULES.PROCESS, `Exceeded max continuation attempts (${CONTINUE_MAX_ATTEMPTS})`);
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Exceeded max continuation attempts (${CONTINUE_MAX_ATTEMPTS})`);
             if (onEvent) {
               onEvent({
                 type: 'error',
@@ -420,13 +420,13 @@ export class ProcessManager {
           }
 
           if (client && client.isAlive) {
-            logger.info(LOG_MODULES.PROCESS, 'Trying session/cancel (方案 A)');
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Trying session/cancel (方案 A)');
             await client.cancel();
 
             const cancelStopReason = await client.waitForCurrentPrompt(CANCEL_WAIT_MS);
 
             if (cancelStopReason === 'cancelled') {
-              logger.info(LOG_MODULES.PROCESS, 'Cancel succeeded, same session continuation');
+              logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel succeeded, same session continuation');
               ctx.lastStrategy = 'cancel_same_session';
               ctx.continueAttempt = 0;
               ctx.eventsSinceContinuation = 0;
@@ -442,7 +442,7 @@ export class ProcessManager {
             }
 
             if (cancelStopReason === 'end_turn') {
-              logger.info(LOG_MODULES.PROCESS, 'Cancel returned end_turn - task actually completed');
+              logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel returned end_turn - task actually completed');
               if (state.currentSkill && onEvent) {
                 ctx.completedSkills.push(state.currentSkill);
                 onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
@@ -451,10 +451,10 @@ export class ProcessManager {
               return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
             }
 
-            logger.info(LOG_MODULES.PROCESS, `Cancel timeout or other response (${CANCEL_WAIT_MS}ms), fallback to 方案 B`);
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Cancel timeout or other response (${CANCEL_WAIT_MS}ms), fallback to 方案 B`);
           }
 
-          logger.info(LOG_MODULES.PROCESS, 'Executing 方案 B: destroy + new session');
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Executing 方案 B: destroy + new session');
           ctx.lastStrategy = 'destroy_new_session';
 
           if (onEvent) {
@@ -474,16 +474,16 @@ export class ProcessManager {
         }
       }
 
-      logger.warn(LOG_MODULES.PROCESS, '========== RUN AGENT FAILED ==========');
+      logger.taskWarn(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT FAILED ==========');
       if (client) await client.destroy();
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       const classified = classifyAcpError(errorMsg);
-      logger.error(LOG_MODULES.PROCESS, '========== RUN AGENT ERROR ==========');
-      logger.error(LOG_MODULES.PROCESS, `Error: ${errorMsg}`);
-      logger.error(LOG_MODULES.PROCESS, `Error category: ${classified.category}, isCritical: ${classified.isCritical}`);
+      logger.taskError(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT ERROR ==========');
+      logger.taskError(taskId, LOG_MODULES.PROCESS, `Error: ${errorMsg}`);
+      logger.taskError(taskId, LOG_MODULES.PROCESS, `Error category: ${classified.category}, isCritical: ${classified.isCritical}`);
 
       if (!state.inactivityTimeoutTriggered) state.stderr += errorMsg;
 
@@ -498,11 +498,11 @@ export class ProcessManager {
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
 
     } finally {
-      logger.info(LOG_MODULES.PROCESS, 'Finally: destroying client and cleaning up');
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Finally: destroying client and cleaning up');
       if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); }
       if (client) await client.destroy();
       this.processes.delete(taskId);
-      logger.info(LOG_MODULES.PROCESS, 'Cleanup done');
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cleanup done');
     }
   }
 
@@ -755,10 +755,11 @@ function registerEventHandlers(
     handleInactivityTimeout: () => void;
   },
   onEvent?: AgentEventCallback,
+  taskId?: string,
 ): void {
   client.on({
     text: (content: string) => {
-      logger.info(LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`);
+      taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`) : logger.info(LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`);
       if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
         clearTimeout(state.inactivityTimer);
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
@@ -787,8 +788,8 @@ function registerEventHandlers(
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
       }
       const actualToolName = (title || tool).toLowerCase();
-      logger.info(LOG_MODULES.PROCESS, `EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
-      logger.info(LOG_MODULES.PROCESS, `EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
+      taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
+      taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
       
       ctx.eventHistory.push({
         type: 'tool_call',
@@ -806,7 +807,7 @@ function registerEventHandlers(
         
         if (skillName === 'unknown') {
           const textBuffer = client.getTextBuffer();
-          logger.info(LOG_MODULES.PROCESS, `Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`);
+          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`) : logger.info(LOG_MODULES.PROCESS, `Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`);
           skillName = inferSkillNameFromContext(textBuffer) || 'unknown';
         }
         
@@ -833,7 +834,7 @@ function registerEventHandlers(
         const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
         if (skillMatch && skillMatch[1]) {
           const skillName = skillMatch[1];
-          logger.info(LOG_MODULES.PROCESS, `检测到 Agent 执行 Skill: ${skillName}`);
+          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `检测到 Agent 执行 Skill: ${skillName}`) : logger.info(LOG_MODULES.PROCESS, `检测到 Agent 执行 Skill: ${skillName}`);
           
           if (state.currentSkill && state.currentSkill !== skillName) {
             ctx.completedSkills.push(state.currentSkill);
@@ -869,7 +870,7 @@ function registerEventHandlers(
         clearTimeout(state.inactivityTimer);
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
       }
-      logger.info(LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
+      taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
       
       ctx.eventHistory.push({
         type: 'tool_call_update',
@@ -881,7 +882,7 @@ function registerEventHandlers(
       if (state.currentSkill === 'unknown' && output) {
         const launchMatch = output.match(/(?:Launching|Invoking|Running|Executing)\s+skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
         if (launchMatch && launchMatch[1]) {
-          logger.info(LOG_MODULES.PROCESS, `Skill name resolved from output: ${launchMatch[1]}`);
+          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Skill name resolved from output: ${launchMatch[1]}`) : logger.info(LOG_MODULES.PROCESS, `Skill name resolved from output: ${launchMatch[1]}`);
           state.currentSkill = launchMatch[1];
           if (onEvent) {
             onEvent({
@@ -909,7 +910,7 @@ function registerEventHandlers(
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
       }
       const classified = classifyAcpError(message);
-      logger.warn(LOG_MODULES.PROCESS, `EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
+      taskId ? logger.taskWarn(taskId, LOG_MODULES.PROCESS, `EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`) : logger.warn(LOG_MODULES.PROCESS, `EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
       state.stderr += message;
       if (onEvent) {
         onEvent({
@@ -929,7 +930,7 @@ function registerEventHandlers(
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
       }
       state.stderr += line + '\n';
-      logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
+      taskId ? logger.taskWarn(taskId, LOG_MODULES.PROCESS, `[stderr] ${line}`) : logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
       if (!onEvent) return;
 
       if (/process exited with|terminated by signal|Failed to write to process stdin/i.test(line)) {
