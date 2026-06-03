@@ -278,7 +278,7 @@ const apiDocs = [
           { name: 'vulnerabilities[].POC', type: 'string', required: false, desc: 'POC 验证代码' },
           { name: 'vulnerabilities[].vulnerable', type: 'boolean', required: false, desc: '是否确认存在漏洞（默认 true）' },
           { name: 'vulnerabilities[].fixSuggestion', type: 'string', required: false, desc: '修复建议' },
-          { name: 'vulnerabilities[].rawReport', type: 'string', required: false, desc: '原始扫描报告文件内容' },
+          { name: 'vulnerabilities[].rawReport', type: 'object', required: false, desc: '{ hasRawReport: boolean, files: [{ name: string }] } 原始报告文件列表' },
         ],
         response: [
           { name: 'created', type: 'array', desc: '创建成功的漏洞列表 [{id, title, type, severity}]' },

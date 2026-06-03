@@ -51,6 +51,12 @@ export async function GET(
 
     const result = {
       ...vulnerability,
+      rawReport: vulnerability.rawReport
+        ? (() => {
+            const urls = vulnerability.rawReport.split(';').map(p => p.trim()).filter(p => p.startsWith('http://') || p.startsWith('https://'));
+            return { hasRawReport: urls.length > 0, files: urls.map(u => ({ name: u.split('/').pop()?.split('?')[0] || 'raw-report' })) };
+          })()
+        : { hasRawReport: false, files: [] },
       Project: vulnerability.Project ? { id: vulnerability.Project.id, name: vulnerability.Project.name } : null,
       TaskInstance: vulnerability.TaskInstance ? { id: vulnerability.TaskInstance.id, name: vulnerability.TaskInstance.name } : null,
     };

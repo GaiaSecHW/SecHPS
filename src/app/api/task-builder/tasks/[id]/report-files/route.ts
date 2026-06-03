@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse, AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/types/permissions';
 
@@ -7,13 +7,14 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.VULNERABILITY_READ });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.VULNERABILITY_READ });
   if (!auth.success) return authErrorResponse(auth);
 
   const { id } = await params;
+  const authSuccess = auth as AuthSuccessResult;
 
   const vuln = await prisma.vulnerability.findFirst({
-    where: { taskId: id },
+    where: { taskId: id, ...authSuccess.tenantFilter },
     select: { filePath: true },
   });
 
@@ -21,19 +22,18 @@ export async function GET(
     return NextResponse.json({ error: '无报告文件', hasReport: false }, { status: 200 });
   }
 
-  let files: { url: string; name: string }[] = [];
+  let files: { name: string }[] = [];
   try {
     const parsed = JSON.parse(vuln.filePath);
     if (Array.isArray(parsed)) {
       files = parsed.map((url: string) => ({
-        url,
         name: url.split('/').pop()?.split('?')[0] || 'report',
       }));
     } else if (typeof parsed === 'string') {
-      files = [{ url: parsed, name: parsed.split('/').pop()?.split('?')[0] || 'report' }];
+      files = [{ name: parsed.split('/').pop()?.split('?')[0] || 'report' }];
     }
   } catch {
-    files = [{ url: vuln.filePath, name: vuln.filePath.split('/').pop()?.split('?')[0] || 'report' }];
+    files = [{ name: vuln.filePath.split('/').pop()?.split('?')[0] || 'report' }];
   }
 
   return NextResponse.json({ hasReport: true, files });

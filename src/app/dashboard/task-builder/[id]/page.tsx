@@ -84,7 +84,7 @@ export default function TaskDetailPage() {
   const [codeswarmStatus, setCodeswarmStatus] = useState<CodeswarmStatus | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [vulnStats, setVulnStats] = useState<{ total: number; bySeverity: Record<string, number>; byStatus: Record<string, number> } | null>(null);
-  const [reportFiles, setReportFiles] = useState<{ hasReport: boolean; files: { url: string; name: string }[] } | null>(null);
+  const [reportFiles, setReportFiles] = useState<{ hasReport: boolean; files: { name: string }[] } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [vulnList, setVulnList] = useState<any[]>([]);
   const [vulnLoading, setVulnLoading] = useState<Record<string, boolean>>({});
@@ -314,8 +314,12 @@ export default function TaskDetailPage() {
     } catch {}
   }, [task?.status, taskId]);
 
-  const downloadFile = async (url: string, fileName: string) => {
-    const response = await fetch(url);
+  const downloadFile = async (fileIndex: number, fileName: string) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`/api/task-builder/tasks/${taskId}/download-report?fileIndex=${fileIndex}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('下载失败');
     const blob = await response.blob();
     const blobUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -332,8 +336,8 @@ export default function TaskDetailPage() {
     setDownloading(true);
     
     try {
-      for (const file of reportFiles.files) {
-        await downloadFile(file.url, file.name);
+      for (let i = 0; i < reportFiles.files.length; i++) {
+        await downloadFile(i, reportFiles.files[i].name);
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       toast.success('报告下载完成');

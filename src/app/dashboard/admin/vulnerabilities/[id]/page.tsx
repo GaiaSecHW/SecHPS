@@ -44,7 +44,7 @@ interface Vulnerability {
   POC: string | null;
   vulnerable: boolean | null;
   fixSuggestion: string | null;
-  rawReport: string | null;
+  rawReport: { hasRawReport: boolean; files: { name: string }[] } | null;
   filePath: string | null;
   status: string;
   taskId: string | null;
@@ -503,48 +503,40 @@ function VulnerabilityDetailContent() {
           </div>
 
           <div className="flex items-center gap-3">
-            {vulnerability.rawReport && (
+            {vulnerability.rawReport?.hasRawReport && (
               <button
                 onClick={async () => {
-                  const rawReport = vulnerability.rawReport!;
                   try {
-                    let content: string;
-                    let fileName: string;
-
-                    if (rawReport.startsWith('http://') || rawReport.startsWith('https://')) {
-                      // MinIO URL: fetch 获取内容
-                      toast.loading('正在下载报告...');
-                      const response = await fetch(rawReport);
+                    toast.loading('正在下载漏洞文件...');
+                    const token = localStorage.getItem('token');
+                    const files = vulnerability.rawReport!.files;
+                    for (let i = 0; i < files.length; i++) {
+                      const response = await fetch(`/api/vulnerabilities/${vulnId}/download-raw-report?index=${i}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
                       if (!response.ok) throw new Error('下载失败');
-                      content = await response.text();
-                      // 从 URL path 提取文件名（去掉 query 参数）
-                      const urlPath = rawReport.split('?')[0];
-                      fileName = urlPath.split('/').pop() || `vuln-${vulnerability.id}-raw-report`;
-                      toast.dismiss();
-                    } else {
-                      // 文本内容：直接下载
-                      content = rawReport;
-                      fileName = rawReport.split(/[/\\]/).pop() || `vuln-${vulnerability.id}`;
+                      const blob = await response.blob();
+                      const blobUrl = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = blobUrl;
+                      a.download = files[i].name;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(blobUrl);
+                      if (i < files.length - 1) await new Promise(r => setTimeout(r, 500));
                     }
-
-                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    toast.dismiss();
                     toast.success('文件已下载');
                   } catch (err) {
+                    toast.dismiss();
                     toast.error(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`);
                   }
                 }}
                 className="inline-flex items-center px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
               >
                 <Download size={16} className="mr-2" />
-                下载报告
+                下载漏洞文件 ({vulnerability.rawReport.files.length})
               </button>
             )}
             {getActionButtons()}
