@@ -46,6 +46,7 @@ interface LogsResponse {
 
 interface Task {
   taskId: string;
+  taskName?: string | null;
   state: string;
   instruction: string;
   createdAt: string;
@@ -150,6 +151,7 @@ export function WorkerLogsPage() {
   const filteredTasks = tasks.filter(task =>
     (statusFilter === 'all' || task.state === statusFilter) &&
     ((task.taskId?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+    (task.taskName?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
     (task.instruction?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
     (task.state?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false))
   );
@@ -292,7 +294,7 @@ export function WorkerLogsPage() {
           <button onClick={() => setSidebarCollapsed(false)} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded" title="展开侧栏"><PanelLeftOpen size={16} /></button>
         </div>
       ) : (
-        <div className="w-[240px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0">
+        <div className="w-[320px] border-r border-gray-700/50 flex flex-col bg-dark-surface min-h-0">
           <div className="flex-shrink-0 p-4 border-b border-gray-700/50">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -327,10 +329,10 @@ export function WorkerLogsPage() {
               return (
                 <button key={task.taskId} onClick={() => setSelectedTaskId(task.taskId)} className={`w-full p-3 rounded-lg border text-left transition-all ${isSelected ? 'border-primary-500 bg-primary-500/10' : 'border-gray-700/50 bg-gray-800/50 hover:bg-gray-700/30'}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`text-xs font-medium truncate ${isSelected ? 'text-primary-300' : 'text-gray-300'}`}>{task.taskId ? task.taskId.slice(0, 16) + '...' : 'N/A'}</span>
+                    <span className={`text-xs font-medium ${isSelected ? 'text-primary-300' : 'text-gray-300'}`}>{task.taskName || task.taskId.slice(0, 16) + '...'}</span>
                     <span className={`px-1.5 py-0.5 text-xs rounded ${config.bg} ${config.text}`}>{task.state}</span>
                   </div>
-                  <p className="text-xs text-gray-500 truncate">{task.instruction ? (task.instruction.length > 30 ? task.instruction.slice(0, 30) + '...' : task.instruction) : '无指令'}</p>
+                  <p className="text-xs text-gray-500 truncate">{task.instruction ? (task.instruction.length > 50 ? task.instruction.slice(0, 50) + '...' : task.instruction) : '无指令'}</p>
                   <div className="flex items-center gap-1 mt-1 text-xs text-gray-500"><Clock size={10} /><span>{new Date(task.createdAt).toLocaleDateString('zh-CN')}</span></div>
                 </button>
               );
