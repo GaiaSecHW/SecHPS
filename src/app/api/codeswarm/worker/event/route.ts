@@ -100,7 +100,9 @@ export async function POST(request: Request) {
           if (eventType === 'log_chunk' || eventType === 'agent_log_chunk') {
             message = logLevel === 'worker' ? '[Worker]' : '[Agent]';
             details = content;
-            level = eventData.stream === 'stderr' ? 'error' : 'info';
+            // ACP routes structured INFO/DEBUG logs through stderr; only real stderr (no structured prefix) is an error
+            const isAcpStructuredLog = /^\s*(INFO|DEBUG)\s+\d{4}-\d{2}-\d{2}T/i.test(content) || content.includes('service=');
+            level = eventData.stream === 'stderr' && !isAcpStructuredLog ? 'error' : 'info';
           } else if (eventType === 'agent_message_chunk' || eventType === 'task_started' || eventType === 'task_completed') {
             message = eventType === 'task_started' ? '任务开始' : eventType === 'task_completed' ? '任务完成' : 'Agent 输出';
             details = content;
