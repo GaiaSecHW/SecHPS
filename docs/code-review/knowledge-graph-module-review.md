@@ -4,6 +4,20 @@
 > 审查范围：知识图谱模块（API + 前端组件），不含 Python 分析引擎
 > 审查状态：待评审
 
+## 汇总
+
+| 严重级别 | 数量 | 关键问题 |
+|---------|------|---------|
+| **高** | 7 | cache 接口无认证、sync 无隔离、DB 连接泄漏、`buildPaths` 内存无限、全量数据加载、错误信息泄露、SQLite 并发风险 |
+| **中** | 11 | MinIO 客户端不一致、对象键注入、路径校验缺失、树组件性能等 |
+| **低** | 5 | userId 过度防御、window 检查冗余、缓存无过期等 |
+
+## 建议修复优先级
+
+1. **P0（立即修复）**: cache 接口添加认证、DB 连接泄漏修复（try-finally）、错误信息脱敏、`buildPaths` 添加上限
+2. **P1（本迭代）**: sync 接口权限控制、MinIO 对象键清洗、MinIO 客户端单例统一、buildTree/buildCallGraph 性能优化
+3. **P2（下迭代）**: vulnerability-tree 认证升级、缓存失效策略、VulnerabilityTreeSelector 索引优化、路径参数白名单校验
+
 ## 审查文件清单
 
 ### API 端点
@@ -363,16 +377,3 @@ await client.fGetObject(KG_BUCKET, `dbs/${product}/graph.db`, dbPath);  // produ
 
 ---
 
-## 汇总
-
-| 严重级别 | 数量 | 关键问题 |
-|---------|------|---------|
-| **高** | 7 | cache 接口无认证、sync 无隔离、DB 连接泄漏、`buildPaths` 内存无限、全量数据加载、错误信息泄露、SQLite 并发风险 |
-| **中** | 11 | MinIO 客户端不一致、对象键注入、路径校验缺失、树组件性能等 |
-| **低** | 5 | userId 过度防御、window 检查冗余、缓存无过期等 |
-
-## 建议修复优先级
-
-1. **P0（立即修复）**: cache 接口添加认证、DB 连接泄漏修复（try-finally）、错误信息脱敏、`buildPaths` 添加上限
-2. **P1（本迭代）**: sync 接口权限控制、MinIO 对象键清洗、MinIO 客户端单例统一、buildTree/buildCallGraph 性能优化
-3. **P2（下迭代）**: vulnerability-tree 认证升级、缓存失效策略、VulnerabilityTreeSelector 索引优化、路径参数白名单校验

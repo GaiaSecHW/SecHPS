@@ -4,6 +4,20 @@
 > 审查范围：智能体集群模块（Dispatcher 调度器 + 节点管理 + Session 提取 + 本地测试 + 文件浏览），不含数据回流审查已覆盖的 Worker 回调/Result 解析
 > 审查状态：待评审
 
+## 汇总
+
+| 严重级别 | 数量 | 关键问题 |
+|---------|------|---------|
+| **高** | 10 | 11 个管理接口无认证、browse-dirs 文件系统遍历、local-test RCE、Worker Token 泄露、Dispatcher 多实例不一致、并行分发过载、fire-and-forget 子进程、workspacePath 无白名单 |
+| **中** | 12 | SQLite 连接泄漏、JSON.parse 无保护、SSE 高频轮询、地址排序不一致、目录浏览器重复、错误信息泄露等 |
+| **低** | 7 | console.error、confirm()、onlineCount 未使用、isSkill 过宽等 |
+
+## 建议修复优先级
+
+1. **P0（立即修复）**: 所有管理接口添加认证、browse-dirs 添加路径白名单、local-test 添加认证+路径白名单、nodes 接口移除 token 字段、错误信息脱敏
+2. **P1（本迭代）**: Dispatcher 并行分发改为串行或原子选择、local-test TaskInstance 关联用户、SQLite try-finally、SSE 添加退避、session-extract/history 添加认证
+3. **P2（下迭代）**: 目录浏览器抽取共享组件、LocalTestPanel 拆分、地址排序统一、local-test 添加取消机制、nodes 分页支持
+
 ## 审查文件清单
 
 ### API 端点
@@ -401,17 +415,3 @@ try {
 **问题**: `productName` 默认为 `'default'`，`taskInstance.name` 默认为 `'local-test'`。如果任务不存在，漏洞入库到 `default` 产品下。
 
 ---
-
-## 汇总
-
-| 严重级别 | 数量 | 关键问题 |
-|---------|------|---------|
-| **高** | 10 | 11 个管理接口无认证、browse-dirs 文件系统遍历、local-test RCE、Worker Token 泄露、Dispatcher 多实例不一致、并行分发过载、fire-and-forget 子进程、workspacePath 无白名单 |
-| **中** | 12 | SQLite 连接泄漏、JSON.parse 无保护、SSE 高频轮询、地址排序不一致、目录浏览器重复、错误信息泄露等 |
-| **低** | 7 | console.error、confirm()、onlineCount 未使用、isSkill 过宽等 |
-
-## 建议修复优先级
-
-1. **P0（立即修复）**: 所有管理接口添加认证、browse-dirs 添加路径白名单、local-test 添加认证+路径白名单、nodes 接口移除 token 字段、错误信息脱敏
-2. **P1（本迭代）**: Dispatcher 并行分发改为串行或原子选择、local-test TaskInstance 关联用户、SQLite try-finally、SSE 添加退避、session-extract/history 添加认证
-3. **P2（下迭代）**: 目录浏览器抽取共享组件、LocalTestPanel 拆分、地址排序统一、local-test 添加取消机制、nodes 分页支持

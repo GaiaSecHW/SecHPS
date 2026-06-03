@@ -4,6 +4,20 @@
 > 审查范围：任务构建模块全链路（API 11个端点 + 前端 6个页面/组件）
 > 审查状态：待评审
 
+## 汇总
+
+| 严重级别 | 数量 | 关键问题 |
+|---------|------|---------|
+| **高** | 8 | result/available-resources/scripts 认证缺失、findUnique OR 语法错误、pollViaRedis timeout 泄漏、download-report 错误泄露、pollViaDB 7天轮询、详情页全量日志 |
+| **中** | 14 | nfs-status 无权限、scripts 路径遍历、stop fire-and-forget、批量上传重复、文件大小无后端校验、SSE 与轮询冲突、detail page 职责过多等 |
+| **低** | 4 | console.error 未替换、ParameterForm URL 校验、LogsGroupedDisplay 性能、console.error |
+
+## 建议修复优先级
+
+1. **P0（立即修复）**: result 和 available-resources 认证升级、findUnique 改 findFirst、pollViaRedis timeout 清理、download-report 错误脱敏、scripts 路径遍历修复
+2. **P1（本迭代）**: scripts 权限隔离、POST /tasks 文件大小限制、name 格式校验、detail page SSE 与轮询互斥、detail page 全量日志限制、ENGINE_PROVIDER_MAP 去重、execute 死代码清理
+3. **P2（下迭代）**: detail page 拆分 Hook/组件、markdown 渲染抽取、pollViaDB 超时缩短、批量上传优化、available-resources 分页
+
 ## 审查文件清单
 
 ### API 端点
@@ -490,17 +504,3 @@ if (!filePath.startsWith(path.resolve(scriptsDir) + path.sep)) {
 **建议**: 使用增量更新策略：只处理新增日志，避免每次全量遍历。
 
 ---
-
-## 汇总
-
-| 严重级别 | 数量 | 关键问题 |
-|---------|------|---------|
-| **高** | 8 | result/available-resources/scripts 认证缺失、findUnique OR 语法错误、pollViaRedis timeout 泄漏、download-report 错误泄露、pollViaDB 7天轮询、详情页全量日志 |
-| **中** | 14 | nfs-status 无权限、scripts 路径遍历、stop fire-and-forget、批量上传重复、文件大小无后端校验、SSE 与轮询冲突、detail page 职责过多等 |
-| **低** | 4 | console.error 未替换、ParameterForm URL 校验、LogsGroupedDisplay 性能、console.error |
-
-## 建议修复优先级
-
-1. **P0（立即修复）**: result 和 available-resources 认证升级、findUnique 改 findFirst、pollViaRedis timeout 清理、download-report 错误脱敏、scripts 路径遍历修复
-2. **P1（本迭代）**: scripts 权限隔离、POST /tasks 文件大小限制、name 格式校验、detail page SSE 与轮询互斥、detail page 全量日志限制、ENGINE_PROVIDER_MAP 去重、execute 死代码清理
-3. **P2（下迭代）**: detail page 拆分 Hook/组件、markdown 渲染抽取、pollViaDB 超时缩短、批量上传优化、available-resources 分页

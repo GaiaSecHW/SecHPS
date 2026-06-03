@@ -4,6 +4,20 @@
 > 审查范围：CodeSwarm 数据回流模块（Worker 回调 + 任务分发 + 漏洞解析）
 > 审查状态：待评审
 
+## 汇总
+
+| 严重级别 | 数量 | 关键问题 |
+|---------|------|---------|
+| **高** | 6 | event/result 无认证、fire-and-forget 解析不可控、多实例 Set 失效、事件串行 DB、任务管理无认证、日志事务不一致 |
+| **中** | 10 | dispatch 明文 API Key、LIKE 误杀、事件数组无限制、无分页、心跳清理频率等 |
+| **低** | 5 | Math.random ID、动态导入合理、status 值域等 |
+
+## 建议修复优先级
+
+1. **P0（立即修复）**: event/result 接口添加 Worker Token 认证、漏洞解析添加取消机制、fire-and-forget 改为可追踪的异步任务
+2. **P1（本迭代）**: tasks 管理接口添加 JWT 认证、批量删除释放 Worker 负载、event 接口优化串行 DB 为并行、LIKE 精确匹配修复
+3. **P2（下迭代）**: 分页支持、心跳清理节流、IP 优先级可配置、API Key 传输安全加固、vulnParseInProgress 改用 Redis
+
 ## 审查文件清单
 
 ### API 端点
@@ -297,17 +311,3 @@ if (events?.length) {
 **问题**: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` 在同一毫秒内多个请求时，`Date.now()` 相同，`Math.random()` 的 6 位字符空间约 2B 种可能，冲突概率存在。
 
 ---
-
-## 汇总
-
-| 严重级别 | 数量 | 关键问题 |
-|---------|------|---------|
-| **高** | 6 | event/result 无认证、fire-and-forget 解析不可控、多实例 Set 失效、事件串行 DB、任务管理无认证、日志事务不一致 |
-| **中** | 10 | dispatch 明文 API Key、LIKE 误杀、事件数组无限制、无分页、心跳清理频率等 |
-| **低** | 5 | Math.random ID、动态导入合理、status 值域等 |
-
-## 建议修复优先级
-
-1. **P0（立即修复）**: event/result 接口添加 Worker Token 认证、漏洞解析添加取消机制、fire-and-forget 改为可追踪的异步任务
-2. **P1（本迭代）**: tasks 管理接口添加 JWT 认证、批量删除释放 Worker 负载、event 接口优化串行 DB 为并行、LIKE 精确匹配修复
-3. **P2（下迭代）**: 分页支持、心跳清理节流、IP 优先级可配置、API Key 传输安全加固、vulnParseInProgress 改用 Redis

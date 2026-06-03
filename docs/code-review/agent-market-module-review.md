@@ -4,6 +4,20 @@
 > 审查范围：Agent 市场模块全链路（API + 前端页面）
 > 审查状态：待评审
 
+## 汇总
+
+| 严重级别 | 数量 | 关键问题 |
+|---------|------|---------|
+| **高** | 4 | branches 认证遗漏、PUT 缺少 isPublic 校验、pipeline 死代码+错误泄露、列表无分页 |
+| **中** | 12 | 认证函数不统一、Gitea 错误泄露、空文件创建、文件大小无限制、并行请求过多等 |
+| **低** | 5 | console.log 未替换、name 校验缺失、setTimeout 伪加载等 |
+
+## 建议修复优先级
+
+1. **P0（立即修复）**: branches 接口认证升级、PUT isPublic 权限校验、pipeline 错误信息泄露+死代码清理
+2. **P1（本迭代）**: 文件大小限制、AppDetailModal 校验补齐、列表分页、filesJson 解析保护、Gitea 错误脱敏
+3. **P2（下迭代）**: 认证函数统一、isAdmin Hook 抽取、Harness 校验共享、ZIP 解析缓存、branches 懒加载
+
 ## 审查文件清单
 
 ### API 端点
@@ -348,16 +362,3 @@ try {
 
 ---
 
-## 汇总
-
-| 严重级别 | 数量 | 关键问题 |
-|---------|------|---------|
-| **高** | 4 | branches 认证遗漏、PUT 缺少 isPublic 校验、pipeline 死代码+错误泄露、列表无分页 |
-| **中** | 12 | 认证函数不统一、Gitea 错误泄露、空文件创建、文件大小无限制、并行请求过多等 |
-| **低** | 5 | console.log 未替换、name 校验缺失、setTimeout 伪加载等 |
-
-## 建议修复优先级
-
-1. **P0（立即修复）**: branches 接口认证升级、PUT isPublic 权限校验、pipeline 错误信息泄露+死代码清理
-2. **P1（本迭代）**: 文件大小限制、AppDetailModal 校验补齐、列表分页、filesJson 解析保护、Gitea 错误脱敏
-3. **P2（下迭代）**: 认证函数统一、isAdmin Hook 抽取、Harness 校验共享、ZIP 解析缓存、branches 懒加载

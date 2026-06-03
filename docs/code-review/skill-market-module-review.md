@@ -4,6 +4,20 @@
 > 审查范围：Skill 市场模块全链路（API + 前端页面）
 > 审查状态：待评审
 
+## 汇总
+
+| 严重级别 | 数量 | 关键问题 |
+|---------|------|---------|
+| **高** | 4 | import 接口认证/租户缺失、ZIP 路径遍历、DELETE 错误信息泄露、相似度检测全量加载 |
+| **中** | 11 | batch TOCTOU、productTagIds 版本不一致、文件大小未限制、name 格式未校验、串行 LLM 分析、并发版本冲突等 |
+| **低** | 6 | parseSkillMarkdown 重复、console.error 未替换、VULNERABILITY_CATEGORY_ID 空字符串等 |
+
+## 建议修复优先级
+
+1. **P0（立即修复）**: 4 个高风险问题 — import 认证、ZIP 路径遍历、错误信息泄露、相似度检测性能
+2. **P1（本迭代）**: 并发版本冲突、文件大小限制、name 格式校验、productTagIds 继承
+3. **P2（下迭代）**: 详情页拆分 Hook、parseSkillMarkdown 去重、scope 语义梳理
+
 ## 审查文件清单
 
 ### API 端点
@@ -380,16 +394,3 @@ const VULNERABILITY_CATEGORY_ID = '';
 
 ---
 
-## 汇总
-
-| 严重级别 | 数量 | 关键问题 |
-|---------|------|---------|
-| **高** | 4 | import 接口认证/租户缺失、ZIP 路径遍历、DELETE 错误信息泄露、相似度检测全量加载 |
-| **中** | 11 | batch TOCTOU、productTagIds 版本不一致、文件大小未限制、name 格式未校验、串行 LLM 分析、并发版本冲突等 |
-| **低** | 6 | parseSkillMarkdown 重复、console.error 未替换、VULNERABILITY_CATEGORY_ID 空字符串等 |
-
-## 建议修复优先级
-
-1. **P0（立即修复）**: 4 个高风险问题 — import 认证、ZIP 路径遍历、错误信息泄露、相似度检测性能
-2. **P1（本迭代）**: 并发版本冲突、文件大小限制、name 格式校验、productTagIds 继承
-3. **P2（下迭代）**: 详情页拆分 Hook、parseSkillMarkdown 去重、scope 语义梳理
