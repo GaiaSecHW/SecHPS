@@ -51,10 +51,7 @@ export type AgentEventType =
   | 'log_chunk'
   | 'session_created'
   | 'skill_start'
-  | 'skill_complete'
-  | 'continuation_attempt'
-  | 'continuation_success'
-  | 'continuation_fallback';
+  | 'skill_complete';
 
 export interface AgentEvent {
   type: AgentEventType;
@@ -88,41 +85,12 @@ export interface CommandResult {
   durationMs: number;
 }
 
-/** 续推上下文 - 跟踪续推状态和进度 */
-interface ContinuationContext {
-  /** 原始指令 */
-  originalInstruction: string;
-  /** 当前续推次数（0=首次执行, 1-N=续推） */
-  continueAttempt: number;
-  /** 已收集的关键事件（用于提取进度摘要，限制最近 MAX_EVENT_HISTORY 条） */
-  eventHistory: AgentEvent[];
-  /** 已完成的 Skill 列表 */
-  completedSkills: string[];
-  /** 上次使用的续推策略 */
-  lastStrategy: 'cancel_same_session' | 'destroy_new_session' | null;
-  /** 上次续推恢复的时间戳（用于判断是否重置计数器） */
-  lastContinuationTime: number | null;
-  /** 续推恢复后累计的正常事件数（用于判断 Agent 是否真正恢复了） */
-  eventsSinceContinuation: number;
-}
-
 /** 运行状态 - 可在事件处理器闭包中修改的对象引用 */
 interface RunState {
   stdout: string;
   stderr: string;
   currentSkill: string | null;
-  inactivityTimer: NodeJS.Timeout | null;
-  inactivityTimeoutReject: ((reason: Error) => void) | null;
-  inactivityTimeoutTriggered: boolean;
-  /** 父 session 等待中的 Agent/Task 工具调用计数（支持嵌套子 session） */
-  waitingChildCount: number;
-  /** 子 session 专用超时计时器（兜底机制：防止子 session 卡死导致父 session 永久挂起） */
-  childSessionTimeoutTimer: NodeJS.Timeout | null;
-  /** 最近一次收到任意 ACP 事件的时间戳（用于 inactivity 触发前的 race 兜底检查） */
-  lastEventTime: number;
 }
-
-const MAX_EVENT_HISTORY = 200;
 
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
@@ -180,90 +148,16 @@ export class ProcessManager {
     apiBaseUrl?: string,
     timeoutMs?: number,
   ): Promise<RunAgentResult> {
-    const INACTIVITY_TIMEOUT_MS = parseInt(process.env.INACTIVITY_TIMEOUT_MS || '3600000');
-    const CONTINUE_MAX_ATTEMPTS = parseInt(process.env.CONTINUE_MAX_ATTEMPTS || '5');
-    const CANCEL_WAIT_MS = parseInt(process.env.CANCEL_WAIT_MS || '10000');
     const TASK_TIMEOUT_SEC = parseInt(process.env.TASK_TIMEOUT_SEC || '604800');
-    const continuationEnabled = INACTIVITY_TIMEOUT_MS > 0 && CONTINUE_MAX_ATTEMPTS > 0;
     const effectiveTimeoutMs = timeoutMs || TASK_TIMEOUT_SEC * 1000;
-    const CHILD_SESSION_TIMEOUT_MS = parseInt(process.env.CHILD_SESSION_TIMEOUT_MS || '3600000');
 
     const state: RunState = {
       stdout: '',
       stderr: '',
       currentSkill: null,
-      inactivityTimer: null,
-      inactivityTimeoutReject: null,
-      inactivityTimeoutTriggered: false,
-      waitingChildCount: 0,
-      childSessionTimeoutTimer: null,
-      lastEventTime: Date.now(),
     };
 
-    const ctx: ContinuationContext = {
-      originalInstruction: instruction || agentName || '执行任务',
-      continueAttempt: 0,
-      eventHistory: [],
-      completedSkills: [],
-      lastStrategy: null,
-      lastContinuationTime: null,
-      eventsSinceContinuation: 0,
-    };
-
-    const taskStartTime = Date.now();
     let client: ACPClient | null = null;
-    let clientConfig: ACPClientConfig;
-    let sessionAgent: string | undefined;
-
-    const HEALTH_CHECK_GRACE_MS = 60_000;
-
-    const handleInactivityTimeout = () => {
-      if (!continuationEnabled || state.inactivityTimeoutReject === null) return;
-      const sinceLastEvent = Date.now() - state.lastEventTime;
-      if (sinceLastEvent < HEALTH_CHECK_GRACE_MS) {
-        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timer fired but recent event ${sinceLastEvent}ms ago (< ${HEALTH_CHECK_GRACE_MS}ms grace), reset and skip continuation`);
-        if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
-        return;
-      }
-      const timeoutSecs = INACTIVITY_TIMEOUT_MS / 1000;
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout detected (no events for ${timeoutSecs}s, last event ${sinceLastEvent}ms ago)`);
-      state.inactivityTimeoutTriggered = true;
-      state.inactivityTimeoutReject(new Error(`Inactivity timeout: no events for ${timeoutSecs}s`));
-    };
-
-    const handleChildSessionTimeout = () => {
-      if (!continuationEnabled || state.inactivityTimeoutReject === null) return;
-      const sinceLastEvent = Date.now() - state.lastEventTime;
-      if (sinceLastEvent < HEALTH_CHECK_GRACE_MS) {
-        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session timer fired but recent event ${sinceLastEvent}ms ago (< ${HEALTH_CHECK_GRACE_MS}ms grace), reset and skip continuation`);
-        if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
-        state.childSessionTimeoutTimer = setTimeout(handleChildSessionTimeout, CHILD_SESSION_TIMEOUT_MS);
-        return;
-      }
-      const timeoutSecs = CHILD_SESSION_TIMEOUT_MS / 1000;
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session timeout: Agent/Task tool call not returning for ${timeoutSecs}s (last event ${sinceLastEvent}ms ago)`);
-      state.waitingChildCount = 0;
-      state.inactivityTimeoutTriggered = true;
-      state.inactivityTimeoutReject(new Error(`Inactivity timeout: child session not returning for ${timeoutSecs}s`));
-    };
-
-    const createAndStartClient = async (): Promise<ACPClient> => {
-      const c = new ACPClient();
-      await c.start(clientConfig);
-      const sid = await c.createSession(sessionAgent);
-      registerEventHandlers(c, state, ctx, {
-        INACTIVITY_TIMEOUT_MS,
-        CHILD_SESSION_TIMEOUT_MS,
-        handleInactivityTimeout,
-        handleChildSessionTimeout,
-      }, onEvent, taskId);
-      this.processes.set(taskId, { client: c, workspace, sessionId: sid, createdAt: Date.now() });
-      if (onEvent) {
-        onEvent({ type: 'session_created', message: sid, timestamp: new Date().toISOString() });
-      }
-      return c;
-    };
 
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== RUN AGENT START ==========`);
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `taskId: ${taskId}`);
@@ -274,9 +168,7 @@ export class ProcessManager {
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `apiKey present: ${!!apiKey}`);
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
-    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `INACTIVITY_TIMEOUT_MS: ${INACTIVITY_TIMEOUT_MS}`);
-    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `CONTINUE_MAX_ATTEMPTS: ${CONTINUE_MAX_ATTEMPTS}`);
-    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `continuationEnabled: ${continuationEnabled}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `effectiveTimeoutMs: ${effectiveTimeoutMs}`);
 
     try {
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step A: Merging environment...');
@@ -303,226 +195,59 @@ export class ProcessManager {
       }
 
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step B: Creating and starting client...');
-      clientConfig = {
+      const clientConfig: ACPClientConfig = {
         cwd: workspace,
         env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
         ...(model ? { model } : {}),
         agent: agentName,
         ...(engine === 'claudecode' ? { command: 'claude-agent-acp', args: [] } : {}),
       };
-      sessionAgent = engine === 'claudecode' ? undefined : agentName;
+      const sessionAgent: string | undefined = engine === 'claudecode' ? undefined : agentName;
 
-      client = await createAndStartClient();
-
-      while (ctx.continueAttempt <= CONTINUE_MAX_ATTEMPTS) {
-        const elapsed = Date.now() - taskStartTime;
-        if (elapsed >= effectiveTimeoutMs) {
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Task overall timeout (${effectiveTimeoutMs/1000}s), terminating`);
-          break;
-        }
-        const remainingTimeoutMs = effectiveTimeoutMs - elapsed;
-
-        if (ctx.lastStrategy === 'destroy_new_session' && ctx.continueAttempt > 0) {
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Rebuilding client (destroy_new_session strategy)');
-          client = await createAndStartClient();
-        }
-
-        const currentInstruction = ctx.continueAttempt === 0
-          ? ctx.originalInstruction
-          : buildContinuationPrompt(ctx);
-
-        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Sending prompt (attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS})`);
-
-        if (continuationEnabled && INACTIVITY_TIMEOUT_MS > 0) {
-          if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
-          state.inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
-          state.lastEventTime = Date.now();
-        }
-
-        const inactivityPromise = continuationEnabled
-          ? new Promise<never>((_, reject) => { state.inactivityTimeoutReject = reject; })
-          : new Promise<never>(() => {});
-
-        const taskTimeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Task overall timeout after ${remainingTimeoutMs/1000}s`)), remainingTimeoutMs);
-        });
-
-        state.inactivityTimeoutTriggered = false;
-
-        try {
-          const stopReason = await Promise.race([
-            client!.sendPrompt(currentInstruction),
-            inactivityPromise,
-            taskTimeoutPromise,
-          ]);
-
-          if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
-          if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
-          state.waitingChildCount = 0;
-          state.inactivityTimeoutReject = null;
-
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Prompt completed with stopReason=${stopReason}`);
-
-          if (state.currentSkill && onEvent) {
-            ctx.completedSkills.push(state.currentSkill);
-            onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
-            state.currentSkill = null;
-          }
-
-          if (stopReason === 'end_turn') {
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'end_turn - destroying client');
-            await client!.destroy();
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
-            return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
-          }
-
-          if (stopReason === 'cancelled') {
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel returned, same session continuation (attempt counter unchanged)');
-            ctx.lastStrategy = 'cancel_same_session';
-            ctx.eventsSinceContinuation = 0;
-            ctx.lastContinuationTime = Date.now();
-            if (onEvent) {
-              onEvent({
-                type: 'continuation_success',
-                message: 'Agent 已恢复（同会话续推）',
-                timestamp: new Date().toISOString(),
-              });
-            }
-            continue;
-          }
-
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Waiting for exitCode (stopReason=${stopReason})...`);
-          const exitCode = await Promise.race([
-            client!.exitCode,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for exit')), 30000)),
-          ]);
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `exitCode = ${exitCode}`);
-          await client!.destroy();
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
-          return { exitCode: exitCode ?? 1, stdout: state.stdout, stderr: state.stderr };
-
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          const isInactivityTimeout = errorMsg.includes('Inactivity timeout');
-
-          if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
-          if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
-          state.waitingChildCount = 0;
-          state.inactivityTimeoutReject = null;
-
-          if (!isInactivityTimeout) {
-            const classified = classifyAcpError(errorMsg);
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Error: ${errorMsg} (category=${classified.category}, isCritical=${classified.isCritical})`);
-
-            if (!state.inactivityTimeoutTriggered) state.stderr += errorMsg;
-
-            if (onEvent) {
-              onEvent({ type: classified.isCritical ? 'error' : 'phase_error', message: errorMsg, phase: classified.category, timestamp: new Date().toISOString() });
-            }
-
-            if (hasSubstantialOutput(state.stdout) && !classified.isCritical) {
-              logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Non-critical error after substantial output');
-              if (state.currentSkill && onEvent) {
-                ctx.completedSkills.push(state.currentSkill);
-                onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
-              }
-              return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
-            }
-
-            if (state.currentSkill && onEvent) {
-              onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
-            }
-            return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
-          }
-
-          ctx.continueAttempt++;
-          const isChildSessionTimeout = errorMsg.includes('child session not returning');
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout (isChildSessionTimeout=${isChildSessionTimeout}), attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS}`);
-
-          if (ctx.continueAttempt > CONTINUE_MAX_ATTEMPTS) {
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Exceeded max continuation attempts (${CONTINUE_MAX_ATTEMPTS})`);
-            if (onEvent) {
-              onEvent({
-                type: 'error',
-                message: `Agent 连续 ${CONTINUE_MAX_ATTEMPTS} 次无响应，任务终止`,
-                timestamp: new Date().toISOString(),
-              });
-            }
-            state.stderr += `\nExceeded max continuation attempts (${CONTINUE_MAX_ATTEMPTS})`;
-            if (client) await client.destroy();
-            return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
-          }
-
-          if (onEvent) {
-            onEvent({
-              type: 'continuation_attempt',
-              message: `Agent 无响应 ${INACTIVITY_TIMEOUT_MS/1000}s，第 ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS} 次续推`,
-              timestamp: new Date().toISOString(),
-            });
-          }
-
-          if (client && client.isAlive && !isChildSessionTimeout) {
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Trying session/cancel (方案 A)');
-            await client.cancel();
-
-            const cancelStopReason = await client.waitForCurrentPrompt(CANCEL_WAIT_MS);
-
-            if (cancelStopReason === 'cancelled') {
-              logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel succeeded, same session continuation');
-              ctx.lastStrategy = 'cancel_same_session';
-              ctx.continueAttempt = Math.max(0, ctx.continueAttempt - 1);
-              ctx.eventsSinceContinuation = 0;
-              ctx.lastContinuationTime = Date.now();
-              if (onEvent) {
-                onEvent({
-                  type: 'continuation_success',
-                  message: 'Agent 已恢复（同会话续推）',
-                  timestamp: new Date().toISOString(),
-                });
-              }
-              continue;
-            }
-
-            if (cancelStopReason === 'end_turn') {
-              logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel returned end_turn - task actually completed');
-              if (state.currentSkill && onEvent) {
-                ctx.completedSkills.push(state.currentSkill);
-                onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
-              }
-              await client.destroy();
-              return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
-            }
-
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Cancel timeout or other response (${CANCEL_WAIT_MS}ms), fallback to 方案 B`);
-          } else if (isChildSessionTimeout) {
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, '父 session 等待子 session 超时，跳过方案 A 直接走方案 B（避免 cancel 信号传播到子工具触发 "Tool execution aborted"）');
-          }
-
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Executing 方案 B: destroy + new session');
-          ctx.lastStrategy = 'destroy_new_session';
-
-          if (onEvent) {
-            onEvent({
-              type: 'continuation_fallback',
-              message: isChildSessionTimeout
-                ? '子 session 超时无响应，重建会话续推（保护子工具不被中断）'
-                : 'Cancel 无响应，重建会话续推',
-              timestamp: new Date().toISOString(),
-            });
-          }
-
-          if (client) {
-            await client.destroy();
-            client = null;
-          }
-
-          continue;
-        }
+      client = new ACPClient();
+      await client.start(clientConfig);
+      const sid = await client.createSession(sessionAgent);
+      registerEventHandlers(client, state, onEvent, taskId);
+      this.processes.set(taskId, { client, workspace, sessionId: sid, createdAt: Date.now() });
+      if (onEvent) {
+        onEvent({ type: 'session_created', message: sid, timestamp: new Date().toISOString() });
       }
 
-      logger.taskWarn(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT FAILED ==========');
-      if (client) await client.destroy();
-      return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
+      const currentInstruction = instruction || agentName || '执行任务';
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Sending prompt (single-shot)`);
+
+      const taskTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Task overall timeout after ${effectiveTimeoutMs / 1000}s`)), effectiveTimeoutMs);
+      });
+
+      const stopReason = await Promise.race([
+        client.sendPrompt(currentInstruction),
+        taskTimeoutPromise,
+      ]);
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Prompt completed with stopReason=${stopReason}`);
+
+      if (state.currentSkill && onEvent) {
+        onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
+        state.currentSkill = null;
+      }
+
+      if (stopReason === 'end_turn') {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'end_turn - destroying client');
+        await client.destroy();
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
+        return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
+      }
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Waiting for exitCode (stopReason=${stopReason})...`);
+      const exitCode = await Promise.race([
+        client.exitCode,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout waiting for exit')), 30000)),
+      ]);
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `exitCode = ${exitCode}`);
+      await client.destroy();
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, '========== RUN AGENT COMPLETE ==========');
+      return { exitCode: exitCode ?? 1, stdout: state.stdout, stderr: state.stderr };
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -531,10 +256,14 @@ export class ProcessManager {
       logger.taskError(taskId, LOG_MODULES.PROCESS, `Error: ${errorMsg}`);
       logger.taskError(taskId, LOG_MODULES.PROCESS, `Error category: ${classified.category}, isCritical: ${classified.isCritical}`);
 
-      if (!state.inactivityTimeoutTriggered) state.stderr += errorMsg;
+      state.stderr += errorMsg;
 
       if (onEvent) {
         onEvent({ type: classified.isCritical ? 'error' : 'phase_error', message: errorMsg, phase: classified.category, timestamp: new Date().toISOString() });
+      }
+
+      if (state.currentSkill && onEvent) {
+        onEvent({ type: 'skill_complete', skill: state.currentSkill, timestamp: new Date().toISOString() });
       }
 
       if (hasSubstantialOutput(state.stdout) && !classified.isCritical) {
@@ -545,8 +274,6 @@ export class ProcessManager {
 
     } finally {
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Finally: destroying client and cleaning up');
-      if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); }
-      if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); }
       if (client) await client.destroy();
       this.processes.delete(taskId);
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cleanup done');
@@ -718,114 +445,19 @@ export function hasSubstantialOutput(stdout: string, minLength = 100): boolean {
 }
 
 /**
- * Extract progress summary from continuation context for building continuation prompt.
- * Limited to 500 characters to avoid overly long prompts.
- */
-function extractProgressSummary(ctx: ContinuationContext): string {
-  const lines: string[] = [];
-  
-  if (ctx.completedSkills.length > 0) {
-    lines.push(`已完成的检测: ${ctx.completedSkills.join(', ')}`);
-  }
-  
-  const toolCalls = ctx.eventHistory.filter(e => e.type === 'tool_call');
-  const toolNames = toolCalls.map(e => e.tool).filter(Boolean);
-  if (toolNames.length > 0) {
-    const uniqueTools = [...new Set(toolNames)];
-    lines.push(`已使用的工具: ${uniqueTools.join(', ')} (共${toolNames.length}次调用)`);
-  }
-  
-  const textChunks = ctx.eventHistory.filter(e => e.type === 'agent_message_chunk');
-  if (textChunks.length > 0) {
-    const lastText = textChunks.slice(-5).map(e => e.content).join('');
-    if (lastText.length > 0) {
-      lines.push(`最后输出: "${lastText.substring(0, 200)}${lastText.length > 200 ? '...' : ''}"`);
-    }
-  }
-  
-  const result = lines.join('\n');
-  return result.length > 500 ? result.substring(0, 500) + '...' : result;
-}
-
-/**
- * Build continuation prompt based on attempt number, strategy, and progress.
- * Escalating urgency: 1st=gentle, 2nd=warning, 3rd+=final warning.
- */
-function buildContinuationPrompt(ctx: ContinuationContext): string {
-  const attempt = ctx.continueAttempt;
-  const original = ctx.originalInstruction;
-  const summary = extractProgressSummary(ctx);
-  
-  const strategyHint = ctx.lastStrategy === 'cancel_same_session'
-    ? '（你之前的工作上下文仍然保留，请直接继续）'
-    : '（这是一个新的会话，请根据以下进度摘要继续工作。请先检查工作目录中已有的文件。）';
-  
-  if (attempt === 1) {
-    return [
-      `你之前的任务执行中断了，请继续完成原始任务。${strategyHint}`,
-      summary ? `\n当前进度:\n${summary}` : '',
-      `\n原始指令:\n${original}`,
-      `\n请从上次中断的地方继续，不要重复已完成的工作。`,
-    ].join('');
-  }
-  
-  if (attempt === 2) {
-    return [
-      `⚠️ 这是第二次续推提醒。${strategyHint}`,
-      summary ? `\n当前进度:\n${summary}` : '',
-      `\n原始指令:\n${original}`,
-      ctx.completedSkills.length > 0
-        ? `\n已完成的 Skill: ${ctx.completedSkills.join(', ')}，请不要重复执行。`
-        : '',
-      `\n请立即继续执行剩余工作。`,
-    ].join('');
-  }
-  
-  return [
-    `🔴 最后一次续推提醒。如果仍然无法继续，任务将被终止。`,
-    summary ? `\n进度: ${summary}` : '',
-    `\n原始指令（精简）:\n${original.substring(0, 300)}${original.length > 300 ? '...' : ''}`,
-    `\n请立即执行剩余任务。`,
-  ].join('');
-}
-
-/**
- * Register event handlers on ACPClient, using RunState and ContinuationContext
- * for state management. This function can be called multiple times (for client rebuilds).
+ * Register event handlers on ACPClient, using RunState for state management.
  */
 function registerEventHandlers(
   client: ACPClient,
   state: RunState,
-  ctx: ContinuationContext,
-  config: {
-    INACTIVITY_TIMEOUT_MS: number;
-    CHILD_SESSION_TIMEOUT_MS: number;
-    handleInactivityTimeout: () => void;
-    handleChildSessionTimeout: () => void;
-  },
   onEvent?: AgentEventCallback,
   taskId?: string,
 ): void {
   client.on({
     text: (content: string) => {
       taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`) : logger.info(LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`);
-      state.lastEventTime = Date.now();
-      if (state.waitingChildCount > 0 && state.childSessionTimeoutTimer) {
-        clearTimeout(state.childSessionTimeoutTimer);
-        state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-      } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
       state.stdout += content;
-      
-      ctx.eventHistory.push({
-        type: 'agent_message_chunk',
-        content,
-        timestamp: new Date().toISOString(),
-      });
-      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
-      
+
       if (onEvent) {
         onEvent({
           type: 'agent_message_chunk',
@@ -834,55 +466,33 @@ function registerEventHandlers(
         });
       }
     },
-    
+
     toolCall: (tool: string, input: unknown, title?: string) => {
       const actualToolName = (title || tool).toLowerCase();
-      const isChildSessionTool = actualToolName === 'agent' || actualToolName === 'task';
 
-      state.lastEventTime = Date.now();
-
-      if (isChildSessionTool) {
-        if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
-        state.waitingChildCount += 1;
-        if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
-        state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-        taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session tool call: ${actualToolName}, waitingChildCount=${state.waitingChildCount}, inactivity timer paused, child timeout started (${config.CHILD_SESSION_TIMEOUT_MS/1000}s)`) : logger.info(LOG_MODULES.PROCESS, `Child session tool call: ${actualToolName}, waitingChildCount=${state.waitingChildCount}`);
-      } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
       taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCall: kind=${tool}, title=${title}, actualName=${actualToolName}`);
       taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 200)}`);
-      
-      ctx.eventHistory.push({
-        type: 'tool_call',
-        tool: actualToolName,
-        input,
-        timestamp: new Date().toISOString(),
-      });
-      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
-      
+
       const isSkillCall = actualToolName === 'skill'
         || (typeof input === 'object' && input !== null && ('skill' in input || 'skill_name' in input));
-      
+
       if (isSkillCall && onEvent) {
         let skillName = extractSkillName(input) || 'unknown';
-        
+
         if (skillName === 'unknown') {
           const textBuffer = client.getTextBuffer();
           taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`) : logger.info(LOG_MODULES.PROCESS, `Text buffer for skill inference: ${JSON.stringify(textBuffer.slice(-3))}`);
           skillName = inferSkillNameFromContext(textBuffer) || 'unknown';
         }
-        
+
         if (state.currentSkill && state.currentSkill !== skillName) {
-          ctx.completedSkills.push(state.currentSkill);
           onEvent({
             type: 'skill_complete',
             skill: state.currentSkill,
             timestamp: new Date().toISOString(),
           });
         }
-        
+
         state.currentSkill = skillName;
         onEvent({
           type: 'skill_start',
@@ -891,23 +501,22 @@ function registerEventHandlers(
           timestamp: new Date().toISOString(),
         });
       }
-      
+
       if ((actualToolName === 'agent' || actualToolName === 'task') && onEvent) {
         const description = (input as any)?.description || '';
         const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
         if (skillMatch && skillMatch[1]) {
           const skillName = skillMatch[1];
           taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `检测到 Agent 执行 Skill: ${skillName}`) : logger.info(LOG_MODULES.PROCESS, `检测到 Agent 执行 Skill: ${skillName}`);
-          
+
           if (state.currentSkill && state.currentSkill !== skillName) {
-            ctx.completedSkills.push(state.currentSkill);
             onEvent({
               type: 'skill_complete',
               skill: state.currentSkill,
               timestamp: new Date().toISOString(),
             });
           }
-          
+
           state.currentSkill = skillName;
           onEvent({
             type: 'skill_start',
@@ -917,7 +526,7 @@ function registerEventHandlers(
           });
         }
       }
-      
+
       if (onEvent) {
         onEvent({
           type: 'tool_call',
@@ -927,36 +536,10 @@ function registerEventHandlers(
         });
       }
     },
-    
+
     toolCallUpdate: (output: string) => {
-      state.lastEventTime = Date.now();
-      if (state.waitingChildCount > 0) {
-        state.waitingChildCount -= 1;
-        if (state.waitingChildCount === 0) {
-          if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
-          if (config.INACTIVITY_TIMEOUT_MS > 0) {
-            state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-          }
-          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session toolCallUpdate received, waitingChildCount=0, inactivity timer restored`) : logger.info(LOG_MODULES.PROCESS, `Child session toolCallUpdate received, inactivity timer restored`);
-        } else {
-          // 嵌套子等待中，重置子 timer 等剩余子返回
-          if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
-          state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session toolCallUpdate received, but waitingChildCount=${state.waitingChildCount} (nested), child timer reset`) : logger.info(LOG_MODULES.PROCESS, `Nested child still waiting, count=${state.waitingChildCount}`);
-        }
-      } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
       taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
-      
-      ctx.eventHistory.push({
-        type: 'tool_call_update',
-        output,
-        timestamp: new Date().toISOString(),
-      });
-      if (ctx.eventHistory.length > MAX_EVENT_HISTORY) ctx.eventHistory.shift();
-      
+
       if (state.currentSkill === 'unknown' && output) {
         const launchMatch = output.match(/(?:Launching|Invoking|Running|Executing)\s+skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
         if (launchMatch && launchMatch[1]) {
@@ -972,7 +555,7 @@ function registerEventHandlers(
           }
         }
       }
-      
+
       if (onEvent) {
         onEvent({
           type: 'tool_call_update',
@@ -981,16 +564,8 @@ function registerEventHandlers(
         });
       }
     },
-    
+
     error: (message: string) => {
-      state.lastEventTime = Date.now();
-      if (state.waitingChildCount > 0 && state.childSessionTimeoutTimer) {
-        clearTimeout(state.childSessionTimeoutTimer);
-        state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-      } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
       const classified = classifyAcpError(message);
       taskId ? logger.taskWarn(taskId, LOG_MODULES.PROCESS, `EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`) : logger.warn(LOG_MODULES.PROCESS, `EVENT error: ${message} (category=${classified.category}, isCritical=${classified.isCritical})`);
       state.stderr += message;
@@ -1003,18 +578,10 @@ function registerEventHandlers(
         });
       }
     },
-    
+
     stderr: (content: string) => {
       const line = content.trim();
       if (!line) return;
-      state.lastEventTime = Date.now();
-      if (state.waitingChildCount > 0 && state.childSessionTimeoutTimer) {
-        clearTimeout(state.childSessionTimeoutTimer);
-        state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-      } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
-        clearTimeout(state.inactivityTimer);
-        state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-      }
       state.stderr += line + '\n';
       taskId ? logger.taskWarn(taskId, LOG_MODULES.PROCESS, `[stderr] ${line}`) : logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
       if (!onEvent) return;
@@ -1041,18 +608,9 @@ function registerEventHandlers(
       }
       onEvent({ type: 'log_chunk', content: line, level: 'worker', stream: 'stderr', timestamp: new Date().toISOString() });
     },
-    
-    raw: (data: string) => {
-      if (data === '__alive__' && config.INACTIVITY_TIMEOUT_MS > 0) {
-        state.lastEventTime = Date.now();
-        if (state.waitingChildCount > 0) {
-          if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
-          state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-        } else if (state.inactivityTimer) {
-          clearTimeout(state.inactivityTimer);
-          state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
-        }
-      }
+
+    raw: (_data: string) => {
+      // 续推机制已移除,raw 事件不再用于 inactivity 心跳检测
     },
   });
 }

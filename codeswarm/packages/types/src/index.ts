@@ -146,9 +146,6 @@ export const WorkerEventTypeEnum = z.enum([
   'tool_duration',       // tool 执行耗时
   'heartbeat',           // Worker 心跳日志
   'cancel_confirmed',    // 取消确认
-  'continuation_attempt',    // 续推尝试
-  'continuation_success',   // 续推成功恢复（同 session）
-  'continuation_fallback',  // 续推降级（destroy 新 session）
   'task_started',        // 任务开始
   'task_completed',      // 任务完成
 ]);
