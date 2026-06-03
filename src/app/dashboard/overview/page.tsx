@@ -326,14 +326,16 @@ export default function OverviewPage() {
                   </span>
                 )}
               </div>
-              <Link
-                href="/dashboard/admin/vulnerabilities"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-purple-400 hover:text-purple-300 bg-purple-500/10 rounded-lg transition-colors flex-shrink-0"
-              >
-                <span className="hidden md:inline">漏洞管理</span>
-                <span className="md:hidden">管理</span>
-                <ArrowRight size={14} />
-              </Link>
+              {isAdmin && (
+                <Link
+                  href="/dashboard/admin/vulnerabilities"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-purple-400 hover:text-purple-300 bg-purple-500/10 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <span className="hidden md:inline">漏洞管理</span>
+                  <span className="md:hidden">管理</span>
+                  <ArrowRight size={14} />
+                </Link>
+              )}
             </div>
 
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 md:gap-3">
