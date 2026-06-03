@@ -114,10 +114,12 @@ interface RunState {
   inactivityTimer: NodeJS.Timeout | null;
   inactivityTimeoutReject: ((reason: Error) => void) | null;
   inactivityTimeoutTriggered: boolean;
-  /** 父 session 正在等待 Agent/Task 工具调用返回（子 session 执行中） */
-  waitingForChildSession: boolean;
-  /** 子 session 专用超时计时器（兜底机制：防止子 session 猉死导致父 session 永久挂起） */
+  /** 父 session 等待中的 Agent/Task 工具调用计数（支持嵌套子 session） */
+  waitingChildCount: number;
+  /** 子 session 专用超时计时器（兜底机制：防止子 session 卡死导致父 session 永久挂起） */
   childSessionTimeoutTimer: NodeJS.Timeout | null;
+  /** 最近一次收到任意 ACP 事件的时间戳（用于 inactivity 触发前的 race 兜底检查） */
+  lastEventTime: number;
 }
 
 const MAX_EVENT_HISTORY = 200;
@@ -193,8 +195,9 @@ export class ProcessManager {
       inactivityTimer: null,
       inactivityTimeoutReject: null,
       inactivityTimeoutTriggered: false,
-      waitingForChildSession: false,
+      waitingChildCount: 0,
       childSessionTimeoutTimer: null,
+      lastEventTime: Date.now(),
     };
 
     const ctx: ContinuationContext = {
@@ -212,19 +215,35 @@ export class ProcessManager {
     let clientConfig: ACPClientConfig;
     let sessionAgent: string | undefined;
 
+    const HEALTH_CHECK_GRACE_MS = 60_000;
+
     const handleInactivityTimeout = () => {
       if (!continuationEnabled || state.inactivityTimeoutReject === null) return;
+      const sinceLastEvent = Date.now() - state.lastEventTime;
+      if (sinceLastEvent < HEALTH_CHECK_GRACE_MS) {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timer fired but recent event ${sinceLastEvent}ms ago (< ${HEALTH_CHECK_GRACE_MS}ms grace), reset and skip continuation`);
+        if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
+        state.inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+        return;
+      }
       const timeoutSecs = INACTIVITY_TIMEOUT_MS / 1000;
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout detected (no events for ${timeoutSecs}s)`);
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout detected (no events for ${timeoutSecs}s, last event ${sinceLastEvent}ms ago)`);
       state.inactivityTimeoutTriggered = true;
       state.inactivityTimeoutReject(new Error(`Inactivity timeout: no events for ${timeoutSecs}s`));
     };
 
     const handleChildSessionTimeout = () => {
       if (!continuationEnabled || state.inactivityTimeoutReject === null) return;
+      const sinceLastEvent = Date.now() - state.lastEventTime;
+      if (sinceLastEvent < HEALTH_CHECK_GRACE_MS) {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session timer fired but recent event ${sinceLastEvent}ms ago (< ${HEALTH_CHECK_GRACE_MS}ms grace), reset and skip continuation`);
+        if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
+        state.childSessionTimeoutTimer = setTimeout(handleChildSessionTimeout, CHILD_SESSION_TIMEOUT_MS);
+        return;
+      }
       const timeoutSecs = CHILD_SESSION_TIMEOUT_MS / 1000;
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session timeout: Agent/Task tool call not returning for ${timeoutSecs}s`);
-      state.waitingForChildSession = false;
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session timeout: Agent/Task tool call not returning for ${timeoutSecs}s (last event ${sinceLastEvent}ms ago)`);
+      state.waitingChildCount = 0;
       state.inactivityTimeoutTriggered = true;
       state.inactivityTimeoutReject(new Error(`Inactivity timeout: child session not returning for ${timeoutSecs}s`));
     };
@@ -317,6 +336,7 @@ export class ProcessManager {
         if (continuationEnabled && INACTIVITY_TIMEOUT_MS > 0) {
           if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
           state.inactivityTimer = setTimeout(handleInactivityTimeout, INACTIVITY_TIMEOUT_MS);
+          state.lastEventTime = Date.now();
         }
 
         const inactivityPromise = continuationEnabled
@@ -337,6 +357,8 @@ export class ProcessManager {
           ]);
 
           if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
+          if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
+          state.waitingChildCount = 0;
           state.inactivityTimeoutReject = null;
 
           logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Prompt completed with stopReason=${stopReason}`);
@@ -355,9 +377,8 @@ export class ProcessManager {
           }
 
           if (stopReason === 'cancelled') {
-            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel returned, same session continuation');
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel returned, same session continuation (attempt counter unchanged)');
             ctx.lastStrategy = 'cancel_same_session';
-            ctx.continueAttempt = Math.max(0, ctx.continueAttempt - 1);
             ctx.eventsSinceContinuation = 0;
             ctx.lastContinuationTime = Date.now();
             if (onEvent) {
@@ -386,7 +407,7 @@ export class ProcessManager {
 
           if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
           if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
-          state.waitingForChildSession = false;
+          state.waitingChildCount = 0;
           state.inactivityTimeoutReject = null;
 
           if (!isInactivityTimeout) {
@@ -415,7 +436,8 @@ export class ProcessManager {
           }
 
           ctx.continueAttempt++;
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout, attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS}`);
+          const isChildSessionTimeout = errorMsg.includes('child session not returning');
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Inactivity timeout (isChildSessionTimeout=${isChildSessionTimeout}), attempt ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS}`);
 
           if (ctx.continueAttempt > CONTINUE_MAX_ATTEMPTS) {
             logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Exceeded max continuation attempts (${CONTINUE_MAX_ATTEMPTS})`);
@@ -439,7 +461,7 @@ export class ProcessManager {
             });
           }
 
-          if (client && client.isAlive) {
+          if (client && client.isAlive && !isChildSessionTimeout) {
             logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Trying session/cancel (方案 A)');
             await client.cancel();
 
@@ -448,9 +470,9 @@ export class ProcessManager {
             if (cancelStopReason === 'cancelled') {
               logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cancel succeeded, same session continuation');
               ctx.lastStrategy = 'cancel_same_session';
-ctx.continueAttempt = Math.max(0, ctx.continueAttempt - 1);
-            ctx.eventsSinceContinuation = 0;
-            ctx.lastContinuationTime = Date.now();
+              ctx.continueAttempt = Math.max(0, ctx.continueAttempt - 1);
+              ctx.eventsSinceContinuation = 0;
+              ctx.lastContinuationTime = Date.now();
               if (onEvent) {
                 onEvent({
                   type: 'continuation_success',
@@ -472,6 +494,8 @@ ctx.continueAttempt = Math.max(0, ctx.continueAttempt - 1);
             }
 
             logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Cancel timeout or other response (${CANCEL_WAIT_MS}ms), fallback to 方案 B`);
+          } else if (isChildSessionTimeout) {
+            logger.taskInfo(taskId, LOG_MODULES.PROCESS, '父 session 等待子 session 超时，跳过方案 A 直接走方案 B（避免 cancel 信号传播到子工具触发 "Tool execution aborted"）');
           }
 
           logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Executing 方案 B: destroy + new session');
@@ -480,7 +504,9 @@ ctx.continueAttempt = Math.max(0, ctx.continueAttempt - 1);
           if (onEvent) {
             onEvent({
               type: 'continuation_fallback',
-              message: 'Cancel 无响应，重建会话续推',
+              message: isChildSessionTimeout
+                ? '子 session 超时无响应，重建会话续推（保护子工具不被中断）'
+                : 'Cancel 无响应，重建会话续推',
               timestamp: new Date().toISOString(),
             });
           }
@@ -783,7 +809,8 @@ function registerEventHandlers(
   client.on({
     text: (content: string) => {
       taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`) : logger.info(LOG_MODULES.PROCESS, `EVENT text: "${content.substring(0, 50)}..."`);
-      if (state.waitingForChildSession && state.childSessionTimeoutTimer) {
+      state.lastEventTime = Date.now();
+      if (state.waitingChildCount > 0 && state.childSessionTimeoutTimer) {
         clearTimeout(state.childSessionTimeoutTimer);
         state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
       } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
@@ -812,12 +839,14 @@ function registerEventHandlers(
       const actualToolName = (title || tool).toLowerCase();
       const isChildSessionTool = actualToolName === 'agent' || actualToolName === 'task';
 
+      state.lastEventTime = Date.now();
+
       if (isChildSessionTool) {
         if (state.inactivityTimer) { clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
-        state.waitingForChildSession = true;
+        state.waitingChildCount += 1;
         if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
         state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
-        taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session tool call: ${actualToolName}, inactivity timer paused, child timeout started (${config.CHILD_SESSION_TIMEOUT_MS/1000}s)`) : logger.info(LOG_MODULES.PROCESS, `Child session tool call: ${actualToolName}, inactivity timer paused`);
+        taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session tool call: ${actualToolName}, waitingChildCount=${state.waitingChildCount}, inactivity timer paused, child timeout started (${config.CHILD_SESSION_TIMEOUT_MS/1000}s)`) : logger.info(LOG_MODULES.PROCESS, `Child session tool call: ${actualToolName}, waitingChildCount=${state.waitingChildCount}`);
       } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
         clearTimeout(state.inactivityTimer);
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
@@ -900,13 +929,21 @@ function registerEventHandlers(
     },
     
     toolCallUpdate: (output: string) => {
-      if (state.waitingForChildSession) {
-        state.waitingForChildSession = false;
-        if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
-        if (config.INACTIVITY_TIMEOUT_MS > 0) {
-          state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
+      state.lastEventTime = Date.now();
+      if (state.waitingChildCount > 0) {
+        state.waitingChildCount -= 1;
+        if (state.waitingChildCount === 0) {
+          if (state.childSessionTimeoutTimer) { clearTimeout(state.childSessionTimeoutTimer); state.childSessionTimeoutTimer = null; }
+          if (config.INACTIVITY_TIMEOUT_MS > 0) {
+            state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
+          }
+          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session toolCallUpdate received, waitingChildCount=0, inactivity timer restored`) : logger.info(LOG_MODULES.PROCESS, `Child session toolCallUpdate received, inactivity timer restored`);
+        } else {
+          // 嵌套子等待中，重置子 timer 等剩余子返回
+          if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
+          state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
+          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session toolCallUpdate received, but waitingChildCount=${state.waitingChildCount} (nested), child timer reset`) : logger.info(LOG_MODULES.PROCESS, `Nested child still waiting, count=${state.waitingChildCount}`);
         }
-        taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Child session toolCallUpdate received, inactivity timer restored`) : logger.info(LOG_MODULES.PROCESS, `Child session toolCallUpdate received, inactivity timer restored`);
       } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
         clearTimeout(state.inactivityTimer);
         state.inactivityTimer = setTimeout(config.handleInactivityTimeout, config.INACTIVITY_TIMEOUT_MS);
@@ -946,7 +983,8 @@ function registerEventHandlers(
     },
     
     error: (message: string) => {
-      if (state.waitingForChildSession && state.childSessionTimeoutTimer) {
+      state.lastEventTime = Date.now();
+      if (state.waitingChildCount > 0 && state.childSessionTimeoutTimer) {
         clearTimeout(state.childSessionTimeoutTimer);
         state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
       } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
@@ -969,7 +1007,8 @@ function registerEventHandlers(
     stderr: (content: string) => {
       const line = content.trim();
       if (!line) return;
-      if (state.waitingForChildSession && state.childSessionTimeoutTimer) {
+      state.lastEventTime = Date.now();
+      if (state.waitingChildCount > 0 && state.childSessionTimeoutTimer) {
         clearTimeout(state.childSessionTimeoutTimer);
         state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
       } else if (config.INACTIVITY_TIMEOUT_MS > 0 && state.inactivityTimer) {
@@ -1005,7 +1044,8 @@ function registerEventHandlers(
     
     raw: (data: string) => {
       if (data === '__alive__' && config.INACTIVITY_TIMEOUT_MS > 0) {
-        if (state.waitingForChildSession) {
+        state.lastEventTime = Date.now();
+        if (state.waitingChildCount > 0) {
           if (state.childSessionTimeoutTimer) clearTimeout(state.childSessionTimeoutTimer);
           state.childSessionTimeoutTimer = setTimeout(config.handleChildSessionTimeout, config.CHILD_SESSION_TIMEOUT_MS);
         } else if (state.inactivityTimer) {
