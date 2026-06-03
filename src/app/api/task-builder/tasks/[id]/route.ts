@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -11,9 +12,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
 
+  const { payload, tenant } = auth as AuthSuccessResult;
   const { id } = await params;
 
   try {
@@ -30,7 +32,8 @@ export async function GET(
       return NextResponse.json({ error: '任务不存在' }, { status: 404 });
     }
 
-    if (!auth.payload.roles?.includes('admin') && task.userId !== auth.payload.userId) {
+    // 权限校验：管理员可访问所有，非管理员只能访问自己的任务
+    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin') && task.userId !== payload.userId) {
       return NextResponse.json({ error: '无权访问此任务' }, { status: 403 });
     }
 
@@ -75,9 +78,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
 
+  const { payload, tenant } = auth as AuthSuccessResult;
   const { id } = await params;
 
   try {
@@ -89,7 +93,7 @@ export async function DELETE(
       return NextResponse.json({ error: '任务不存在' }, { status: 404 });
     }
 
-    if (!auth.payload.roles?.includes('admin') && task.userId !== auth.payload.userId) {
+    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin') && task.userId !== payload.userId) {
       return NextResponse.json({ error: '无权删除此任务' }, { status: 403 });
     }
 

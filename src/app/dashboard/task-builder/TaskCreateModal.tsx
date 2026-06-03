@@ -234,9 +234,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       return;
     }
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-    const allowed = ['.zip','.jar','.war','.ear','.tar','.gz','.rar','.7z',
-      '.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.txt',
-      '.md','.csv','.json','.xml','.yaml','.yml'];
+    const allowed = ['.zip', '.jar', '.tar', '.gz', '.tgz'];
     if (!allowed.includes(ext)) {
       toast.error('文件格式不支持，仅支持 ZIP、JAR、TAR 格式');
       return;

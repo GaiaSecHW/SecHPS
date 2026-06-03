@@ -78,7 +78,6 @@ export default function TaskDetailPage() {
   const [logs, setLogs] = useState<TaskExecutionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [eventSourceRef, setEventSourceRef] = useState<EventSource | null>(null);
   const [executing, setExecuting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [codeswarmStatus, setCodeswarmStatus] = useState<CodeswarmStatus | null>(null);
@@ -212,41 +211,89 @@ export default function TaskDetailPage() {
     });
   };
 
-  const subscribeToLogs = (id: string) => {
-    const eventSource = new EventSource(`/api/task-builder/tasks/${id}/logs/stream`);
-    setEventSourceRef(eventSource);
+  const subscribeToLogs = async (id: string) => {
+    const token = localStorage.getItem('token');
     setIsStreaming(true);
 
-    eventSource.onmessage = (event) => {
-      const log = JSON.parse(event.data);
-      
-      setLogs(prev => {
-        const exists = prev.find(l => l.id === log.id);
-        if (exists) return prev;
-        return [...prev, {
-          id: log.id || Date.now().toString(),
-          taskId: id,
-          timestamp: log.timestamp || new Date().toISOString(),
-          level: log.level,
-          message: log.message,
-          details: log.details,
-          createdAt: new Date().toISOString(),
-        }];
+    try {
+      const response = await fetch(`/api/task-builder/tasks/${id}/logs/stream`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (log.type === 'completed' || log.type === 'error') {
-        eventSource.close();
+      if (!response.ok || !response.body) {
         setIsStreaming(false);
-        setEventSourceRef(null);
-        fetchTaskDetail(id, false);
+        return;
       }
-    };
 
-    eventSource.onerror = () => {
-      eventSource.close();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const processChunk = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6).trim();
+                if (!data) continue;
+                try {
+                  const log = JSON.parse(data);
+
+                  if (log.type === 'initial' && log.logs) {
+                    setLogs(log.logs.map((l: any) => ({
+                      id: l.id || Date.now().toString(),
+                      taskId: id,
+                      timestamp: l.timestamp || new Date().toISOString(),
+                      level: l.level,
+                      message: l.message,
+                      details: l.details,
+                      createdAt: new Date().toISOString(),
+                    })));
+                    continue;
+                  }
+
+                  setLogs(prev => {
+                    const exists = prev.find(l => l.id === log.id);
+                    if (exists) return prev;
+                    return [...prev, {
+                      id: log.id || Date.now().toString(),
+                      taskId: id,
+                      timestamp: log.timestamp || new Date().toISOString(),
+                      level: log.level,
+                      message: log.message,
+                      details: log.details,
+                      createdAt: new Date().toISOString(),
+                    }];
+                  });
+
+                  if (log.type === 'completed' || log.type === 'error') {
+                    reader.cancel();
+                    setIsStreaming(false);
+                    fetchTaskDetail(id, false);
+                    return;
+                  }
+                } catch {}
+              }
+            }
+          }
+        } catch {
+          // reader cancelled or connection closed
+        } finally {
+          setIsStreaming(false);
+        }
+      };
+
+      processChunk();
+    } catch {
       setIsStreaming(false);
-      setEventSourceRef(null);
-    };
+    }
   };
 
   const handleExecute = async () => {
@@ -375,11 +422,10 @@ export default function TaskDetailPage() {
 
   useEffect(() => {
     return () => {
-      if (eventSourceRef) eventSourceRef.close();
       if (pollingRef.current) clearInterval(pollingRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [eventSourceRef]);
+  }, []);
 
   if (loading) {
     return (

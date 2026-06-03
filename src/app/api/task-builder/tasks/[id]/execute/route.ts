@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma, withRetry } from '@/lib/prisma';
@@ -48,9 +49,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
 
+  const { payload, tenant } = auth as AuthSuccessResult;
   const { id } = await params;
   let overrideModelId: string | null = null;
   let overrideModelName: string | null = null;
@@ -81,7 +83,7 @@ export async function POST(
       return NextResponse.json({ error: '任务不存在' }, { status: 404 });
     }
 
-    if (!auth.payload.roles?.includes('admin') && task.userId !== auth.payload.userId) {
+    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin') && task.userId !== payload.userId) {
       return NextResponse.json({ error: '无权执行此任务' }, { status: 403 });
     }
 
@@ -115,7 +117,7 @@ export async function POST(
           id: effectiveModelIdPre,
           OR: [
             { tenantId: null },
-            { tenantId: auth.payload.tenantId ?? undefined },
+            { tenantId: payload.tenantId ?? undefined },
             { isPublic: true },
           ],
         },
@@ -193,7 +195,7 @@ export async function POST(
           id: effectiveModelId,
           OR: [
             { tenantId: null },
-            { tenantId: auth.payload.tenantId ?? undefined },
+            { tenantId: payload.tenantId ?? undefined },
             { isPublic: true },
           ],
         },

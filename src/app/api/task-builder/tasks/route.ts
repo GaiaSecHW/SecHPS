@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest, authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -100,24 +100,28 @@ export async function GET(request: NextRequest) {
   const skip = (page - 1) * limit;
 
   try {
-    // 构建租户过滤条件
-    let where: any = {};
+    // 构建 where 条件：用 AND 数组显式组合，避免属性覆盖
+    const conditions: any[] = [];
 
     if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin')) {
-      where.userId = payload.userId;
+      conditions.push({ userId: payload.userId });
     }
 
     if (status) {
-      where.status = status;
+      conditions.push({ status });
     }
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { agentName: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-      ];
+      conditions.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { agentName: { contains: search, mode: 'insensitive' } },
+          { notes: { contains: search, mode: 'insensitive' } },
+        ],
+      });
     }
+
+    const where = conditions.length > 0 ? { AND: conditions } : {};
 
     const [tasks, total] = await Promise.all([
       prisma.taskInstance.findMany({
