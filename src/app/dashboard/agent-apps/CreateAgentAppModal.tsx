@@ -101,6 +101,14 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       return;
     }
 
+    if (formData.engine === 'opencode' || formData.engine === 'claudecode') {
+      const validation = await validateHarnessStructure(agentHarnessFile, formData.engine);
+      if (!validation.valid) {
+        toast.error(validation.message);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const isPublic = formData.tenantId === '__public__';
@@ -112,6 +120,51 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const validateHarnessStructure = async (
+    fileData: AgentHarnessFileData,
+    engine: string,
+  ): Promise<{ valid: boolean; message: string }> => {
+    if (engine === 'agentflow') return { valid: true, message: '' };
+
+    const requiredFolder = engine === 'opencode' ? '.opencode' : '.claude';
+    const engineLabel = engine === 'opencode' ? 'OpenCode' : 'Claude Code';
+
+    if (fileData.type === 'folder' && fileData.files) {
+      const hasRequiredFolder = fileData.files.some(f => {
+        const normalized = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+        return normalized.split('/').includes(requiredFolder);
+      });
+      if (!hasRequiredFolder) {
+        return {
+          valid: false,
+          message: `该文件不是 ${engineLabel} 的 AgentHarness 文件`,
+        };
+      }
+      return { valid: true, message: '' };
+    }
+
+    if (fileData.type === 'archive' && fileData.file && fileData.name.match(/\.zip$/i)) {
+      try {
+        const zip = await JSZip.loadAsync(fileData.file);
+        const hasRequiredFolder = Object.keys(zip.files).some(path => {
+          const normalized = path.replace(/\\/g, '/');
+          return normalized.split('/').includes(requiredFolder);
+        });
+        if (!hasRequiredFolder) {
+          return {
+            valid: false,
+            message: `该文件不是 ${engineLabel} 的 AgentHarness 文件`,
+          };
+        }
+        return { valid: true, message: '' };
+      } catch {
+        return { valid: false, message: '无法解析 ZIP 文件，请确认文件格式正确' };
+      }
+    }
+
+    return { valid: true, message: '' };
   };
 
   const handleClose = () => {
