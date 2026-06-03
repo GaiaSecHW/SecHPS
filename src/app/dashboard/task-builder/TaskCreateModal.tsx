@@ -216,11 +216,9 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
         return;
       }
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      const allowed = ['.zip','.jar','.war','.ear','.tar','.gz','.rar','.7z',
-        '.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.txt',
-        '.md','.csv','.json','.xml','.yaml','.yml'];
+      const allowed = ['.zip', '.jar', '.tar', '.gz', '.tgz'];
       if (!allowed.includes(ext)) {
-        toast.error('文件格式不支持，仅支持 ZIP、JAR、WAR 等格式');
+        toast.error('文件格式不支持，仅支持 ZIP、JAR、TAR 格式');
         return;
       }
       setSelectedFile(file);
@@ -240,7 +238,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       '.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.txt',
       '.md','.csv','.json','.xml','.yaml','.yml'];
     if (!allowed.includes(ext)) {
-      toast.error('文件格式不支持，仅支持 ZIP、JAR、WAR 等格式');
+      toast.error('文件格式不支持，仅支持 ZIP、JAR、TAR 格式');
       return;
     }
     setSelectedFile(file);
@@ -509,12 +507,12 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                     ref={fileInputRef}
                     type="file"
                     onChange={handleFileSelect}
-                    accept=".zip,.jar,.war,.ear,.tar,.gz,.rar,.7z,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
+                    accept=".zip,.jar,.tar,.tar.gz,.tgz"
                     className="hidden"
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center mt-1">
-                  支持 ZIP、JAR、PDF、DOC 等，最大 5GB
+                  仅支持 ZIP、JAR、TAR 格式，最大 5GB
                 </p>
               </div>
             )}
