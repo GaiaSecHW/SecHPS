@@ -8,6 +8,30 @@ import { randomUUID } from 'crypto';
 import { getTenantIdForCreate } from '@/lib/tenant-filter';
 import { createTaskWithFiles } from '@/lib/task-creation';
 
+type DisplayStatus = 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
+
+function mapDisplayStatus(
+  taskStatus: string,
+  codeswarmState: string | null | undefined,
+  hasCodeswarmTaskId: boolean,
+): DisplayStatus {
+  if (!hasCodeswarmTaskId || codeswarmState === null || codeswarmState === undefined) {
+    if (taskStatus === 'completed') return 'completed';
+    if (taskStatus === 'failed') return 'failed';
+    if (taskStatus === 'running') return 'running';
+    return 'pending';
+  }
+  switch (codeswarmState) {
+    case 'queued': return 'queued';
+    case 'dispatched': return 'dispatched';
+    case 'building': return 'running';
+    case 'running': return 'running';
+    case 'completed': return 'completed';
+    case 'failed': return 'failed';
+    default: return 'pending';
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
@@ -32,7 +56,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '缺少必填参数：agentId' }, { status: 400 });
     }
 
-    // 使用用户提供的名称，为空时自动生成
     let name = userProvidedName?.trim();
     if (!name) {
       let tenantName = 'public';
@@ -46,21 +69,14 @@ export async function POST(request: NextRequest) {
       name = `${payload.username}_${tenantName}_${Date.now()}`;
     }
 
-    // notes 为可选字段，无需校验
-
     const taskId = randomUUID();
 
-    // 准备文件数据
     const files: { name: string; buffer: Buffer }[] = [];
     if (file && file.size > 0) {
       const arrayBuffer = await file.arrayBuffer();
-      files.push({
-        name: file.name,
-        buffer: Buffer.from(arrayBuffer),
-      });
+      files.push({ name: file.name, buffer: Buffer.from(arrayBuffer) });
     }
 
-    // 使用共享函数创建任务
     const result = await createTaskWithFiles({
       taskId,
       userId: payload.userId,
@@ -96,19 +112,13 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '10');
   const search = searchParams.get('search') || '';
-  const status = searchParams.get('status') || '';
-  const skip = (page - 1) * limit;
+  const displayStatusFilter = searchParams.get('displayStatus') || '';
 
   try {
-    // 构建 where 条件：用 AND 数组显式组合，避免属性覆盖
     const conditions: any[] = [];
 
     if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin')) {
       conditions.push({ userId: payload.userId });
-    }
-
-    if (status) {
-      conditions.push({ status });
     }
 
     if (search) {
@@ -123,21 +133,29 @@ export async function GET(request: NextRequest) {
 
     const where = conditions.length > 0 ? { AND: conditions } : {};
 
-    const [tasks, total] = await Promise.all([
-      prisma.taskInstance.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-        include: { User: { select: { username: true } } },
-      }),
-      prisma.taskInstance.count({ where }),
-    ]);
+    const allTasks = await prisma.taskInstance.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: { User: { select: { username: true } } },
+    });
 
-    // 收集所有 codeswarmTaskId，批量查询 Worker 信息
-    const codeswarmTaskIds = tasks
+    const codeswarmTaskIds = allTasks
       .map(t => t.codeswarmTaskId)
       .filter((id): id is string => id !== null && id !== undefined);
+
+    let codeswarmStateMap = new Map<string, string>();
+
+    if (codeswarmTaskIds.length > 0) {
+      const stateRows: { taskId: string; state: string }[] =
+        await prisma.$queryRaw`
+          SELECT ct."taskId", ct."state"
+          FROM "CodeswarmTask" ct
+          WHERE ct."taskId" IN (${Prisma.join(codeswarmTaskIds)})
+        `;
+      for (const row of stateRows) {
+        codeswarmStateMap.set(row.taskId, row.state);
+      }
+    }
 
     let workerMap = new Map<string, { workerNodeId: string | null; workerStatus: string | null }>();
 
@@ -154,23 +172,30 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 为每个 task 添加 worker 信息
-    const augmentedTasks = tasks.map(task => ({
-      ...task,
-      workerNodeId: task.codeswarmTaskId ? (workerMap.get(task.codeswarmTaskId)?.workerNodeId ?? null) : null,
-      workerStatus: task.codeswarmTaskId ? (workerMap.get(task.codeswarmTaskId)?.workerStatus ?? null) : null,
-    }));
+    const augmentedTasks = allTasks.map(task => {
+      const hasCsid = task.codeswarmTaskId !== null && task.codeswarmTaskId !== undefined;
+      const csState = hasCsid ? codeswarmStateMap.get(task.codeswarmTaskId!) ?? null : null;
+      const displayStatus = mapDisplayStatus(task.status, csState, hasCsid);
+      return {
+        ...task,
+        displayStatus,
+        workerNodeId: hasCsid ? (workerMap.get(task.codeswarmTaskId!)?.workerNodeId ?? null) : null,
+        workerStatus: hasCsid ? (workerMap.get(task.codeswarmTaskId!)?.workerStatus ?? null) : null,
+      };
+    });
 
+    const filteredTasks = displayStatusFilter
+      ? augmentedTasks.filter(t => t.displayStatus === displayStatusFilter)
+      : augmentedTasks;
+
+    const total = filteredTasks.length;
     const totalPages = Math.ceil(total / limit);
+    const skip = (page - 1) * limit;
+    const paginatedTasks = filteredTasks.slice(skip, skip + limit);
 
     return NextResponse.json({
-      tasks: augmentedTasks,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages,
-      },
+      tasks: paginatedTasks,
+      pagination: { total, page, limit, totalPages },
     });
   } catch (error) {
     logger.error(LOG_MODULES.AGENT, '获取任务列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });

@@ -30,6 +30,7 @@ interface TaskInstance {
   codeswarmTaskId: string | null;
   createdAt: string;
   updatedAt: string;
+  displayStatus?: 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
 }
 
 interface TaskExecutionLog {
@@ -56,10 +57,12 @@ interface CodeswarmStatus {
 }
 
 const statusConfig: Record<string, { bg: string; text: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
-  pending: { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '待执行', icon: Clock },
-  running: { bg: 'bg-blue-100', text: 'text-blue-400', label: '执行中', icon: Loader2 },
-  completed: { bg: 'bg-green-100', text: 'text-green-400', label: '已完成', icon: CheckCircle },
-  failed: { bg: 'bg-red-100', text: 'text-red-400', label: '执行失败', icon: XCircle },
+  pending:     { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '未执行', icon: Clock },
+  queued:      { bg: 'bg-slate-100', text: 'text-slate-400', label: '排队中', icon: Clock },
+  dispatched:  { bg: 'bg-purple-100', text: 'text-purple-400', label: '已分发', icon: Loader2 },
+  running:     { bg: 'bg-blue-100', text: 'text-blue-400', label: '执行中', icon: Loader2 },
+  completed:   { bg: 'bg-green-100', text: 'text-green-400', label: '已完成', icon: CheckCircle },
+  failed:      { bg: 'bg-red-100', text: 'text-red-400', label: '失败', icon: XCircle },
 };
 
 const logLevelConfig: Record<string, { bg: string; text: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
@@ -67,6 +70,18 @@ const logLevelConfig: Record<string, { bg: string; text: string; icon: React.Com
   warning: { bg: 'bg-yellow-900/20', text: 'text-yellow-400', icon: AlertCircle },
   error: { bg: 'bg-red-900/20', text: 'text-red-400', icon: XCircle },
   success: { bg: 'bg-green-900/20', text: 'text-green-400', icon: CheckCircle },
+};
+
+const getDisplayStatus = (task: TaskInstance): 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed' => {
+  if (task.displayStatus) return task.displayStatus;
+  // Fallback: compute from task.status and codeswarmStatus
+  if (!task.codeswarmTaskId) {
+    if (task.status === 'completed') return 'completed';
+    if (task.status === 'failed') return 'failed';
+    return 'pending';
+  }
+  // No codeswarmStatus available in interface, rely on displayStatus from API
+  return task.status as any;
 };
 
 export default function TaskDetailPage() {
@@ -107,6 +122,10 @@ export default function TaskDetailPage() {
         setTask(data.task || null);
         setLogs(data.logs || []);
         setCodeswarmStatus(data.codeswarmStatus || null);
+        // Merge displayStatus into task object for convenience
+        if (data.task && data.displayStatus) {
+          setTask({ ...data.task, displayStatus: data.displayStatus });
+        }
       } else {
         setTask(null);
         setLogs([]);
@@ -159,7 +178,7 @@ export default function TaskDetailPage() {
 
   // 执行时长计时器
   useEffect(() => {
-    if (task?.status === 'running' && task.startedAt) {
+    if ((task?.status === 'running' || (task?.displayStatus === 'running' || task?.displayStatus === 'queued' || task?.displayStatus === 'dispatched')) && task.startedAt) {
       const start = new Date(task.startedAt).getTime();
       setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
       timerRef.current = setInterval(() => {
@@ -175,7 +194,7 @@ export default function TaskDetailPage() {
   useEffect(() => {
     const completedAtMs = task?.completedAt ? new Date(task.completedAt).getTime() : 0;
 
-    if (task?.status === 'running') {
+    if (task?.status === 'running' || task?.displayStatus === 'running' || task?.displayStatus === 'queued' || task?.displayStatus === 'dispatched') {
       pollingRef.current = setInterval(() => {
         fetchTaskDetail(taskId, false);
       }, 5000);
@@ -449,14 +468,14 @@ export default function TaskDetailPage() {
     );
   }
 
-  const config = statusConfig[task.status] || statusConfig.pending;
+  const config = statusConfig[getDisplayStatus(task)] || statusConfig.pending;
   const StatusIcon = config.icon;
 
   // 从事件推断当前 Agent 执行阶段
   const getParallelPhases = (): { agentPhase: string; agentColor: string; agentDetail: string; codedmapPhase: string; codedmapColor: string; codedmapDetail: string } => {
     const defaults = { agentPhase: '未执行', agentColor: 'text-gray-400', agentDetail: '', codedmapPhase: '跳过', codedmapColor: 'text-gray-500', codedmapDetail: '' };
     if (!codeswarmStatus) {
-      if (task.status === 'running') return { ...defaults, agentPhase: '等待调度', agentColor: 'text-yellow-400', agentDetail: '任务已提交，等待 Worker 接收' };
+      if (getDisplayStatus(task) === 'running' || getDisplayStatus(task) === 'queued' || getDisplayStatus(task) === 'dispatched') return { ...defaults, agentPhase: '等待调度', agentColor: 'text-yellow-400', agentDetail: '任务已提交，等待 Worker 接收' };
       return defaults;
     }
     const events = codeswarmStatus.recentEvents || [];
@@ -540,10 +559,10 @@ export default function TaskDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>
-              <StatusIcon size={14} className={`mr-1 ${task.status === 'running' ? 'animate-spin' : ''}`} />
+              <StatusIcon size={14} className={`mr-1 ${(getDisplayStatus(task) === 'running' || getDisplayStatus(task) === 'queued' || getDisplayStatus(task) === 'dispatched') ? 'animate-spin' : ''}`} />
               {config.label}
             </span>
-{task.status === 'pending' && (
+{getDisplayStatus(task) === 'pending' && (
                <button
                  onClick={handleExecute}
                  disabled={executing}
@@ -553,7 +572,7 @@ export default function TaskDetailPage() {
                  {executing ? '启动中...' : '执行任务'}
                </button>
              )}
-{task.status === 'running' && (
+{(getDisplayStatus(task) === 'running' || getDisplayStatus(task) === 'queued' || getDisplayStatus(task) === 'dispatched') && (
                  <button
                    onClick={handleStop}
                    disabled={stopping}
@@ -563,7 +582,7 @@ export default function TaskDetailPage() {
                    {stopping ? '停止中...' : '停止任务'}
                  </button>
                )}
-            {task.status === 'completed' && reportFiles?.hasReport && (
+            {getDisplayStatus(task) === 'completed' && reportFiles?.hasReport && (
               <button
                 onClick={handleDownloadAllReports}
                 disabled={downloading}
@@ -578,7 +597,7 @@ export default function TaskDetailPage() {
       </div>
 
       {/* 执行状态 */}
-      {(task.startedAt || task.status === 'running' || codeswarmStatus) && (
+      {(task.startedAt || getDisplayStatus(task) === 'running' || getDisplayStatus(task) === 'queued' || getDisplayStatus(task) === 'dispatched' || codeswarmStatus) && (
         <div className="bg-dark-surface rounded-lg border border-gray-700/50 px-4 py-3">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-start text-xs">
             <div className="flex items-center gap-2">
@@ -603,7 +622,7 @@ export default function TaskDetailPage() {
                   {task.startedAt ? formatDate(task.startedAt) : '-'}
                   {task.completedAt
                     ? ` → ${formatDate(task.completedAt)}`
-                    : task.status === 'running' && <span className="text-blue-400 font-mono ml-1">{formatElapsed(elapsedSeconds)}</span>}
+                    : (getDisplayStatus(task) === 'running' || getDisplayStatus(task) === 'queued' || getDisplayStatus(task) === 'dispatched') && <span className="text-blue-400 font-mono ml-1">{formatElapsed(elapsedSeconds)}</span>}
                 </p>
               </div>
             </div>
