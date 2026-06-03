@@ -26,7 +26,7 @@ export default function ModeSelectModal({ isOpen, onClose, onSelect }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
       <div className="bg-zinc-900 rounded-lg shadow-xl w-full max-w-xl mx-4">
         <div className="border-b border-gray-700/50 px-6 py-4 flex items-center justify-between">
           <h2 className="text-white text-lg font-semibold">选择创建模式</h2>

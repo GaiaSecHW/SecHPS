@@ -722,7 +722,7 @@ function McpServersContent() {
 
         {/* Add/Edit Form Modal */}
         {showForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
             <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
               <div className="p-6">
                 <h2 className="text-xl font-bold text-gray-100 mb-4">

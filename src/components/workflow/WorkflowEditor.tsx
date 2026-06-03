@@ -2016,7 +2016,7 @@ return (
 
       {/* 预览弹窗 */}
       {showPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
             {/* 头部 */}
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
@@ -2075,7 +2075,7 @@ return (
 
       {/* 预测任务弹窗 */}
       {showPredictionTasks && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
             {/* 头部 */}
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
@@ -2253,7 +2253,7 @@ return (
 
       {/* 角色管理面板 */}
       {showRolePanel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">角色管理</h3>

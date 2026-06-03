@@ -473,7 +473,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
       </div>
 
       {showTemplateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg p-4 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-3">
               <div>
