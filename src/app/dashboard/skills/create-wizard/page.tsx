@@ -42,7 +42,7 @@ interface SkillWizardData {
     description: string;
     categoryId: string;
     vulnerabilityTreeId?: number | null;
-    selectedLanguageId?: string;
+    selectedLanguageId?: number | '';
     productTagIds?: string[];
     whatDoesItDo: string;
     whenShouldItTrigger: string;

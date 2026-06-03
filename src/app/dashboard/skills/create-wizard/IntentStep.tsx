@@ -311,7 +311,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                   具体模式
                 </label>
                 <select
-                  value={data.vulnerabilityTreeId ?? ''}
+value={data.vulnerabilityTreeId ?? ''}
                   onChange={(e) => handleChange('vulnerabilityTreeId', e.target.value ? Number(e.target.value) : null)}
                   disabled={loadingTree || !data.selectedVulnSubcategoryId || availablePatterns.length === 0}
                   className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"

@@ -20,7 +20,7 @@ interface Props {
     description: string;
     categoryId: string;
     vulnerabilityTreeId?: number | null;
-    selectedLanguageId?: string;
+    selectedLanguageId?: number | '';
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
