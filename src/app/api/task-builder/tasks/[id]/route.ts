@@ -138,9 +138,14 @@ export async function DELETE(
     }
 
     // 最后删除 TaskInstance（级联删 TaskExecutionLog + Vulnerability）
-    await prisma.taskInstance.delete({
+    // 使用 deleteMany 防止中间清理步骤的级联删除导致记录已不存在时抛异常
+    const deleteResult = await prisma.taskInstance.deleteMany({
       where: { id },
     });
+
+    if (deleteResult.count === 0) {
+      logger.info(LOG_MODULES.AGENT, `任务 ${id} 已不存在，视为删除成功`);
+    }
 
     return NextResponse.json({ message: '任务已删除' });
   } catch (error) {
