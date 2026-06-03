@@ -531,7 +531,7 @@ export default function AgentAppsPage() {
 
                   {/* Meta info */}
                   <div className="px-4 py-3 flex items-center justify-between text-xs text-gray-400">
-                    <span><span className="text-gray-600">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
+                    <span><span className="text-gray-600">开发者：</span>{app.User?.username || app.User?.name || '-'}</span>
                     <span><span className="text-gray-600">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
                   </div>
 
