@@ -434,7 +434,7 @@ export class ProcessManager {
           if (onEvent) {
             onEvent({
               type: 'continuation_attempt',
-              message: `Agent 无响应 ${state.inactivityTimeoutTriggered ? INACTIVITY_TIMEOUT_MS/1000 : CHILD_SESSION_TIMEOUT_MS/1000}s，第 ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS} 次续推`,
+              message: `Agent 无响应 ${INACTIVITY_TIMEOUT_MS/1000}s，第 ${ctx.continueAttempt}/${CONTINUE_MAX_ATTEMPTS} 次续推`,
               timestamp: new Date().toISOString(),
             });
           }
