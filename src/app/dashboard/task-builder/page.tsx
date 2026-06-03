@@ -83,6 +83,7 @@ export default function TaskBuilderPage() {
     taskName: string;
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'running' | 'completed' | 'failed'>('all');
 
   // 重试弹窗状态
@@ -107,13 +108,16 @@ export default function TaskBuilderPage() {
 
   useEffect(() => {
     fetchTasks(currentPage, pageSize);
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, searchQuery, statusFilter]);
 
   const fetchTasks = async (page: number, size: number) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/task-builder/tasks?page=${page}&limit=${size}`, {
+      const params = new URLSearchParams({ page: String(page), limit: String(size) });
+      if (searchQuery) params.append('search', searchQuery);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      const response = await fetch(`/api/task-builder/tasks?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -136,12 +140,6 @@ export default function TaskBuilderPage() {
     }
   };
 
-  const filteredTasks = tasks.filter(task =>
-    (statusFilter === 'all' || task.status === statusFilter) &&
-    (task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    task.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (task.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false))
-  );
 
   const handleModeSelect = (mode: 'quick' | 'deep') => {
     setShowModeSelect(false);
@@ -367,8 +365,9 @@ export default function TaskBuilderPage() {
               <input
                 type="text"
                 placeholder="搜索任务名称、Agent..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setSearchQuery(searchInput); setCurrentPage(1); } }}
                 className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
               />
             </div>
@@ -376,7 +375,7 @@ export default function TaskBuilderPage() {
             {/* 状态筛选按钮组 */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setStatusFilter('all')}
+                onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -384,7 +383,7 @@ export default function TaskBuilderPage() {
                 全部
               </button>
               <button
-                onClick={() => setStatusFilter('pending')}
+                onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'pending' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -393,7 +392,7 @@ export default function TaskBuilderPage() {
                 待执行
               </button>
               <button
-                onClick={() => setStatusFilter('running')}
+                onClick={() => { setStatusFilter('running'); setCurrentPage(1); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'running' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -402,7 +401,7 @@ export default function TaskBuilderPage() {
                 执行中
               </button>
               <button
-                onClick={() => setStatusFilter('completed')}
+                onClick={() => { setStatusFilter('completed'); setCurrentPage(1); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'completed' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -411,7 +410,7 @@ export default function TaskBuilderPage() {
                 已完成
               </button>
               <button
-                onClick={() => setStatusFilter('failed')}
+                onClick={() => { setStatusFilter('failed'); setCurrentPage(1); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'failed' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -424,7 +423,7 @@ export default function TaskBuilderPage() {
         </div>
 
         {/* Cards section */}
-        {filteredTasks.length === 0 ? (
+        {tasks.length === 0 ? (
           <div className="p-12">
             <div className="text-center">
               <ClipboardList className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -444,7 +443,7 @@ export default function TaskBuilderPage() {
         ) : (
         <div className="p-5">
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-            {filteredTasks.map((task) => {
+            {tasks.map((task) => {
             const config = statusConfig[task.status] || statusConfig.pending;
             const isExecuting = executingIds.has(task.id);
 

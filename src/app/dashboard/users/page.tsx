@@ -33,6 +33,7 @@ function UsersPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -45,12 +46,14 @@ function UsersPageContent() {
   useEffect(() => {
     fetchUsers();
     fetchRoles();
-  }, [page]);
+  }, [page, searchQuery]);
 
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/users?page=${page}&limit=${pageSize}`, {
+      const params = new URLSearchParams({ page: String(page), limit: String(pageSize) });
+      if (searchQuery) params.append('search', searchQuery);
+      const response = await fetch(`/api/users?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -132,12 +135,6 @@ function UsersPageContent() {
     setShowResetPasswordModal(true);
   };
 
-  const filteredUsers = users.filter(
-    user =>
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.name && user.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
 
   if (loading) {
     return (
@@ -185,8 +182,9 @@ function UsersPageContent() {
             <input
               type="text"
               placeholder="按姓名、邮箱或用户名搜索..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { setSearchQuery(searchInput); setPage(1); } }}
               className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
             />
           </div>
@@ -220,7 +218,7 @@ function UsersPageContent() {
             </tr>
           </thead>
           <tbody className="bg-dark-surface divide-y divide-gray-700/50">
-            {filteredUsers.length === 0 ? (
+            {users.length === 0 ? (
               <tr>
                 <td
                   colSpan={7}
@@ -230,7 +228,7 @@ function UsersPageContent() {
                 </td>
               </tr>
             ) : (
-              filteredUsers.map((user) => (
+              users.map((user) => (
                 <UserRow
                   key={user.id}
                   user={user}
@@ -563,12 +561,16 @@ function CreateUserModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-300">所属租户 <span className="text-red-400">*</span></label>
-            <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-dark-bg text-gray-100">
-              <option value="">请选择租户</option>
-              {tenants.map((t: any) => (
-                <option key={t.id} value={t.id}>{t.name}{t.isIcsTenant ? ' (ICSL)' : ''}</option>
-              ))}
-            </select>
+            {tenants.length === 0 ? (
+              <p className="mt-1 text-sm text-amber-400">暂无可用租户，请先 <a href="/dashboard/admin/tenants" className="underline hover:text-amber-300">创建租户</a></p>
+            ) : (
+              <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-dark-bg text-gray-100">
+                <option value="">请选择租户</option>
+                {tenants.map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.name}{t.isIcsTenant ? ' (ICSL)' : ''}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">

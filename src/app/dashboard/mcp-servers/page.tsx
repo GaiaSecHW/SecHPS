@@ -73,6 +73,7 @@ function McpServersContent() {
     toolCount?: number;
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -420,8 +421,9 @@ function McpServersContent() {
               <input
                 type="text"
                 placeholder="搜索 MCP 服务器..."
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setSearchQuery(searchInput); setPage(1); } }}
                 className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
               />
             </div>

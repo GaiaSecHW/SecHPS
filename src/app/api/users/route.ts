@@ -39,6 +39,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
+    const search = searchParams.get('search') || '';
 
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
 
@@ -54,6 +55,23 @@ export async function GET(request: Request) {
       } else {
         // 无租户用户：只看到无租户用户
         where.tenantId = null;
+      }
+    }
+
+    // 搜索过滤
+    if (search) {
+      const searchFilter = {
+        OR: [
+          { username: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { name: { contains: search, mode: 'insensitive' } },
+        ],
+      };
+      if (where.OR) {
+        // 已有租户 OR 条件，需要组合
+        where = { AND: [where, searchFilter] };
+      } else {
+        Object.assign(where, searchFilter);
       }
     }
 

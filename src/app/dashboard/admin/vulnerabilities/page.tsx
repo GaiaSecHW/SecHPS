@@ -159,8 +159,13 @@ function VulnerabilitiesContent() {
   const taskFilter = searchParams.get('task') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
 
+  const [searchInput, setSearchInput] = useState(search);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 20;
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
 
   useEffect(() => {
     fetchStats();
@@ -338,8 +343,9 @@ function VulnerabilitiesContent() {
               <input
                 type="text"
                 placeholder="搜索漏洞..."
-                value={search}
-                onChange={(e) => updateUrl({ search: e.target.value, page: 1 })}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') updateUrl({ search: searchInput, page: 1 }); }}
                 className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-500 text-sm"
               />
             </div>

@@ -95,6 +95,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '10');
+  const search = searchParams.get('search') || '';
+  const status = searchParams.get('status') || '';
   const skip = (page - 1) * limit;
 
   try {
@@ -103,6 +105,18 @@ export async function GET(request: NextRequest) {
 
     if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin')) {
       where.userId = payload.userId;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { agentName: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     const [tasks, total] = await Promise.all([
