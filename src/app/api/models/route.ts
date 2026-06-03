@@ -12,8 +12,8 @@ function formatModel(model: any, includeApiKey: boolean = false) {
   return {
     id: model.id,
     userId: model.userId,
-    userName: model.user?.name || model.user?.username || null,  // 创建者姓名
-    userUsername: model.user?.username || null,  // 创建者用户名
+    userName: model.User?.name || model.User?.username || null,
+    userUsername: model.User?.username || null,
     name: model.name,
     providerType: model.providerType,
     apiBaseUrl: model.apiBaseUrl,

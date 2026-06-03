@@ -548,7 +548,7 @@ function CreateUserModal({
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">角色</label>
             <div className="grid grid-cols-2 gap-2">
-              {roles.filter((r: any) => r.name !== 'admin').map((role: any) => (
+              {roles.map((role: any) => (
                 <label key={role.id} className="flex items-center space-x-2 px-3 py-2 border border-gray-600 rounded-md cursor-pointer hover:bg-dark-surface-hover">
                   <input type="checkbox" checked={selectedRoles.includes(role.id)} onChange={() => {
                     setSelectedRoles(prev => prev.includes(role.id) ? prev.filter(id => id !== role.id) : [...prev, role.id]);
