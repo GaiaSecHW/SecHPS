@@ -12,30 +12,12 @@ interface CategoryItem {
   hasSubDimension: boolean;
 }
 
-interface LanguageItem {
-  id: string;
+interface AttackPatternNode {
+  id: number;
   name: string;
-  displayName: string;
-}
-
-interface VulnerabilityCategory {
-  id: string;
-  name: string;
-  displayName: string;
-}
-
-interface VulnerabilitySubcategory {
-  id: string;
-  name: string;
-  displayName: string;
-  parentId: string | null;
-}
-
-interface VulnerabilityPattern {
-  id: string;
-  name: string;
-  displayName: string;
-  parentId: string | null;
+  parent_id: number | null;
+  level: number;
+  library_id: number;
 }
 
 interface IntentData {
@@ -43,9 +25,9 @@ interface IntentData {
   description: string;
   categoryId: string;
   vulnerabilityTreeId?: number | null;
-  selectedLanguageId?: string;
-  selectedVulnCategoryId?: string;
-  selectedVulnSubcategoryId?: string;
+  selectedLanguageId?: number | '';
+  selectedVulnCategoryId?: number | '';
+  selectedVulnSubcategoryId?: number | '';
   productTagIds?: string[];
   whatDoesItDo: string;
   whenShouldItTrigger: string;
@@ -67,10 +49,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [languages, setLanguages] = useState<LanguageItem[]>([]);
-  const [vulnCategories, setVulnCategories] = useState<VulnerabilityCategory[]>([]);
-  const [vulnSubcategories, setVulnSubcategories] = useState<VulnerabilitySubcategory[]>([]);
-  const [vulnPatterns, setVulnPatterns] = useState<VulnerabilityPattern[]>([]);
+  const [attackNodes, setAttackNodes] = useState<AttackPatternNode[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
 
@@ -102,7 +81,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   }, []);
 
   useEffect(() => {
-    if (vulnCategories.length === 0) {
+    if (attackNodes.length === 0) {
       const fetchTree = async () => {
         setLoadingTree(true);
         try {
@@ -112,10 +91,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           });
           if (res.ok) {
             const d = await res.json();
-            setLanguages(d.tree || []);
-            setVulnCategories(d.categories || []);
-            setVulnSubcategories(d.subcategories || []);
-            setVulnPatterns(d.patterns || []);
+            setAttackNodes(d.nodes || []);
           }
         } catch (e) {
           console.error('加载漏洞树失败:', e);
@@ -125,17 +101,21 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
       };
       fetchTree();
     }
-  }, [vulnCategories.length]);
+  }, [attackNodes.length]);
 
   const selectedCategory = categories.find(c => c.id === data.categoryId);
 
-  const availableSubcategories = vulnSubcategories.filter(
-    s => s.parentId === data.selectedVulnCategoryId
-  );
+  // 从 attackNodes 派生各级数据
+  const languages = attackNodes.filter(n => n.level === 0);
+  const getChildren = (parentId: number) => attackNodes.filter(n => n.parent_id === parentId);
+  const isLeaf = (id: number) => !attackNodes.some(n => n.parent_id === id);
 
-  const availablePatterns = vulnPatterns.filter(
-    p => p.parentId === data.selectedVulnSubcategoryId
-  );
+  const selectedLanguage = attackNodes.find(n => n.id === data.selectedLanguageId);
+  const vulnCategories = selectedLanguage ? getChildren(selectedLanguage.id) : [];
+  const selectedVulnCat = attackNodes.find(n => n.id === data.selectedVulnCategoryId);
+  const vulnSubcategories = selectedVulnCat ? getChildren(selectedVulnCat.id) : [];
+  const selectedVulnSub = attackNodes.find(n => n.id === data.selectedVulnSubcategoryId);
+  const availablePatterns = selectedVulnSub ? getChildren(selectedVulnSub.id).filter(n => isLeaf(n.id)) : [];
 
   useEffect(() => {
     const fetchTemplate = async () => {
@@ -248,17 +228,26 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           {selectedCategory?.hasSubDimension && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                语言 <span className="text-red-500">*</span>
+                模式库 <span className="text-red-500">*</span>
               </label>
               <select
                 value={data.selectedLanguageId || ''}
-                onChange={(e) => handleChange('selectedLanguageId', e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value ? Number(e.target.value) : '';
+                  onChange({
+                    ...data,
+                    selectedLanguageId: val,
+                    selectedVulnCategoryId: '',
+                    selectedVulnSubcategoryId: '',
+                    vulnerabilityTreeId: null,
+                  });
+                }}
                 disabled={loadingTree}
                 className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
               >
-                <option value="">请选择语言</option>
+                <option value="">请选择模式库</option>
                 {languages.map(lang => (
-                  <option key={lang.id} value={lang.id}>{lang.displayName}</option>
+                  <option key={lang.id} value={lang.id}>{lang.name}</option>
                 ))}
               </select>
             </div>
@@ -275,9 +264,10 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                 <select
                   value={data.selectedVulnCategoryId || ''}
                   onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : '';
                     onChange({
                       ...data,
-                      selectedVulnCategoryId: e.target.value,
+                      selectedVulnCategoryId: val,
                       selectedVulnSubcategoryId: '',
                       vulnerabilityTreeId: null,
                     });
@@ -287,7 +277,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                 >
                   <option value="">请选择类型</option>
                   {vulnCategories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.displayName}</option>
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
               </div>
@@ -299,18 +289,19 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                 <select
                   value={data.selectedVulnSubcategoryId || ''}
                   onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : '';
                     onChange({
                       ...data,
-                      selectedVulnSubcategoryId: e.target.value,
+                      selectedVulnSubcategoryId: val,
                       vulnerabilityTreeId: null,
                     });
                   }}
-                  disabled={loadingTree || !data.selectedVulnCategoryId || availableSubcategories.length === 0}
+                  disabled={loadingTree || !data.selectedVulnCategoryId || vulnSubcategories.length === 0}
                   className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
                 >
                   <option value="">请选择分类</option>
-                  {availableSubcategories.map(sub => (
-                    <option key={sub.id} value={sub.id}>{sub.displayName}</option>
+                  {vulnSubcategories.map(sub => (
+                    <option key={sub.id} value={sub.id}>{sub.name}</option>
                   ))}
                 </select>
               </div>
@@ -320,20 +311,20 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                   具体模式
                 </label>
                 <select
-                  value={data.vulnerabilityTreeId?.toString() ?? ''}
+                  value={data.vulnerabilityTreeId ?? ''}
                   onChange={(e) => handleChange('vulnerabilityTreeId', e.target.value ? Number(e.target.value) : null)}
                   disabled={loadingTree || !data.selectedVulnSubcategoryId || availablePatterns.length === 0}
                   className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
                 >
                   <option value="">请选择模式</option>
                   {availablePatterns.map(pat => (
-                    <option key={pat.id} value={pat.id}>{pat.displayName}</option>
+                    <option key={pat.id} value={pat.id}>{pat.name}</option>
                   ))}
                 </select>
               </div>
             </div>
             <p className="text-xs text-gray-500">
-              依次选择漏洞类型、分类和具体模式
+              依次选择模式库、漏洞类型、分类和具体模式
             </p>
           </>
         )}

@@ -677,7 +677,7 @@ export default function ImportCreateSkillPage() {
                                   {(() => {
                                     const selectedCat = categories.find(c => c.id === item.categoryId);
                                     return selectedCat?.hasSubDimension ? (
-                                      <div className="min-w-[200px] max-w-[300px]">
+                                      <div className="min-w-[360px]">
                                         <label className="block text-xs text-gray-500 mb-0.5">漏洞模式</label>
                                         <VulnerabilityTreeSelector
                                           value={item.vulnerabilityTreeId}
