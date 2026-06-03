@@ -95,6 +95,7 @@ export async function POST(request: Request) {
     const categoryId = formData.get('categoryId') as string;
     const vulnerabilityTreeId = formData.get('vulnerabilityTreeId') as string | null;
     const vulnerabilityTreeIdInt = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
+    const vulnerabilityTreeIdStr = vulnerabilityTreeId || null;
     const productTagIdsStr = formData.get('productTagIds') as string;
     const isPublicStr = formData.get('isPublic') as string;
     const skillNameOverride = formData.get('skillName') as string | null;
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: `分类 ID "${categoryId}" 不存在` } }, { status: 400 });
     }
 
-    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdInt) {
+    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdStr) {
       return NextResponse.json(
         { details: { error: `分类 "${skillCategory.displayName}" 需要指定漏洞模式` } },
         { status: 400 }

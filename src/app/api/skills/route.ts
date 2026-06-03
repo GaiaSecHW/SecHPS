@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     const where: Record<string, unknown> = {};
     if (isActive !== null) where.isActive = isActive === 'true';
     if (categoryId) where.categoryId = categoryId;
-    if (patternId) where.vulnerabilityTreeId = Number(patternId);
+    if (patternId) where.vulnerabilityTreeId = patternId;
     if (languageId) {
       const patterns = await prisma.attackPattern.findMany({
         where: { parent_id: Number(languageId), is_valid: 1 },
@@ -170,6 +170,7 @@ export async function POST(request: Request) {
     } = body;
 
     const vulnerabilityTreeIdNum = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
+    const vulnerabilityTreeIdStr = vulnerabilityTreeId || null;
 
     // 验证必填字段
     if (!name || !displayName || !description || !content || !categoryId) {
@@ -189,7 +190,7 @@ export async function POST(request: Request) {
     }
 
     // 如果分类需要第二维度，vulnerabilityTreeId 必填
-    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdNum) {
+    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdStr) {
       return NextResponse.json(
         { details: { error: `分类 "${skillCategory.displayName}" 需要指定漏洞模式` } },
         { status: 400 }

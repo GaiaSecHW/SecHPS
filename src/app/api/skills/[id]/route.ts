@@ -97,6 +97,7 @@ export async function PUT(
     } = body;
 
     const vulnerabilityTreeIdNum = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
+    const vulnerabilityTreeIdStr = vulnerabilityTreeId || null;
 
     const skill = await prisma.skill.findUnique({ where: { id } });
     if (!skill) {
@@ -137,7 +138,7 @@ export async function PUT(
           displayName: displayName || currentSkill.displayName,
           description: description || currentSkill.description,
           categoryId: categoryId || currentSkill.categoryId,
-          vulnerabilityTreeId: vulnerabilityTreeIdNum || currentSkill.vulnerabilityTreeId,
+          vulnerabilityTreeId: vulnerabilityTreeIdNum ?? currentSkill.vulnerabilityTreeId,
           cwe: cwe || currentSkill.cwe,
           content,
           userId: currentSkill.userId,
