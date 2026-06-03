@@ -167,6 +167,7 @@ export default function LoginPage() {
           </div>
         </form>
 
+        {/* 注册入口暂时隐藏
         <div className="mt-6">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -192,6 +193,7 @@ export default function LoginPage() {
             </Link>
           </div>
         </div>
+        */}
       </div>
     </div>
   );
