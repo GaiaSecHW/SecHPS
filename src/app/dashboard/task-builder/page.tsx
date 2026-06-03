@@ -31,6 +31,7 @@ interface TaskInstance {
   workerStatus: string | null;
   createdAt: string;
   updatedAt: string;
+  User?: { username: string } | null;
 }
 
 interface TaskFormData {
@@ -497,6 +498,9 @@ export default function TaskBuilderPage() {
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                     <Clock size={12} className="shrink-0" />
                     <span>创建于 {formatDate(task.createdAt)}</span>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    创建人: {task.User?.username || '未知'}
                   </div>
                 </div>
 

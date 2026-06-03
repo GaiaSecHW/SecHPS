@@ -111,6 +111,7 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
+        include: { User: { select: { username: true } } },
       }),
       prisma.taskInstance.count({ where }),
     ]);
