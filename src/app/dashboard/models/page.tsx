@@ -771,7 +771,7 @@ export default function ModelsPage() {
 
       {/* 添加/编辑模型模态框 */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
               <h3 className="text-lg font-semibold text-gray-100">
@@ -1076,7 +1076,7 @@ export default function ModelsPage() {
 
       {/* 删除确认对话框 */}
       {showDeleteConfirm && deletingModel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">

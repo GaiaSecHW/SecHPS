@@ -8,6 +8,30 @@ import { rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
+type DisplayStatus = 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
+
+function mapDisplayStatusLocal(
+  taskStatus: string,
+  codeswarmState: string | null | undefined,
+  codeswarmTaskId: string | null,
+): DisplayStatus {
+  if (!codeswarmTaskId || codeswarmState === null || codeswarmState === undefined) {
+    if (taskStatus === 'completed') return 'completed';
+    if (taskStatus === 'failed') return 'failed';
+    if (taskStatus === 'running') return 'running';
+    return 'pending';
+  }
+  switch (codeswarmState) {
+    case 'queued': return 'queued';
+    case 'dispatched': return 'dispatched';
+    case 'building': return 'running';
+    case 'running': return 'running';
+    case 'completed': return 'completed';
+    case 'failed': return 'failed';
+    default: return 'pending';
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -67,7 +91,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ task, logs: task.TaskExecutionLog, codeswarmStatus });
+    return NextResponse.json({ task, logs: task.TaskExecutionLog, codeswarmStatus, displayStatus: mapDisplayStatusLocal(task.status, codeswarmStatus?.state, task.codeswarmTaskId) });
   } catch (error) {
     logger.error(LOG_MODULES.AGENT, '获取任务详情失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取任务详情失败' }, { status: 500 });

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server, X, Check, ChevronDown } from 'lucide-react';
+import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server, X, Check, ChevronDown, ListOrdered, Send } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import ModeSelectModal from './ModeSelectModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -23,10 +23,11 @@ interface TaskInstance {
   skills: string | null;
   scripts: string | null;
   notes: string | null;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
   startedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
+  displayStatus: 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
   workerNodeId: string | null;
   workerStatus: string | null;
   createdAt: string;
@@ -44,10 +45,12 @@ interface TaskFormData {
 }
 
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-  pending:   { bg: 'bg-gray-500/20',  text: 'text-gray-400',  label: '待执行' },
-  running:   { bg: 'bg-blue-500/20',  text: 'text-blue-400',  label: '执行中' },
-  completed: { bg: 'bg-green-500/20', text: 'text-green-400', label: '已完成' },
-  failed:    { bg: 'bg-red-500/20',   text: 'text-red-400',   label: '执行失败' },
+  pending:     { bg: 'bg-gray-500/20',  text: 'text-gray-400',  label: '未执行' },
+  queued:      { bg: 'bg-slate-500/20',  text: 'text-slate-400', label: '排队中' },
+  dispatched:  { bg: 'bg-purple-500/20', text: 'text-purple-400', label: '已分发' },
+  running:     { bg: 'bg-blue-500/20',  text: 'text-blue-400',  label: '执行中' },
+  completed:   { bg: 'bg-green-500/20', text: 'text-green-400', label: '已完成' },
+  failed:      { bg: 'bg-red-500/20',   text: 'text-red-400',   label: '失败' },
 };
 
 const PAGE_SIZE_OPTIONS = [12, 24, 36, 100];
@@ -84,7 +87,7 @@ export default function TaskBuilderPage() {
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'running' | 'completed' | 'failed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed'>('all');
 
   // 重试弹窗状态
   const [rerunModal, setRerunModal] = useState<{ isOpen: boolean; taskId: string | null; taskName: string; modelId: string; modelName: string }>({
@@ -116,7 +119,7 @@ export default function TaskBuilderPage() {
       const token = localStorage.getItem('token');
       const params = new URLSearchParams({ page: String(page), limit: String(size) });
       if (searchQuery) params.append('search', searchQuery);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (statusFilter !== 'all') params.append('displayStatus', statusFilter);
       const response = await fetch(`/api/task-builder/tasks?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -389,7 +392,25 @@ export default function TaskBuilderPage() {
                 }`}
               >
                 <Clock size={16} />
-                待执行
+                未执行
+              </button>
+              <button
+                onClick={() => { setStatusFilter('queued'); setCurrentPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'queued' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <ListOrdered size={16} />
+                排队中
+              </button>
+              <button
+                onClick={() => { setStatusFilter('dispatched'); setCurrentPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'dispatched' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <Send size={16} />
+                已分发
               </button>
               <button
                 onClick={() => { setStatusFilter('running'); setCurrentPage(1); }}
@@ -444,7 +465,7 @@ export default function TaskBuilderPage() {
         <div className="p-5">
           <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
             {tasks.map((task) => {
-            const config = statusConfig[task.status] || statusConfig.pending;
+            const config = statusConfig[task.displayStatus] || statusConfig.pending;
             const isExecuting = executingIds.has(task.id);
 
             return (
@@ -457,7 +478,7 @@ export default function TaskBuilderPage() {
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="text-sm font-medium text-gray-100 truncate leading-tight">{task.name}</h3>
                     <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
-                      {task.status === 'running' && <Loader2 size={10} className="animate-spin" />}
+                      {(task.displayStatus === 'running' || task.displayStatus === 'queued' || task.displayStatus === 'dispatched') && <Loader2 size={10} className="animate-spin" />}
                       {config.label}
                     </span>
                   </div>
@@ -478,7 +499,7 @@ export default function TaskBuilderPage() {
                         <Server className="w-3 h-3" />
                         <span>{task.workerNodeId}</span>
                       </span>
-                    ) : task.status === 'pending' ? (
+                    ) : task.displayStatus === 'pending' ? (
                       <span className="text-gray-500">待分配 Worker</span>
                     ) : null}
                   </div>
@@ -487,7 +508,7 @@ export default function TaskBuilderPage() {
                     <p className="text-xs text-gray-500 line-clamp-2">{task.notes}</p>
                   )}
 
-                  {task.status === 'failed' && task.errorMessage && (
+                  {task.displayStatus === 'failed' && task.errorMessage && (
                     <div className="flex items-start gap-1.5 text-xs">
                       <AlertCircle size={12} className="text-red-400 shrink-0 mt-0.5" />
                       <span className="text-red-400 line-clamp-1">{task.errorMessage}</span>
@@ -506,7 +527,7 @@ export default function TaskBuilderPage() {
                 {/* 操作栏 */}
                 <div className="mt-auto border-t border-gray-600/30 px-4 py-2.5 flex items-center justify-between bg-gray-700/20">
                   <div className="flex items-center gap-1.5">
-                    {task.status === 'pending' && (
+                    {task.displayStatus === 'pending' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRunTask(task.id); }}
                         disabled={isExecuting}
@@ -516,7 +537,7 @@ export default function TaskBuilderPage() {
                         执行
                       </button>
                     )}
-                    {task.status === 'running' && (
+                    {(task.displayStatus === 'running' || task.displayStatus === 'queued' || task.displayStatus === 'dispatched') && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleStopTask(task.id, task.name); }}
                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-400/15 rounded transition-colors"
@@ -525,7 +546,7 @@ export default function TaskBuilderPage() {
                         停止
                       </button>
                     )}
-                    {(task.status === 'completed' || task.status === 'failed') && (
+                    {(task.displayStatus === 'completed' || task.displayStatus === 'failed') && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -670,7 +691,7 @@ export default function TaskBuilderPage() {
 
       {/* 重试弹窗 - 选择模型 */}
       {rerunModal.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white">重试任务</h3>

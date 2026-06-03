@@ -743,7 +743,7 @@ return (
 
       {/* 新建编排对话框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">新建编排</h3>
@@ -976,7 +976,7 @@ return (
 
       {/* 编辑编排信息对话框 */}
       {showEditModal && editingWorkflow && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">编辑编排信息</h3>

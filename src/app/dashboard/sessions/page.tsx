@@ -1543,7 +1543,7 @@ if (loading) {
 
       {/* 新建任务对话框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">新建任务</h3>
@@ -1736,7 +1736,7 @@ if (loading) {
 
       {/* 编辑任务对话框 */}
       {showEditModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">编辑任务</h3>
@@ -2028,7 +2028,7 @@ if (loading) {
 
       {/* 评估历史对话框 */}
       {showHistoryModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">评估历史</h3>
@@ -2197,7 +2197,7 @@ if (loading) {
 
       {/* 灰盒渗透对话框 */}
       {showEnvConfigModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-100">灰盒渗透</h3>
@@ -2290,7 +2290,7 @@ if (loading) {
 
       {/* Workflow 选择对话框 */}
       {showWorkflowModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
@@ -2446,7 +2446,7 @@ if (loading) {
 
       {/* 角色模型配置对话框 */}
       {showRoleModelModal && selectedProject && selectedWorkflow && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
@@ -2629,7 +2629,7 @@ if (loading) {
 
       {/* 漏洞管理弹窗 */}
       {showVulnerabilityModal && vulnerabilityProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
@@ -2895,7 +2895,7 @@ if (loading) {
 
       {/* 误报原因输入弹窗 */}
       {showFalsePositiveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <h3 className="text-lg font-semibold text-gray-100 mb-4">标记为误报</h3>
             <p className="text-sm text-gray-400 mb-4">
