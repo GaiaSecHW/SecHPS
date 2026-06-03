@@ -1064,9 +1064,9 @@ model Skill {
   createdAt                                              DateTime                    @default(now()) @db.Timestamptz
   updatedAt                                              DateTime @db.Timestamptz
   categoryId                                             String                    @default("cat-vulnerability-mining")
-  vulnerabilityTreeId                                    String?
+  vulnerabilityTreeId                                    Int?
   SkillCategory                                          SkillCategory               @relation(fields: [categoryId], references: [id])
-  VulnerabilityTree                                      VulnerabilityTree?          @relation(fields: [vulnerabilityTreeId], references: [id])
+  AttackPattern                                          AttackPattern?              @relation(fields: [vulnerabilityTreeId], references: [id])
   Tenant                                                 Tenant?                     @relation(fields: [tenantId], references: [id])
   User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   Skill                                                  Skill?                      @relation("SkillToSkill", fields: [parentId], references: [id])
@@ -1174,6 +1174,26 @@ model SkillCategory {
   @@index([sortOrder])
 }
 
+model AttackPattern {
+  id                Int                @id @default(autoincrement())
+  parent_id         Int?
+  name              String
+  level             Int
+  library_id        Int
+  create_time       DateTime           @default(now()) @db.Timestamptz
+  is_valid          Int                @default(1)
+
+  AttackPattern     AttackPattern?     @relation("AttackPatternTree", fields: [parent_id], references: [id])
+  other_AttackPattern AttackPattern[]  @relation("AttackPatternTree")
+  Skill             Skill[]
+
+  @@map("attack_pattern")
+  @@index([parent_id])
+  @@index([level])
+  @@index([is_valid])
+  @@index([library_id])
+}
+
 model VulnerabilityTree {
   id          String            @id
   name        String
@@ -1187,7 +1207,6 @@ model VulnerabilityTree {
   updatedAt   DateTime @db.Timestamptz
   VulnerabilityTree VulnerabilityTree?  @relation("VulnerabilityTreeToTree", fields: [parentId], references: [id])
   other_VulnerabilityTree VulnerabilityTree[] @relation("VulnerabilityTreeToTree")
-  Skill       Skill[]
   Skill2      Skill2[]
 
   @@index([type])

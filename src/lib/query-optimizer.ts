@@ -105,21 +105,13 @@ export const skillSelectMinimal = {
       hasSubDimension: true,
     },
   },
-  VulnerabilityTree: {
+  AttackPattern: {
     select: {
       id: true,
       name: true,
-      displayName: true,
-      type: true,
-      parentId: true,
-      VulnerabilityTree: {
-        select: {
-          id: true,
-          name: true,
-          displayName: true,
-          type: true,
-        },
-      },
+      level: true,
+      parent_id: true,
+      library_id: true,
     },
   },
 };

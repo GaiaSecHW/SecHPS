@@ -27,6 +27,7 @@ export async function POST(
     const file = formData.get('file') as File;
     const categoryId = formData.get('categoryId') as string;
     const vulnerabilityTreeId = formData.get('vulnerabilityTreeId') as string | null;
+    const vulnerabilityTreeIdInt = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
     const productTagIdsStr = formData.get('productTagIds') as string;
     const skillName = formData.get('skillName') as string;
     const skillDisplayName = formData.get('skillDisplayName') as string;
@@ -46,7 +47,7 @@ export async function POST(
       return NextResponse.json({ error: '分类不存在' }, { status: 400 });
     }
 
-    if (skillCategory.hasSubDimension && !vulnerabilityTreeId) {
+    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdInt) {
       return NextResponse.json({ error: '请选择漏洞类型' }, { status: 400 });
     }
 
@@ -117,7 +118,7 @@ const skillMdPaths: string[] = [];
         displayName: skillDisplayName || skill.displayName,
         description: skillDescription || skill.description,
         categoryId,
-        vulnerabilityTreeId: vulnerabilityTreeId || null,
+        vulnerabilityTreeId: vulnerabilityTreeIdInt,
         content,
         userId: skill.userId,
         tenantId: skill.tenantId,

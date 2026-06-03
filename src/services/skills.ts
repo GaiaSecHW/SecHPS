@@ -22,7 +22,7 @@ export interface LoadedSkill {
   displayName: string;
   description: string;
   categoryId?: string | null;
-  vulnerabilityTreeId?: string | null;
+  vulnerabilityTreeId?: number | null;
   severity: Severity;
   cwe?: string | null;
   content: string;
@@ -191,7 +191,7 @@ export async function createSkill(
     displayName: string;
     description: string;
     categoryId?: string | null;
-    vulnerabilityTreeId?: string | null;
+    vulnerabilityTreeId?: number | null;
     cwe?: string | null;
     severity: string;
     content: string;
@@ -247,7 +247,7 @@ export async function createSkillVersion(
     displayName?: string;
     description?: string;
     categoryId?: string | null;
-    vulnerabilityTreeId?: string | null;
+    vulnerabilityTreeId?: number | null;
     cwe?: string | null;
     severity?: string;
     content?: string;
@@ -536,7 +536,7 @@ export function filterSkillsByCategory(
   skills: LoadedSkill[],
   categories: string[]
 ): LoadedSkill[] {
-  return skills.filter(skill => skill.vulnerabilityTreeId && categories.includes(skill.vulnerabilityTreeId));
+  return skills.filter(skill => skill.vulnerabilityTreeId && categories.includes(String(skill.vulnerabilityTreeId)));
 }
 
 /**

@@ -35,7 +35,7 @@ export default function CreateSkillPage() {
   const [isPublic, setIsPublic] = useState(false);
 
   const [categoryId, setCategoryId] = useState<string>(VULNERABILITY_CATEGORY_ID);
-  const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<string | null>(null);
+  const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<number | null>(null);
   const [productTagIds, setProductTagIds] = useState<string[]>([]);
 
   const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; description?: string; icon?: string; hasSubDimension: boolean }>>([]);
@@ -140,7 +140,7 @@ export default function CreateSkillPage() {
             description: name.trim(),
             category: selectedCategory?.name || 'code-audit',
             categoryId: categoryId || undefined,
-            vulnerabilityTreeId: vulnerabilityTreeId || undefined,
+            vulnerabilityTreeId: vulnerabilityTreeId ?? undefined,
             whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
             whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
             expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
@@ -210,7 +210,7 @@ export default function CreateSkillPage() {
           displayName: name.trim(),
           description: name.trim(),
           categoryId: categoryId,
-          vulnerabilityTreeId: vulnerabilityTreeId || null,
+          vulnerabilityTreeId: vulnerabilityTreeId ?? null,
           productTagIds: productTagIds,
           content,
           isPublic,

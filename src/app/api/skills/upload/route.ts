@@ -94,6 +94,7 @@ export async function POST(request: Request) {
     const file = formData.get('file') as File | null;
     const categoryId = formData.get('categoryId') as string;
     const vulnerabilityTreeId = formData.get('vulnerabilityTreeId') as string | null;
+    const vulnerabilityTreeIdInt = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
     const productTagIdsStr = formData.get('productTagIds') as string;
     const isPublicStr = formData.get('isPublic') as string;
     const skillNameOverride = formData.get('skillName') as string | null;
@@ -120,17 +121,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: `分类 ID "${categoryId}" 不存在` } }, { status: 400 });
     }
 
-    if (skillCategory.hasSubDimension && !vulnerabilityTreeId) {
+    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdInt) {
       return NextResponse.json(
         { details: { error: `分类 "${skillCategory.displayName}" 需要指定漏洞模式` } },
         { status: 400 }
       );
     }
 
-    if (vulnerabilityTreeId) {
-      const treeNode = await prisma.vulnerabilityTree.findUnique({ where: { id: vulnerabilityTreeId } });
-      if (!treeNode || treeNode.type !== 'pattern') {
-        return NextResponse.json({ details: { error: `漏洞模式 ID "${vulnerabilityTreeId}" 无效` } }, { status: 400 });
+    if (vulnerabilityTreeIdInt) {
+      const treeNode = await prisma.attackPattern.findUnique({ where: { id: vulnerabilityTreeIdInt } });
+      if (!treeNode || treeNode.is_valid !== 1) {
+        return NextResponse.json({ details: { error: `漏洞模式 ID "${vulnerabilityTreeIdInt}" 无效` } }, { status: 400 });
       }
     }
 
@@ -231,7 +232,7 @@ export async function POST(request: Request) {
         displayName: skillDisplayName,
         description: skillDescription,
         categoryId,
-        vulnerabilityTreeId: vulnerabilityTreeId || null,
+        vulnerabilityTreeId: vulnerabilityTreeIdInt,
         cwe: parsed.cwe || null,
         content: skillContent,
         userId,
@@ -305,14 +306,14 @@ export async function POST(request: Request) {
           name: skill.name,
           displayName: skill.displayName,
           cwe: parsed.cwe,
-          vulnerabilityPatternId: skill.vulnerabilityTreeId,  // 添加漏洞模式
+          vulnerabilityPatternId: skill.vulnerabilityTreeId != null ? String(skill.vulnerabilityTreeId) : null,  // 添加漏洞模式
         },
         existingSkills.map(s => ({
           id: s.id,
           name: s.name,
           displayName: s.displayName,
           techStackId: null,
-          vulnerabilityPatternId: s.vulnerabilityTreeId,
+          vulnerabilityPatternId: s.vulnerabilityTreeId != null ? String(s.vulnerabilityTreeId) : null,
           cwe: s.cwe,
         }))
       );

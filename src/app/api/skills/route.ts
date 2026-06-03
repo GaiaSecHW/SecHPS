@@ -46,15 +46,10 @@ export async function GET(request: Request) {
     const where: Record<string, unknown> = {};
     if (isActive !== null) where.isActive = isActive === 'true';
     if (categoryId) where.categoryId = categoryId;
-    if (patternId) where.vulnerabilityTreeId = patternId;
+    if (patternId) where.vulnerabilityTreeId = Number(patternId);
     if (languageId) {
-      // 一次查询获取该语言和通用语言下的所有 pattern ID
-      const generalLanguageIds = (await prisma.vulnerabilityTree.findMany({
-        where: { name: '通用', type: 'language' },
-        select: { id: true },
-      })).map(p => p.id);
-      const patterns = await prisma.vulnerabilityTree.findMany({
-        where: { parentId: { in: [languageId, ...generalLanguageIds] }, type: 'pattern' },
+      const patterns = await prisma.attackPattern.findMany({
+        where: { parent_id: Number(languageId), is_valid: 1 },
         select: { id: true },
       });
       where.vulnerabilityTreeId = { in: patterns.map(p => p.id) };
@@ -138,10 +133,10 @@ export async function GET(request: Request) {
       categoryName: skill.SkillCategory?.displayName || null,
       categoryIcon: skill.SkillCategory?.icon || null,
       hasSubDimension: skill.SkillCategory?.hasSubDimension || false,
-      patternName: skill.VulnerabilityTree?.displayName || null,
-      languageName: skill.VulnerabilityTree?.VulnerabilityTree?.displayName || null,
+      patternName: skill.AttackPattern?.name || null,
       SkillCategory: undefined,
       VulnerabilityTree: undefined,
+      AttackPattern: undefined,
     }));
 
     return NextResponse.json(createPaginatedResponse(skillsWithCreator, total, pageNum, pageLimit));
@@ -174,6 +169,8 @@ export async function POST(request: Request) {
       isPublic = false,
     } = body;
 
+    const vulnerabilityTreeIdNum = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
+
     // 验证必填字段
     if (!name || !displayName || !description || !content || !categoryId) {
       return NextResponse.json(
@@ -192,18 +189,17 @@ export async function POST(request: Request) {
     }
 
     // 如果分类需要第二维度，vulnerabilityTreeId 必填
-    if (skillCategory.hasSubDimension && !vulnerabilityTreeId) {
+    if (skillCategory.hasSubDimension && !vulnerabilityTreeIdNum) {
       return NextResponse.json(
         { details: { error: `分类 "${skillCategory.displayName}" 需要指定漏洞模式` } },
         { status: 400 }
       );
     }
 
-    // 验证 vulnerabilityTreeId 是 pattern 类型的叶子节点
-    if (vulnerabilityTreeId) {
-      const treeNode = await prisma.vulnerabilityTree.findUnique({ where: { id: vulnerabilityTreeId } });
-      if (!treeNode || treeNode.type !== 'pattern') {
-        return NextResponse.json({ details: { error: `漏洞模式 ID "${vulnerabilityTreeId}" 无效` } }, { status: 400 });
+    if (vulnerabilityTreeIdNum) {
+      const treeNode = await prisma.attackPattern.findUnique({ where: { id: vulnerabilityTreeIdNum } });
+      if (!treeNode || treeNode.is_valid !== 1) {
+        return NextResponse.json({ details: { error: `漏洞模式 ID "${vulnerabilityTreeIdNum}" 无效` } }, { status: 400 });
       }
     }
 
@@ -246,7 +242,7 @@ export async function POST(request: Request) {
         displayName,
         description,
         categoryId,
-        vulnerabilityTreeId: vulnerabilityTreeId || null,
+        vulnerabilityTreeId: vulnerabilityTreeIdNum,
         cwe: cwe || null,
         content,
         userId,

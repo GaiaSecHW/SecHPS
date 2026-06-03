@@ -50,7 +50,7 @@ export async function matchSkillsByCategoryValues(
   // 查找关联的 Skills（包含更多信息用于调试）
   const skills = await prisma.skill.findMany({
     where: {
-      vulnerabilityTreeId: { in: patternIds },
+      vulnerabilityTreeId: { in: patternIds.map(Number) },
     },
     select: {
       id: true,

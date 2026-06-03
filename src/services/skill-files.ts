@@ -52,7 +52,7 @@ export interface DiskSkill {
   displayName: string;
   description: string;
   categoryId: string | null;
-  vulnerabilityTreeId: string | null;
+  vulnerabilityTreeId: number | null;
   severity: string;
   cwe: string | null;
   content: string;  // 完整的 Markdown 内容

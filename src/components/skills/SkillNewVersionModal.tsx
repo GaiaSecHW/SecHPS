@@ -22,7 +22,7 @@ interface SkillNewVersionModalProps {
     content: string;
     isActive: boolean;
     categoryId: string;
-    vulnerabilityTreeId: string;
+    vulnerabilityTreeId: number | null;
   };
 }
 
@@ -79,7 +79,7 @@ export function SkillNewVersionModal({
           content: editData.content,
           isActive: editData.isActive,
           categoryId: editData.categoryId,
-          vulnerabilityTreeId: editData.vulnerabilityTreeId || null,
+          vulnerabilityTreeId: editData.vulnerabilityTreeId ?? null,
         }),
       });
 

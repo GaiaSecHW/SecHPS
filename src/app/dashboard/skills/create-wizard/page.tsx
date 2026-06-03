@@ -41,7 +41,7 @@ interface SkillWizardData {
     name: string;
     description: string;
     categoryId: string;
-    vulnerabilityTreeId?: string;
+    vulnerabilityTreeId?: number | null;
     selectedLanguageId?: string;
     productTagIds?: string[];
     whatDoesItDo: string;
@@ -61,7 +61,7 @@ interface SkillWizardData {
     displayName: string;
     description: string;
     categoryId?: string;
-    vulnerabilityTreeId?: string;
+    vulnerabilityTreeId?: number | null;
     cwe?: string;
     content: string;
   };
@@ -108,7 +108,7 @@ const initialWizardData: SkillWizardData = {
     name: '',
     description: '',
     categoryId: '',
-    vulnerabilityTreeId: '',
+    vulnerabilityTreeId: null,
     selectedLanguageId: '',
     whatDoesItDo: '',
     whenShouldItTrigger: '',
@@ -127,7 +127,7 @@ const initialWizardData: SkillWizardData = {
     displayName: '',
     description: '',
     categoryId: undefined,
-    vulnerabilityTreeId: undefined,
+    vulnerabilityTreeId: null,
     content: '',
   },
   testCases: [],
@@ -271,7 +271,7 @@ export default function SkillCreateWizardPage() {
         ...wizardData.skill,
         isPublic: false,
         categoryId: wizardData.intent.categoryId,
-        vulnerabilityTreeId: wizardData.intent.vulnerabilityTreeId || null,
+        vulnerabilityTreeId: wizardData.intent.vulnerabilityTreeId ?? null,
         productTagIds: wizardData.intent.productTagIds || [],
       };
       const missingFields = [];

@@ -205,7 +205,7 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
     where: { id: skillId },
     include: {
       SkillCategory: true,
-      VulnerabilityTree: true,
+      AttackPattern: true,
     },
   });
 
@@ -244,13 +244,12 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
 async function findPotentialDuplicates(skill: {
   id: string;
   techStackId?: string | null;
-  vulnerabilityPatternId?: string | null;
+vulnerabilityPatternId?: number | null;
   cwe?: string | null;
 }): Promise<Array<{ id: string; name: string }>> {
-  // 构建查询条件
   const conditions: Array<{
     techStackId?: string | null;
-    vulnerabilityPatternId?: string | null;
+    vulnerabilityPatternId?: number | null;
     cwe?: string | null;
   }> = [];
 

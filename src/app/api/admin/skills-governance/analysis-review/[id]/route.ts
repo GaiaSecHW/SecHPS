@@ -170,7 +170,7 @@ export async function PUT(
           data: {
             id: groupId,
             language: skillA?.categoryId || 'unknown',
-            vulnerabilityType: skillA?.vulnerabilityTreeId || 'unknown',
+            vulnerabilityType: skillA?.vulnerabilityTreeId != null ? String(skillA.vulnerabilityTreeId) : 'unknown',
             status: 'pending_review',
             updatedAt: new Date(),
             skillCount: 2,

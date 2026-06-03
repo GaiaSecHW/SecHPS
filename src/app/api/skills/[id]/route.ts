@@ -30,8 +30,8 @@ export async function GET(
         SkillCategory: { select: { id: true, name: true, displayName: true, icon: true, hasSubDimension: true } },
         VulnerabilityTree: {
           select: {
-            id: true, name: true, displayName: true, type: true,
-            VulnerabilityTree: { select: { id: true, name: true, displayName: true } },
+            id: true, name: true, level: true, parent_id: true, library_id: true,
+            AttackPattern: { select: { id: true, name: true, parent_id: true } },
           },
         },
         SkillProductTag: { select: { id: true, productTagId: true, ProductTag: { select: { id: true, name: true, displayName: true } } } },
@@ -96,6 +96,8 @@ export async function PUT(
       isActive, severity, cwe, productTagIds, isPublic, 
     } = body;
 
+    const vulnerabilityTreeIdNum = vulnerabilityTreeId ? Number(vulnerabilityTreeId) : null;
+
     const skill = await prisma.skill.findUnique({ where: { id } });
     if (!skill) {
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
@@ -135,7 +137,7 @@ export async function PUT(
           displayName: displayName || currentSkill.displayName,
           description: description || currentSkill.description,
           categoryId: categoryId || currentSkill.categoryId,
-          vulnerabilityTreeId: vulnerabilityTreeId || currentSkill.vulnerabilityTreeId,
+          vulnerabilityTreeId: vulnerabilityTreeIdNum || currentSkill.vulnerabilityTreeId,
           cwe: cwe || currentSkill.cwe,
           content,
           userId: currentSkill.userId,
@@ -170,7 +172,7 @@ export async function PUT(
       if (displayName) updateData.displayName = displayName;
       if (description) updateData.description = description;
       if (categoryId) updateData.categoryId = categoryId;
-      if (vulnerabilityTreeId !== undefined) updateData.vulnerabilityTreeId = vulnerabilityTreeId || null;
+      if (vulnerabilityTreeId !== undefined) updateData.vulnerabilityTreeId = vulnerabilityTreeIdNum;
       if (isActive !== undefined) updateData.isActive = isActive;
       if (severity !== undefined) updateData.severity = severity || null;
       if (cwe !== undefined) updateData.cwe = cwe || null;

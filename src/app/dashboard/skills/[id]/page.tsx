@@ -124,7 +124,7 @@ interface Skill {
   displayName: string;
   description: string;
   categoryId: string;
-  vulnerabilityTreeId: string | null;
+  vulnerabilityTreeId: number | null;
   cwe: string | null;
   severity: string | null;
   content: string;
@@ -167,7 +167,7 @@ export default function SkillDetailPage() {
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editCategoryId, setEditCategoryId] = useState<string>('');
-  const [editVulnerabilityTreeId, setEditVulnerabilityTreeId] = useState<string>('');
+  const [editVulnerabilityTreeId, setEditVulnerabilityTreeId] = useState<number | null>(null);
   const [editProductTagIds, setEditProductTagIds] = useState<string[]>([]);
   const [editFile, setEditFile] = useState<File | null>(null);
   const [editParsed, setEditParsed] = useState<ParsedSkill | null>(null);
@@ -429,7 +429,7 @@ export default function SkillDetailPage() {
     if (!skill) return;
     setEditName(skill.displayName);
     setEditCategoryId(skill.categoryId || VULNERABILITY_CATEGORY_ID);
-    setEditVulnerabilityTreeId(skill.vulnerabilityTreeId || '');
+    setEditVulnerabilityTreeId(skill.vulnerabilityTreeId ?? null);
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
     setEditProductTagIds(skill.productTags?.map(t => t.id) || []);
@@ -543,7 +543,7 @@ export default function SkillDetailPage() {
         const formData = new FormData();
         formData.append('file', editFile);
         formData.append('categoryId', editCategoryId);
-        formData.append('vulnerabilityTreeId', editVulnerabilityTreeId || '');
+        formData.append('vulnerabilityTreeId', editVulnerabilityTreeId?.toString() ?? '');
         formData.append('productTagIds', JSON.stringify(editProductTagIds));
         formData.append('skillName', skill.name);
         formData.append('skillDisplayName', editName.trim());
@@ -576,7 +576,7 @@ export default function SkillDetailPage() {
             displayName: editName.trim(),
             description: editName.trim(),
             categoryId: editCategoryId,
-            vulnerabilityTreeId: editVulnerabilityTreeId || null,
+            vulnerabilityTreeId: editVulnerabilityTreeId ?? null,
             content: editContent,
             isActive: editIsActive,
             productTagIds: editProductTagIds,
@@ -1092,7 +1092,7 @@ export default function SkillDetailPage() {
                   value={editCategoryId}
                   onChange={(e) => {
                     setEditCategoryId(e.target.value);
-                    setEditVulnerabilityTreeId('');
+                    setEditVulnerabilityTreeId(null);
                   }}
                   disabled={loadingCategories}
                   className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -1113,7 +1113,7 @@ export default function SkillDetailPage() {
                       漏洞类型 <span className="text-red-500">*</span>
                     </label>
                     <VulnerabilityTreeSelector
-                      value={editVulnerabilityTreeId || null}
+                      value={editVulnerabilityTreeId}
                       onChange={(nodeId) => setEditVulnerabilityTreeId(nodeId)}
                       placeholder="选择漏洞类型"
                     />

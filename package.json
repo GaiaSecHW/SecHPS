@@ -17,6 +17,7 @@
     "db:seed-techstack": "tsx prisma/seed-techstack.ts",
     "db:seed-agents": "tsx prisma/seed-agent-definitions.ts",
     "db:seed-fsm": "tsx prisma/seed-fsm-templates.ts",
+    "db:seed-attack-pattern": "tsx prisma/seed-attack-pattern.ts",
     "migrate:workflow-to-agent-team": "tsx scripts/migrate-workflow-to-agent-team.ts",
     "rollback:agent-team": "tsx scripts/rollback-agent-team-migration.ts",
     "clean": "rmdir /s .next &&  rmdir /s node_modules && del package-lock.json && npm install",

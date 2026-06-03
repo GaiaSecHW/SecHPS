@@ -43,7 +43,7 @@ interface Skill {
   displayName: string;
   description: string;
   categoryId: string;
-  vulnerabilityTreeId: string | null;
+  vulnerabilityTreeId: number | null;
   categoryName: string | null;
   categoryIcon: string | null;
   hasSubDimension: boolean;
@@ -79,12 +79,11 @@ interface SkillCategoryItem {
 }
 
 interface VulnerabilityTreeLanguage {
-  id: string;
+  id: number;
   name: string;
-  displayName: string;
-  type: string;
-  skillCount: number;
-  patterns: { id: string; name: string; displayName: string; skillCount: number }[];
+  level: number;
+  parent_id: number | null;
+  library_id: number;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -259,7 +258,7 @@ function SkillsPageContent() {
       const response = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
-        setVulnerabilityTree(data.tree || []);
+        setVulnerabilityTree(data.nodes || []);
       }
     } catch (err) {
       console.error('获取漏洞模式树失败:', err);
@@ -624,16 +623,16 @@ function SkillsPageContent() {
                   }}
                   className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">所有语言</option>
-                  {vulnerabilityTree.map((lang) => (
-                    <option key={lang.id} value={lang.id}>{lang.displayName} ({lang.skillCount})</option>
+                  <option value="">所有模式库</option>
+                  {vulnerabilityTree.filter(n => n.level === 0).map((lib) => (
+                    <option key={lib.id} value={lib.id}>{lib.name}</option>
                   ))}
                 </select>
               ) : null;
             })()}
             {selectedLanguageId && (() => {
-              const selectedLang = vulnerabilityTree.find(l => l.id === selectedLanguageId);
-              return selectedLang && selectedLang.patterns.length > 0 ? (
+              const libChildren = vulnerabilityTree.filter(n => n.parent_id === Number(selectedLanguageId));
+              return libChildren.length > 0 ? (
                 <select
                   value={selectedPatternId}
                   onChange={(e) => {
@@ -644,8 +643,8 @@ function SkillsPageContent() {
                   className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">所有模式</option>
-                  {selectedLang.patterns.map((pat) => (
-                    <option key={pat.id} value={pat.id}>{pat.displayName} ({pat.skillCount})</option>
+                  {libChildren.map((node) => (
+                    <option key={node.id} value={node.id}>{node.name}</option>
                   ))}
                 </select>
               ) : null;

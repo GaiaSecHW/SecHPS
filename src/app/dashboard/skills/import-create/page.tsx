@@ -44,7 +44,7 @@ interface SkillItem {
   skillDisplayName: string;
   skillDescription: string;
   categoryId: string;
-  vulnerabilityTreeId: string | null;
+  vulnerabilityTreeId: number | null;
   productTagIds: string[];
   status: 'pending' | 'uploading' | 'success' | 'failed';
   governanceWarning?: {
@@ -359,7 +359,7 @@ export default function ImportCreateSkillPage() {
       formData.append('skillDisplayName', item.skillDisplayName.trim());
       formData.append('skillDescription', item.skillDescription.trim());
       if (item.vulnerabilityTreeId) {
-        formData.append('vulnerabilityTreeId', item.vulnerabilityTreeId);
+        formData.append('vulnerabilityTreeId', String(item.vulnerabilityTreeId));
       }
 
       const response = await fetch('/api/skills/upload', {
@@ -441,7 +441,7 @@ export default function ImportCreateSkillPage() {
         formData.append('skillDisplayName', item.skillDisplayName.trim());
         formData.append('skillDescription', item.skillDescription.trim());
         if (item.vulnerabilityTreeId) {
-          formData.append('vulnerabilityTreeId', item.vulnerabilityTreeId);
+          formData.append('vulnerabilityTreeId', String(item.vulnerabilityTreeId));
         }
 
         const response = await fetch('/api/skills/upload', {

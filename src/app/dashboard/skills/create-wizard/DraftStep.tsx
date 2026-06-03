@@ -8,7 +8,7 @@ interface SkillDraft {
   name: string;
   displayName: string;
   description: string;
-  vulnerabilityTreeId?: string;
+  vulnerabilityTreeId?: number | null;
   categoryId?: string;
   cwe?: string;
   content: string;  // 完整的 Markdown 内容
@@ -19,7 +19,7 @@ interface Props {
     name: string;
     description: string;
     categoryId: string;
-    vulnerabilityTreeId?: string;
+    vulnerabilityTreeId?: number | null;
     selectedLanguageId?: string;
     whatDoesItDo: string;
     whenShouldItTrigger: string;
@@ -254,7 +254,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
           </label>
           <input
             type="text"
-            value={skillData.vulnerabilityTreeId || ''}
+            value={skillData.vulnerabilityTreeId?.toString() ?? ''}
             disabled
             className="w-full px-4 py-2 border border-gray-600 rounded-md bg-[#0F172A]"
           />

@@ -42,7 +42,7 @@ interface IntentData {
   name: string;
   description: string;
   categoryId: string;
-  vulnerabilityTreeId?: string;
+  vulnerabilityTreeId?: number | null;
   selectedLanguageId?: string;
   selectedVulnCategoryId?: string;
   selectedVulnSubcategoryId?: string;
@@ -158,7 +158,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
     fetchTemplate();
   }, []);
 
-  const handleChange = (field: keyof IntentData, value: string | boolean | string[]) => {
+  const handleChange = (field: keyof IntentData, value: string | boolean | string[] | number | null) => {
     onChange({ ...data, [field]: value });
   };
 
@@ -230,7 +230,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                   selectedLanguageId: '',
                   selectedVulnCategoryId: '',
                   selectedVulnSubcategoryId: '',
-                  vulnerabilityTreeId: '',
+                  vulnerabilityTreeId: null,
                 });
               }}
               disabled={loadingCategories}
@@ -279,7 +279,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                       ...data,
                       selectedVulnCategoryId: e.target.value,
                       selectedVulnSubcategoryId: '',
-                      vulnerabilityTreeId: '',
+                      vulnerabilityTreeId: null,
                     });
                   }}
                   disabled={loadingTree || vulnCategories.length === 0}
@@ -302,7 +302,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                     onChange({
                       ...data,
                       selectedVulnSubcategoryId: e.target.value,
-                      vulnerabilityTreeId: '',
+                      vulnerabilityTreeId: null,
                     });
                   }}
                   disabled={loadingTree || !data.selectedVulnCategoryId || availableSubcategories.length === 0}
@@ -320,8 +320,8 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                   具体模式
                 </label>
                 <select
-                  value={data.vulnerabilityTreeId || ''}
-                  onChange={(e) => handleChange('vulnerabilityTreeId', e.target.value)}
+                  value={data.vulnerabilityTreeId?.toString() ?? ''}
+                  onChange={(e) => handleChange('vulnerabilityTreeId', e.target.value ? Number(e.target.value) : null)}
                   disabled={loadingTree || !data.selectedVulnSubcategoryId || availablePatterns.length === 0}
                   className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
                 >
