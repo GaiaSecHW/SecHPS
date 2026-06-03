@@ -142,11 +142,14 @@ export class EnvironmentFactory {
       const localPath = path.join(localBase, payload.taskId);
 
       onProgress?.('Downloading workspace from MinIO...');
+      progress(`[MinIO] 开始从 MinIO 下载工作区: key=${payload.workspaceStorageKey}`);
       fs.mkdirSync(localPath, { recursive: true });
 
       try {
-        await downloadAndExtractWorkspace(payload.workspaceStorageKey, localPath);
+        const { bytes } = await downloadAndExtractWorkspace(payload.workspaceStorageKey, localPath);
+        progress(`[MinIO] 工作区下载解压成功: size=${(bytes / 1024 / 1024).toFixed(1)} MB, dest=${localPath}`);
       } catch (err) {
+        progress(`[MinIO] 工作区下载解压失败: ${err instanceof Error ? err.message : String(err)}`);
         fs.rmSync(localPath, { recursive: true, force: true });
         throw new Error(`Workspace download failed: ${err}`);
       }

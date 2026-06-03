@@ -318,9 +318,11 @@ function executeVulnerabilityParseAsync(
 
     try {
       await mkdir(projectPath, { recursive: true });
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] [MinIO] 开始下载结果工作区: resultStorageKey=${resultStorageKey}, destDir=${projectPath}`);
       await downloadAndExtract(resultStorageKey, projectPath);
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] [MinIO] 结果工作区下载解压成功: destDir=${projectPath}`);
     } catch (err) {
-      logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] Failed to download results from MinIO`, { details: { error: err instanceof Error ? err.message : String(err) } });
+      logger.error(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] [MinIO] 结果工作区下载解压失败`, { details: { error: err instanceof Error ? err.message : String(err) } });
       await rm(projectPath, { recursive: true, force: true }).catch(() => {});
       vulnParseInProgress.delete(taskId);
       return;
@@ -330,6 +332,30 @@ function executeVulnerabilityParseAsync(
       logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 开始解析漏洞报告 (productName=${productName}, taskName=${taskName})`);
 
       await createParseLog(taskInstanceId, 'info', '开始解析漏洞报告', `产品: ${productName}, 任务: ${taskName}`);
+
+      const reportFolder = findReportFolder(projectPath);
+      if (!reportFolder) {
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 未找到 Report 文件夹，跳过漏洞解析`);
+        await createParseLog(taskInstanceId, 'warn', '未找到 Report 文件夹，跳过漏洞解析', `工作区路径: ${projectPath}，无法执行 Phase 1/2`);
+        return;
+      }
+
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 找到 Report 文件夹: ${path.relative(projectPath, reportFolder).replace(/\\/g, '/')}`);
+      await createParseLog(taskInstanceId, 'info', '找到 Report 文件夹', `上传报告文件到 MinIO (${productName}/${taskName}/report)`);
+
+      logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 上传 Report 文件到 MinIO (${productName}/${taskName}/report)...`);
+      const uploadResult = await uploadReportFolder(taskId, reportFolder, productName, taskName);
+
+      let filePath: string = projectPath;
+      if (uploadResult.success) {
+        filePath = JSON.stringify(uploadResult.urls);
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
+        await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
+      } else {
+        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传失败: ${uploadResult.error}`);
+        filePath = reportFolder;
+        await createParseLog(taskInstanceId, 'warn', `MinIO 上传失败`, uploadResult.error || '未知错误');
+      }
 
       // 将内置 skill 拷贝到工作区，确保 opencode run 能发现 audit-report-parser
       const copyResult = copyInnerSkillsToWorkspace(projectPath);
@@ -346,31 +372,6 @@ function executeVulnerabilityParseAsync(
       if (!instructionPhase1) {
         logger.warn(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 无法构建 Phase 1 指令（inner_skills/ 中无 audit-report-parser）`);
         await createParseLog(taskInstanceId, 'warn', 'Phase 1 指令构建失败', 'inner_skills/ 中缺少 audit-report-parser skill');
-      }
-
-      let filePath: string = projectPath;
-
-      const reportFolder = findReportFolder(projectPath);
-      if (reportFolder) {
-        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 找到 Report 文件夹: ${path.relative(projectPath, reportFolder).replace(/\\/g, '/')}`);
-
-        await createParseLog(taskInstanceId, 'info', '找到 Report 文件夹', `上传报告文件到 MinIO (${productName}/${taskName}/report)`);
-
-        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 上传 Report 文件到 MinIO (${productName}/${taskName}/report)...`);
-        const uploadResult = await uploadReportFolder(taskId, reportFolder, productName, taskName);
-
-        if (uploadResult.success) {
-          filePath = JSON.stringify(uploadResult.urls);
-          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
-          await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
-        } else {
-          logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传失败: ${uploadResult.error}`);
-          filePath = reportFolder;
-          await createParseLog(taskInstanceId, 'warn', `MinIO 上传失败`, uploadResult.error || '未知错误');
-        }
-      } else {
-        logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] 未找到 Report 文件夹`);
-        await createParseLog(taskInstanceId, 'warn', '未找到 Report 文件夹', `工作区路径: ${projectPath}`);
       }
 
       let report: ParsedVulnerabilityReport | null = null;

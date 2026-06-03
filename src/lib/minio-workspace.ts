@@ -43,6 +43,8 @@ export async function uploadDirectory(
   const client = getClient();
   const exclude = opts?.exclude || [];
 
+  logger.info(LOG_MODULES.FILE, `[MinIO-Upload] 开始打包工作区: localDir=${localDir}, objectKey=${objectKey}, exclude=${exclude.join(',')}`);
+
   const packStream = tar.c({
     gzip: true,
     cwd: localDir,
@@ -57,11 +59,13 @@ export async function uploadDirectory(
   }
   const buffer = Buffer.concat(chunks);
 
+  logger.info(LOG_MODULES.FILE, `[MinIO-Upload] 打包完成: ${(buffer.length / 1024 / 1024).toFixed(1)} MB, 开始上传到 bucket=${WORKSPACE_BUCKET}`);
+
   await client.putObject(WORKSPACE_BUCKET, objectKey, buffer, buffer.length, {
     'Content-Type': 'application/gzip',
   });
 
-  logger.info(LOG_MODULES.FILE, `Workspace uploaded to MinIO: ${objectKey} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+  logger.info(LOG_MODULES.FILE, `[MinIO-Upload] 上传成功: bucket=${WORKSPACE_BUCKET}, objectKey=${objectKey}, size=${(buffer.length / 1024 / 1024).toFixed(1)} MB`);
   return { objectKey, bytes: buffer.length };
 }
 
@@ -71,7 +75,12 @@ export async function downloadAndExtract(
   destDir: string,
 ): Promise<{ bytes: number }> {
   const client = getClient();
+
+  logger.info(LOG_MODULES.FILE, `[MinIO-Download] 开始下载: bucket=${WORKSPACE_BUCKET}, objectKey=${objectKey}, destDir=${destDir}`);
+
   const dataStream = await client.getObject(WORKSPACE_BUCKET, objectKey);
+
+  logger.info(LOG_MODULES.FILE, `[MinIO-Download] 流已建立, 开始解压到 ${destDir}`);
 
   await mkdir(destDir, { recursive: true });
 
@@ -89,7 +98,7 @@ export async function downloadAndExtract(
     tar.x({ gzip: true, cwd: destDir }),
   );
 
-  logger.info(LOG_MODULES.FILE, `Workspace downloaded from MinIO: ${objectKey} (${(bytes / 1024 / 1024).toFixed(1)} MB)`);
+  logger.info(LOG_MODULES.FILE, `[MinIO-Download] 下载解压成功: bucket=${WORKSPACE_BUCKET}, objectKey=${objectKey}, destDir=${destDir}, size=${(bytes / 1024 / 1024).toFixed(1)} MB`);
   return { bytes };
 }
 

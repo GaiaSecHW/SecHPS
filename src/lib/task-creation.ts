@@ -307,12 +307,18 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   // Upload to MinIO
   const { uploadDirectory } = await import('@/lib/minio-workspace');
   const workspaceStorageKey = `workspaces/${taskId}.tar.gz`;
+  serverLog.info(`[TaskCreation] [MinIO] 开始上传工作区到 MinIO: taskDir=${taskDir}, objectKey=${workspaceStorageKey}`);
   try {
-    await uploadDirectory(taskDir, workspaceStorageKey, {
+    const uploadResult = await uploadDirectory(taskDir, workspaceStorageKey, {
       exclude: ['.git', 'node_modules'],
     });
+    serverLog.info(`[TaskCreation] [MinIO] 工作区上传成功: objectKey=${uploadResult.objectKey}, size=${(uploadResult.bytes / 1024 / 1024).toFixed(1)} MB`);
+  } catch (uploadErr) {
+    serverLog.error(`[TaskCreation] [MinIO] 工作区上传失败: ${uploadErr instanceof Error ? uploadErr.message : String(uploadErr)}`);
+    throw uploadErr;
   } finally {
     // Cleanup temp directory regardless of upload success/failure
+    serverLog.info(`[TaskCreation] 清理临时目录: ${taskDir}`);
     await rm(taskDir, { recursive: true, force: true });
   }
 

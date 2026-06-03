@@ -612,11 +612,14 @@ export class WorkerDaemon {
       const resultStorageKey = buildResult.resultStorageKey;
       let effectiveResultStorageKey: string | undefined = resultStorageKey;
       if (resultStorageKey && status === 'completed') {
+        console.log(`[Daemon] [MinIO] 开始上传结果工作区: workspacePath=${workspacePath}, objectKey=${resultStorageKey}`);
         try {
-          await uploadWorkspaceResult(workspacePath, resultStorageKey);
+          const { bytes } = await uploadWorkspaceResult(workspacePath, resultStorageKey);
+          console.log(`[Daemon] [MinIO] 结果工作区上传成功: size=${(bytes / 1024 / 1024).toFixed(1)} MB, objectKey=${resultStorageKey}`);
         } catch (err) {
           // Upload failed: clear key so Server won't attempt to download a non-existent object
           effectiveResultStorageKey = undefined;
+          console.error(`[Daemon] [MinIO] 结果工作区上传失败: ${err instanceof Error ? err.message : String(err)}`);
           this.server.log.warn({ taskId, error: err }, 'Result upload to MinIO failed, vulnerability parse will be skipped');
         }
       }
