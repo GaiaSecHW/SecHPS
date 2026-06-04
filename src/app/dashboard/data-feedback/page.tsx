@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown } from 'lucide-react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { apiGet } from '@/lib/api-client';
@@ -34,12 +34,20 @@ interface TasksResponse {
 interface TraceData {
   instance: any;
   csTask: any;
-  events: any[];
-  execLogs: any[];
+  events: any[] | null;
+  eventCount: number;
+  execLogs: any[] | null;
+  execLogCount: number;
   sessionExtract: any;
+  resultTruncated: boolean;
 }
 
 type Tab = 'events' | 'skills' | 'tools' | 'reasoning' | 'result';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const EVENT_PAGE_SIZE = 200;
+const LOG_PAGE_SIZE = 100;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,33 +93,94 @@ function statusBadge(status: string, csState: string | null) {
   return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-400">{s}</span>;
 }
 
+function getEventDisplay(ev: any) {
+  const t = ev._type || ev.type;
+  if (t === 'skill_start') return { badge: 'Skill', text: ev.skill || '', color: 'bg-purple-900/50 text-purple-300' };
+  if (t === 'skill_complete') return { badge: 'Skill✓', text: ev.skill || '', color: 'bg-purple-900/30 text-purple-400' };
+  if (t === 'tool_call') return { badge: 'Tool', text: ev.tool || '', color: 'bg-yellow-900/50 text-yellow-300' };
+  if (t === 'tool_call_update') return { badge: 'Result', text: (ev.output || '').slice(0, 120), color: 'bg-blue-900/50 text-blue-300' };
+  if (t === 'error') return { badge: 'Error', text: ev.message || '', color: 'bg-red-900/50 text-red-400' };
+  if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', text: ev.phase || ev.message || '', color: 'bg-cyan-900/50 text-cyan-300' };
+  if (CHUNK_TYPES.has(t)) return { badge: 'Log', text: (ev.content || '').slice(0, 200), color: 'bg-gray-800 text-gray-400' };
+  return { badge: t, text: ev.content || ev.message || '', color: 'bg-gray-700 text-gray-300' };
+}
+
+function isSkillTool(toolName: string): boolean {
+  const lower = (toolName || '').toLowerCase();
+  return lower === 'skill' || lower.includes('skill') ||
+    lower.startsWith('audit-') || lower.startsWith('cdm-') || lower.startsWith('tech-');
+}
+
+function extractFromEvents(events: any[]): { tools: any[]; skills: any[] } {
+  const tools: any[] = [];
+  const skills: any[] = [];
+  let lastEntry: any = null;
+
+  for (const ev of events) {
+    const t = ev._type || ev.type;
+    if (t === 'tool_call') {
+      const entry = {
+        toolName: ev.tool || ev.toolName || '(unknown)',
+        toolUseId: ev.toolUseId || ev._id,
+        input: ev.input ?? ev.params ?? {},
+        result: undefined,
+        startTime: ev._createdAt || ev.timestamp,
+      };
+      if (isSkillTool(entry.toolName)) skills.push(entry);
+      else tools.push(entry);
+      lastEntry = entry;
+    } else if (t === 'tool_call_update') {
+      const output: string = ev.output ?? ev.result ?? '';
+      const skillMatch = typeof output === 'string' && output.match(/Launching skill:\s*([^\s"\\]+)/);
+      if (lastEntry) {
+        lastEntry.result = output;
+        if (skillMatch) lastEntry.toolName = skillMatch[1];
+        lastEntry = null;
+      }
+    }
+  }
+  return { tools, skills };
+}
+
+// ─── Infinite Scroll Sentinel Hook ───────────────────────────────────────────
+
+function useInfiniteScroll(hasMore: boolean, loading: boolean, onLoadMore: () => void) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!sentinelRef.current || !hasMore || loading) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) onLoadMore(); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loading, onLoadMore]);
+
+  return sentinelRef;
+}
+
 // ─── Event Stream Tab ─────────────────────────────────────────────────────────
 
-function EventsTab({ events }: { events: any[] }) {
+function EventsTab({ events, hasMore, loadingMore, onLoadMore }: {
+  events: any[];
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const sentinelRef = useInfiniteScroll(hasMore, loadingMore, onLoadMore);
   const merged = mergeChunks(events);
 
-  const getDisplay = (ev: any) => {
-    const t = ev._type || ev.type;
-    if (t === 'skill_start') return { badge: 'Skill', text: ev.skill || '', color: 'bg-purple-900/50 text-purple-300' };
-    if (t === 'skill_complete') return { badge: 'Skill✓', text: ev.skill || '', color: 'bg-purple-900/30 text-purple-400' };
-    if (t === 'tool_call') return { badge: 'Tool', text: ev.tool || '', color: 'bg-yellow-900/50 text-yellow-300' };
-    if (t === 'tool_call_update') return { badge: 'Result', text: (ev.output || '').slice(0, 120), color: 'bg-blue-900/50 text-blue-300' };
-    if (t === 'error') return { badge: 'Error', text: ev.message || '', color: 'bg-red-900/50 text-red-400' };
-    if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', text: ev.phase || ev.message || '', color: 'bg-cyan-900/50 text-cyan-300' };
-    if (CHUNK_TYPES.has(t)) return { badge: 'Log', text: (ev.content || '').slice(0, 200), color: 'bg-gray-800 text-gray-400' };
-    return { badge: t, text: ev.content || ev.message || '', color: 'bg-gray-700 text-gray-300' };
-  };
-
-  if (merged.length === 0) return <Empty text="暂无事件记录" />;
+  if (merged.length === 0 && !hasMore) return <Empty text="暂无事件记录" />;
 
   return (
-    <div className="bg-gray-900 rounded-lg p-3 overflow-y-auto max-h-[calc(100vh-320px)]">
+    <div className="bg-gray-900 rounded-lg p-3 overflow-y-auto">
       <div className="space-y-0.5 font-mono text-xs">
         {merged.map((ev, i) => {
-          const { badge, text, color } = getDisplay(ev);
+          const { badge, text, color } = getEventDisplay(ev);
           const ts = ev._createdAt || ev.timestamp;
           return (
-            <div key={i} className="flex items-start gap-2 py-0.5">
+            <div key={ev._id || i} className="flex items-start gap-2 py-0.5">
               <span className="text-gray-600 shrink-0 w-20 text-right">
                 {ts ? new Date(ts).toLocaleTimeString('zh-CN') : ''}
               </span>
@@ -121,6 +190,15 @@ function EventsTab({ events }: { events: any[] }) {
           );
         })}
       </div>
+      {hasMore && (
+        <div ref={sentinelRef} className="py-3 text-center">
+          {loadingMore ? (
+            <Loader2 className="w-4 h-4 animate-spin mx-auto text-gray-400" />
+          ) : (
+            <span className="text-xs text-gray-500">向下滚动加载更多</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -132,7 +210,7 @@ function SkillsTab({ skills, events }: { skills: any[]; events: any[] }) {
   const items = skills?.length ? skills : extractFromEvents(events || []).skills;
   if (!items.length) return <Empty text="暂无 Skill 调用记录" />;
   return (
-    <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)]">
+    <div className="space-y-2">
       {items.map((sk, i) => (
         <div key={i} className="border border-gray-700/50 rounded-lg overflow-hidden">
           <button
@@ -175,51 +253,12 @@ function SkillsTab({ skills, events }: { skills: any[]; events: any[] }) {
 
 // ─── Tools Tab ────────────────────────────────────────────────────────────────
 
-function isSkillTool(toolName: string): boolean {
-  const lower = (toolName || '').toLowerCase();
-  return lower === 'skill' || lower.includes('skill') ||
-    lower.startsWith('audit-') || lower.startsWith('cdm-') || lower.startsWith('tech-');
-}
-
-function extractFromEvents(events: any[]): { tools: any[]; skills: any[] } {
-  const tools: any[] = [];
-  const skills: any[] = [];
-  // track last entry in insertion order for sequential pairing (no toolUseId in these events)
-  let lastEntry: any = null;
-
-  for (const ev of events) {
-    const t = ev._type || ev.type;
-    if (t === 'tool_call') {
-      const entry = {
-        toolName: ev.tool || ev.toolName || '(unknown)',
-        toolUseId: ev.toolUseId || ev._id,
-        input: ev.input ?? ev.params ?? {},
-        result: undefined,
-        startTime: ev._createdAt || ev.timestamp,
-      };
-      if (isSkillTool(entry.toolName)) skills.push(entry);
-      else tools.push(entry);
-      lastEntry = entry;
-    } else if (t === 'tool_call_update') {
-      const output: string = ev.output ?? ev.result ?? '';
-      // Try to resolve the real skill name from "Launching skill: <name>"
-      const skillMatch = typeof output === 'string' && output.match(/Launching skill:\s*([^\s"\\]+)/);
-      if (lastEntry) {
-        lastEntry.result = output;
-        if (skillMatch) lastEntry.toolName = skillMatch[1];
-        lastEntry = null;
-      }
-    }
-  }
-  return { tools, skills };
-}
-
 function ToolsTab({ tools, events }: { tools: any[]; events: any[] }) {
   const [open, setOpen] = useState<number | null>(null);
   const items = tools?.length ? tools : extractFromEvents(events || []).tools;
   if (!items.length) return <Empty text="暂无工具调用记录" />;
   return (
-    <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-320px)]">
+    <div className="space-y-2">
       {items.map((t, i) => (
         <div key={i} className="border border-gray-700/50 rounded-lg overflow-hidden">
           <button
@@ -257,7 +296,7 @@ function ToolsTab({ tools, events }: { tools: any[]; events: any[] }) {
 function ReasoningTab({ reasoning }: { reasoning: any[] }) {
   if (!reasoning?.length) return <Empty text="暂无模型思考记录" />;
   return (
-    <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-320px)]">
+    <div className="space-y-3">
       {reasoning.map((r, i) => (
         <div key={i} className="border border-yellow-900/30 rounded-lg p-3 bg-yellow-900/5">
           <div className="text-xs text-gray-500 mb-1">{fmtTime(r.startTime)}</div>
@@ -270,12 +309,22 @@ function ReasoningTab({ reasoning }: { reasoning: any[] }) {
 
 // ─── Result Tab ───────────────────────────────────────────────────────────────
 
-function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any; execLogs: any[] }) {
+function ResultTab({ csTask, instance, execLogs, logHasMore, loadingLogs, onLoadMoreLogs, resultTruncated }: {
+  csTask: any;
+  instance: any;
+  execLogs: any[];
+  logHasMore: boolean;
+  loadingLogs: boolean;
+  onLoadMoreLogs: () => void;
+  resultTruncated: boolean;
+}) {
+  const sentinelRef = useInfiniteScroll(logHasMore, loadingLogs, onLoadMoreLogs);
+
   return (
-    <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-320px)]">
+    <div className="space-y-4">
       {csTask?.result && (
         <div>
-          <h4 className="text-xs font-medium text-gray-400 mb-1">执行结果</h4>
+          <h4 className="text-xs font-medium text-gray-400 mb-1">执行结果{resultTruncated ? ' (已截断)' : ''}</h4>
           <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
             {csTask.result}
           </pre>
@@ -283,7 +332,7 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
       )}
       {csTask?.reportContent && (
         <div>
-          <h4 className="text-xs font-medium text-gray-400 mb-1">安全报告</h4>
+          <h4 className="text-xs font-medium text-gray-400 mb-1">安全报告{resultTruncated ? ' (已截断)' : ''}</h4>
           <pre className="bg-dark-surface-hover p-3 rounded-lg text-xs whitespace-pre-wrap break-all">
             {csTask.reportContent}
           </pre>
@@ -297,7 +346,7 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
           </pre>
         </div>
       )}
-      {execLogs?.length > 0 && (
+      {(execLogs?.length > 0 || loadingLogs) && (
         <div>
           <h4 className="text-xs font-medium text-gray-400 mb-1">执行日志 ({execLogs.length})</h4>
           <div className="bg-gray-900 rounded-lg p-3 space-y-0.5 font-mono text-xs">
@@ -309,9 +358,14 @@ function ResultTab({ csTask, instance, execLogs }: { csTask: any; instance: any;
               </div>
             ))}
           </div>
+          {logHasMore && (
+            <div ref={sentinelRef} className="py-2 text-center">
+              {loadingLogs ? <Loader2 className="w-4 h-4 animate-spin mx-auto text-gray-400" /> : <span className="text-xs text-gray-500">向下滚动加载更多日志</span>}
+            </div>
+          )}
         </div>
       )}
-      {!csTask?.result && !csTask?.reportContent && !csTask?.error && !instance?.errorMessage && execLogs?.length === 0 && (
+      {!csTask?.result && !csTask?.reportContent && !csTask?.error && !instance?.errorMessage && execLogs?.length === 0 && !loadingLogs && (
         <Empty text="暂无结果数据" />
       )}
     </div>
@@ -331,17 +385,128 @@ function Empty({ text }: { text: string }) {
 function TracePanel({ taskId }: { taskId: string }) {
   const [trace, setTrace] = useState<TraceData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<Tab>('events');
+  const [tab, setTab] = useState<Tab>('result');
 
+  // Events pagination
+  const [events, setEvents] = useState<any[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventHasMore, setEventHasMore] = useState(false);
+  const eventOffsetRef = useRef(0);
+  const eventHasMoreRef = useRef(false);
+  const loadingEventsRef = useRef(false);
+  const eventCountRef = useRef(0);
+  const eventsLoadedRef = useRef(false);
+
+  // Exec logs pagination
+  const [execLogs, setExecLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [logHasMore, setLogHasMore] = useState(false);
+  const logOffsetRef = useRef(0);
+  const logHasMoreRef = useRef(false);
+  const loadingLogsRef = useRef(false);
+  const logCountRef = useRef(0);
+  const logsLoadedRef = useRef(false);
+  const initialFetchedRef = useRef(false);
+
+  const loadMoreEvents = useCallback(async () => {
+    if (loadingEventsRef.current || !eventHasMoreRef.current) return;
+    loadingEventsRef.current = true;
+    setLoadingEvents(true);
+    try {
+      const offset = eventOffsetRef.current;
+      const { data } = await apiGet<TraceData>(
+        `/api/data-feedback/tasks/${taskId}?includeEvents=true&eventOffset=${offset}&eventLimit=${EVENT_PAGE_SIZE}`
+      );
+      if (data?.events) {
+        setEvents(prev => [...prev, ...data.events!]);
+        eventOffsetRef.current = offset + data.events.length;
+        const hasMore = eventOffsetRef.current < eventCountRef.current;
+        eventHasMoreRef.current = hasMore;
+        setEventHasMore(hasMore);
+      } else {
+        eventHasMoreRef.current = false;
+        setEventHasMore(false);
+      }
+    } finally {
+      loadingEventsRef.current = false;
+      setLoadingEvents(false);
+    }
+  }, [taskId]);
+
+  const loadMoreLogs = useCallback(async () => {
+    if (loadingLogsRef.current || !logHasMoreRef.current) return;
+    loadingLogsRef.current = true;
+    setLoadingLogs(true);
+    try {
+      const offset = logOffsetRef.current;
+      const { data } = await apiGet<TraceData>(
+        `/api/data-feedback/tasks/${taskId}?includeExecLogs=true&logOffset=${offset}&logLimit=${LOG_PAGE_SIZE}`
+      );
+      if (data?.execLogs) {
+        setExecLogs(prev => [...prev, ...data.execLogs!]);
+        logOffsetRef.current = offset + data.execLogs.length;
+        const hasMore = logOffsetRef.current < logCountRef.current;
+        logHasMoreRef.current = hasMore;
+        setLogHasMore(hasMore);
+      } else {
+        logHasMoreRef.current = false;
+        setLogHasMore(false);
+      }
+    } finally {
+      loadingLogsRef.current = false;
+      setLoadingLogs(false);
+    }
+  }, [taskId]);
+
+  // Initial load (no events, no execLogs)
   useEffect(() => {
-    setTrace(null);
-    setTab('events');
+    if (initialFetchedRef.current) return;
+    initialFetchedRef.current = true;
     setLoading(true);
     apiGet<TraceData>(`/api/data-feedback/tasks/${taskId}`)
-      .then(({ data, error }) => setTrace(error ? ({ error } as any) : data))
+      .then(({ data, error }) => {
+        if (data) {
+          setTrace(data);
+          eventCountRef.current = data.eventCount ?? 0;
+          logCountRef.current = data.execLogCount ?? 0;
+        } else {
+          setTrace({ error } as any);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [taskId]);
+
+  // Auto-load first page of exec logs when trace loads (default tab is 'result')
+  useEffect(() => {
+    if (!trace?.instance || logsLoadedRef.current) return;
+    logsLoadedRef.current = true;
+    if (logCountRef.current > 0) {
+      logHasMoreRef.current = true;
+      setLogHasMore(true);
+      loadMoreLogs();
+    }
+  }, [trace, loadMoreLogs]);
+
+  const handleTabChange = useCallback((newTab: Tab) => {
+    setTab(newTab);
+    if (newTab === 'events' && !eventsLoadedRef.current) {
+      eventsLoadedRef.current = true;
+      if (eventCountRef.current > 0) {
+        eventHasMoreRef.current = true;
+        setEventHasMore(true);
+        loadMoreEvents();
+      }
+    }
+    if (newTab === 'result' && !logsLoadedRef.current) {
+      logsLoadedRef.current = true;
+      if (logCountRef.current > 0) {
+        logHasMoreRef.current = true;
+        setLogHasMore(true);
+        loadMoreLogs();
+      }
+    }
+  }, [loadMoreEvents, loadMoreLogs]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-48">
@@ -355,24 +520,25 @@ function TracePanel({ taskId }: { taskId: string }) {
     </div>
   );
 
-  const { instance, csTask, events, execLogs, sessionExtract } = trace;
+  const { instance, csTask, sessionExtract, eventCount, execLogCount, resultTruncated } = trace;
+  const displayEvents = events ?? [];
 
-  const eventsExtracted = extractFromEvents(events || []);
+  const eventsExtracted = extractFromEvents(displayEvents);
   const skillCount = sessionExtract?.skills?.length || eventsExtracted.skills.length;
   const toolCount = sessionExtract?.tools?.length || eventsExtracted.tools.length;
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'events', label: '事件流', count: events?.length },
+    { key: 'events', label: '事件流', count: eventCount },
     { key: 'skills', label: 'Skill', count: skillCount },
     { key: 'tools', label: '工具', count: toolCount },
     { key: 'reasoning', label: '思考', count: sessionExtract?.reasoning?.length },
-    { key: 'result', label: '结果' },
+    { key: 'result', label: '结果', count: execLogCount || undefined },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full">
       {/* Meta */}
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+      <div className="shrink-0 grid grid-cols-2 gap-x-6 gap-y-1 text-xs pb-3">
         <div><span className="text-gray-500">任务名称：</span><span className="text-gray-200">{instance.name}</span></div>
         <div><span className="text-gray-500">Agent：</span><span className="text-gray-200">{instance.agentName}</span></div>
         <div><span className="text-gray-500">模型：</span><span className="text-gray-200">{instance.modelName || csTask?.model || '-'}</span></div>
@@ -385,11 +551,11 @@ function TracePanel({ taskId }: { taskId: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-700/50">
+      <div className="shrink-0 flex gap-1 border-b border-gray-700/50">
         {tabs.map(t => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => handleTabChange(t.key)}
             className={`px-3 py-1.5 text-xs rounded-t transition-colors ${
               tab === t.key ? 'bg-dark-surface-hover text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'
             }`}
@@ -400,11 +566,17 @@ function TracePanel({ taskId }: { taskId: string }) {
       </div>
 
       {/* Tab Content */}
-      {tab === 'events' && <EventsTab events={events || []} />}
-      {tab === 'skills' && <SkillsTab skills={sessionExtract?.skills || []} events={events || []} />}
-      {tab === 'tools' && <ToolsTab tools={sessionExtract?.tools || []} events={events || []} />}
-      {tab === 'reasoning' && <ReasoningTab reasoning={sessionExtract?.reasoning || []} />}
-      {tab === 'result' && <ResultTab csTask={csTask} instance={instance} execLogs={execLogs || []} />}
+      <div className="flex-1 min-h-0 overflow-y-auto mt-3">
+        {tab === 'events' && (loadingEvents && events.length === 0 ? (
+          <div className="flex items-center justify-center h-32"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+        ) : (
+          <EventsTab events={displayEvents} hasMore={eventHasMore} loadingMore={loadingEvents} onLoadMore={loadMoreEvents} />
+        ))}
+        {tab === 'skills' && <SkillsTab skills={sessionExtract?.skills || []} events={displayEvents} />}
+        {tab === 'tools' && <ToolsTab tools={sessionExtract?.tools || []} events={displayEvents} />}
+        {tab === 'reasoning' && <ReasoningTab reasoning={sessionExtract?.reasoning || []} />}
+        {tab === 'result' && <ResultTab csTask={csTask} instance={instance} execLogs={execLogs} logHasMore={logHasMore} loadingLogs={loadingLogs} onLoadMoreLogs={loadMoreLogs} resultTruncated={resultTruncated} />}
+      </div>
     </div>
   );
 }
@@ -425,9 +597,9 @@ export default function DataFeedbackPage() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 104px)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+      <div className="shrink-0 flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
             <GitBranch size={18} className="text-white" />
@@ -447,20 +619,20 @@ export default function DataFeedbackPage() {
       </div>
 
       {/* Body: two-column layout */}
-      <div className="flex gap-4 items-start">
+      <div className="flex gap-4 mt-4 flex-1 min-h-0">
         {/* Left: task list */}
-        <div className="w-80 shrink-0 bg-dark-surface border border-gray-700/50 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700/50 text-sm font-medium text-gray-300">
+        <div className="w-80 shrink-0 bg-dark-surface border border-gray-700/50 rounded-xl overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-gray-700/50 text-sm font-medium text-gray-300 shrink-0">
             任务列表 {total > 0 && <span className="text-gray-500 font-normal">({total})</span>}
           </div>
           {loading && tasks.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
+            <div className="flex items-center justify-center flex-1">
               <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
             </div>
           ) : tasks.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-500">暂无任务</div>
+            <div className="flex items-center justify-center flex-1 text-sm text-gray-500">暂无任务</div>
           ) : (
-            <div className="divide-y divide-gray-700/30">
+            <div className="divide-y divide-gray-700/30 overflow-y-auto flex-1">
               {tasks.map(t => (
                 <button
                   key={t.id}
@@ -497,7 +669,7 @@ export default function DataFeedbackPage() {
         </div>
 
         {/* Right: trace detail */}
-        <div className="flex-1 min-w-0 bg-dark-surface border border-gray-700/50 rounded-xl p-5">
+        <div className="flex-1 min-w-0 bg-dark-surface border border-gray-700/50 rounded-xl p-5 overflow-hidden">
           {selectedId ? (
             <TracePanel key={selectedId} taskId={selectedId} />
           ) : (
