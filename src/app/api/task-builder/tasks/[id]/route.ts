@@ -45,9 +45,34 @@ export async function GET(
   try {
     const task = await prisma.taskInstance.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        agentName: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        errorMessage: true,
+        executionResult: true,
+        reportPath: true,
+        skills: true,
+        scripts: true,
+        mergedSkills: true,
+        mergedScripts: true,
+        fileName: true,
+        projectPath: true,
+        codeswarmTaskId: true,
+        userId: true,
         TaskExecutionLog: {
           orderBy: { timestamp: 'asc' },
+          select: {
+            id: true,
+            timestamp: true,
+            level: true,
+            message: true,
+            details: true,
+            taskId: true,
+          },
         },
       },
     });
@@ -66,14 +91,14 @@ export async function GET(
     if (task.codeswarmTaskId) {
       const csTask = await prisma.codeswarmTask.findUnique({
         where: { taskId: task.codeswarmTaskId },
-        select: { state: true, sessionId: true, engine: true, agent: true, model: true, workerId: true, createdAt: true, updatedAt: true },
+        select: { state: true, sessionId: true, engine: true, model: true, workerId: true },
       });
       if (csTask) {
         const recentEvents = await prisma.codeswarmEvent.findMany({
           where: { taskId: task.codeswarmTaskId },
           orderBy: { createdAt: 'desc' },
           take: 10,
-          select: { type: true, data: true, createdAt: true },
+          select: { type: true, data: true },
         });
 
         let workerInfo = null;

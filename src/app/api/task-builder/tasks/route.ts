@@ -136,7 +136,20 @@ export async function GET(request: NextRequest) {
     const allTasks = await prisma.taskInstance.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: { User: { select: { username: true } } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        agentId: true,
+        agentName: true,
+        modelId: true,
+        modelName: true,
+        notes: true,
+        errorMessage: true,
+        createdAt: true,
+        codeswarmTaskId: true,
+        User: { select: { username: true } },
+      },
     });
 
     const codeswarmTaskIds = allTasks
