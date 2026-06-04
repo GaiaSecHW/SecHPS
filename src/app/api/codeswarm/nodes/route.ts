@@ -12,8 +12,22 @@ export async function GET() {
       ORDER BY "lastHeartbeat" DESC
       LIMIT 100
     ` as any[];
+    
+    const activeCounts = await prisma.$queryRaw`
+      SELECT "workerId", COUNT(*)::int as "activeCount"
+      FROM "CodeswarmTask"
+      WHERE state IN ('dispatched', 'running')
+      GROUP BY "workerId"
+    ` as { workerId: string; activeCount: number }[];
 
-    return NextResponse.json({ workers });
+    const countMap = new Map(activeCounts.map(r => [r.workerId, r.activeCount]));
+
+    const result = workers.map(w => ({
+      ...w,
+      currentTasks: countMap.get(w.id) ?? 0,
+    }));
+
+    return NextResponse.json({ workers: result });
   } catch (error) {
     logger.error(LOG_MODULES.CODESWARM, 'Get nodes error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: 'Failed to fetch nodes' }, { status: 500 });
