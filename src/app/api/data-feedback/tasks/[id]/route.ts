@@ -33,9 +33,19 @@ function extractFromToolEvents(rows: any[]): { skills: any[]; tools: any[]; reas
       lastEntry = entry;
     } else if (row.type === 'tool_call_update' && lastEntry) {
       const output: string = data.output ?? data.result ?? '';
-      const skillMatch = typeof output === 'string' && output.match(/Launching skill:\s*([^\s"\\]+)/);
+      const title: string = data.title ?? '';
       lastEntry.result = typeof output === 'string' ? output.slice(0, 5000) : String(output).slice(0, 5000);
-      if (skillMatch) lastEntry.toolName = skillMatch[1];
+      // Resolve skill name from three sources (priority: rawInput > title > skill_content tag)
+      const titleSkillMatch = title.match(/^Loaded skill:\s*(.+)/);
+      const contentSkillMatch: RegExpMatchArray | null | false = typeof output === 'string' && output.match(/<skill_content name="([^"]+)"/);
+      const resolvedSkillName = titleSkillMatch?.[1]?.trim() || (contentSkillMatch && contentSkillMatch[1]?.trim());
+      if (resolvedSkillName) {
+        lastEntry.toolName = resolvedSkillName;
+        // Fill input with skill name if it was empty from tool_call pending stage
+        if (!lastEntry.input || (typeof lastEntry.input === 'object' && Object.keys(lastEntry.input).length === 0)) {
+          lastEntry.input = { name: resolvedSkillName };
+        }
+      }
       lastEntry = null;
     }
   }

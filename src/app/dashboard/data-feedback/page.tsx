@@ -133,10 +133,18 @@ function extractFromEvents(events: any[]): { tools: any[]; skills: any[] } {
       lastEntry = entry;
     } else if (t === 'tool_call_update') {
       const output: string = ev.output ?? ev.result ?? '';
-      const skillMatch = typeof output === 'string' && output.match(/Launching skill:\s*([^\s"\\]+)/);
+      const title: string = ev.title ?? '';
+      const titleSkillMatch = title.match(/^Loaded skill:\s*(.+)/);
+      const contentSkillMatch: RegExpMatchArray | null | false = typeof output === 'string' && output.match(/<skill_content name="([^"]+)"/);
+      const resolvedSkillName = titleSkillMatch?.[1]?.trim() || (contentSkillMatch && contentSkillMatch[1]?.trim());
       if (lastEntry) {
         lastEntry.result = output;
-        if (skillMatch) lastEntry.toolName = skillMatch[1];
+        if (resolvedSkillName) {
+          lastEntry.toolName = resolvedSkillName;
+          if (!lastEntry.input || (typeof lastEntry.input === 'object' && Object.keys(lastEntry.input as object).length === 0)) {
+            lastEntry.input = { name: resolvedSkillName };
+          }
+        }
         lastEntry = null;
       }
     }
