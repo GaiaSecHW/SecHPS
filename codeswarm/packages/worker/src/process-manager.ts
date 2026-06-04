@@ -421,7 +421,7 @@ export interface ClassifiedError {
  * Check order matters: INFO exemption before rate_limit, since git hashes embed "429".
  */
 export function classifyAcpError(message: string): ClassifiedError {
-  if (/^\s*INFO\b|^\s*DEBUG\b|service=session\b|service=bus\b|service=compaction\b|service=snapshot\b/i.test(message)) {
+  if (/^\s*INFO\b|^\s*DEBUG\b|service=acp-agent\b|service=session\b|service=bus\b|service=compaction\b|service=snapshot\b/i.test(message)) {
     return { isCritical: false, category: 'agent_info_log', rawMessage: message };
   }
 
