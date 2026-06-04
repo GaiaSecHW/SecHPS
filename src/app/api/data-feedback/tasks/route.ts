@@ -1,19 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request);
   if (!auth.success) return authErrorResponse(auth);
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
   const limit = Math.min(50, parseInt(searchParams.get('limit') || '20', 10));
   const skip = (page - 1) * limit;
 
+  const where: any = {};
+  if (!tenant.isPlatformAdmin && !(tenant.isIcsTenant && payload.roles?.includes('admin'))) {
+    where.userId = payload.userId;
+  }
+
   try {
     const [instances, total] = await Promise.all([
       prisma.taskInstance.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -31,7 +39,7 @@ export async function GET(request: NextRequest) {
           errorMessage: true,
         },
       }),
-      prisma.taskInstance.count(),
+      prisma.taskInstance.count({ where }),
     ]);
 
     const csTaskIds = instances.map(t => t.codeswarmTaskId).filter(Boolean) as string[];
