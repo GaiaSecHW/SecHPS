@@ -34,6 +34,19 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
+`deploy.sh` 现在会按以下顺序自动执行并等待关键资源就绪：
+
+- PostgreSQL / Redis
+- `chirmera-sechps-db-init`
+- `chirmera-sechps`
+- `chirmera-worker`
+- Ingress
+
+可选环境变量：
+
+- `WAIT_TIMEOUT=600s ./deploy.sh`：调整 rollout / job 等待超时
+- `SKIP_DB_INIT_WAIT=true ./deploy.sh`：只下发初始化 Job，不等待其完成
+
 ## 数据库初始化与迁移
 
 - `chirmera-sechps-db-init` 会在部署时自动执行：
