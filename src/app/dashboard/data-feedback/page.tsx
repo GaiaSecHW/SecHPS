@@ -36,6 +36,8 @@ interface TraceData {
   csTask: any;
   events: any[] | null;
   eventCount: number;
+  skillCount: number;
+  toolCount: number;
   execLogs: any[] | null;
   execLogCount: number;
   sessionExtract: any;
@@ -479,32 +481,31 @@ function TracePanel({ taskId }: { taskId: string }) {
 
   // Auto-load first page of exec logs when trace loads (default tab is 'result')
   useEffect(() => {
-    if (!trace?.instance || logsLoadedRef.current) return;
-    logsLoadedRef.current = true;
-    if (logCountRef.current > 0) {
-      logHasMoreRef.current = true;
-      setLogHasMore(true);
-      loadMoreLogs();
-    }
-  }, [trace, loadMoreLogs]);
-
-  const handleTabChange = useCallback((newTab: Tab) => {
-    setTab(newTab);
-    if (newTab === 'events' && !eventsLoadedRef.current) {
-      eventsLoadedRef.current = true;
-      if (eventCountRef.current > 0) {
-        eventHasMoreRef.current = true;
-        setEventHasMore(true);
-        loadMoreEvents();
-      }
-    }
-    if (newTab === 'result' && !logsLoadedRef.current) {
+    if (!trace?.instance) return;
+    if (!logsLoadedRef.current) {
       logsLoadedRef.current = true;
       if (logCountRef.current > 0) {
         logHasMoreRef.current = true;
         setLogHasMore(true);
         loadMoreLogs();
       }
+    }
+  }, [trace, loadMoreLogs]);
+
+  const handleTabChange = useCallback((newTab: Tab) => {
+    setTab(newTab);
+    const needsEvents = newTab === 'events' || newTab === 'skills' || newTab === 'tools';
+    if (needsEvents && !eventsLoadedRef.current && eventCountRef.current > 0) {
+      eventsLoadedRef.current = true;
+      eventHasMoreRef.current = true;
+      setEventHasMore(true);
+      loadMoreEvents();
+    }
+    if (newTab === 'result' && !logsLoadedRef.current && logCountRef.current > 0) {
+      logsLoadedRef.current = true;
+      logHasMoreRef.current = true;
+      setLogHasMore(true);
+      loadMoreLogs();
     }
   }, [loadMoreEvents, loadMoreLogs]);
 
@@ -520,12 +521,8 @@ function TracePanel({ taskId }: { taskId: string }) {
     </div>
   );
 
-  const { instance, csTask, sessionExtract, eventCount, execLogCount, resultTruncated } = trace;
+  const { instance, csTask, sessionExtract, eventCount, skillCount, toolCount, execLogCount, resultTruncated } = trace;
   const displayEvents = events ?? [];
-
-  const eventsExtracted = extractFromEvents(displayEvents);
-  const skillCount = sessionExtract?.skills?.length || eventsExtracted.skills.length;
-  const toolCount = sessionExtract?.tools?.length || eventsExtracted.tools.length;
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'events', label: '事件流', count: eventCount },
@@ -572,8 +569,16 @@ function TracePanel({ taskId }: { taskId: string }) {
         ) : (
           <EventsTab events={displayEvents} hasMore={eventHasMore} loadingMore={loadingEvents} onLoadMore={loadMoreEvents} />
         ))}
-        {tab === 'skills' && <SkillsTab skills={sessionExtract?.skills || []} events={displayEvents} />}
-        {tab === 'tools' && <ToolsTab tools={sessionExtract?.tools || []} events={displayEvents} />}
+        {tab === 'skills' && (loadingEvents && events.length === 0 ? (
+          <div className="flex items-center justify-center h-32"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+        ) : (
+          <SkillsTab skills={sessionExtract?.skills || []} events={displayEvents} />
+        ))}
+        {tab === 'tools' && (loadingEvents && events.length === 0 ? (
+          <div className="flex items-center justify-center h-32"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+        ) : (
+          <ToolsTab tools={sessionExtract?.tools || []} events={displayEvents} />
+        ))}
         {tab === 'reasoning' && <ReasoningTab reasoning={sessionExtract?.reasoning || []} />}
         {tab === 'result' && <ResultTab csTask={csTask} instance={instance} execLogs={execLogs} logHasMore={logHasMore} loadingLogs={loadingLogs} onLoadMoreLogs={loadMoreLogs} resultTruncated={resultTruncated} />}
       </div>

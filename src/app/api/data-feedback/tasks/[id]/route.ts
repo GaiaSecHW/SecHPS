@@ -5,6 +5,43 @@ import { prisma } from '@/lib/prisma';
 
 const RESULT_TRUNCATE_SIZE = 50_000;
 
+function isSkillTool(toolName: string): boolean {
+  const lower = (toolName || '').toLowerCase();
+  return lower === 'skill' || lower.includes('skill') ||
+    lower.startsWith('audit-') || lower.startsWith('cdm-') || lower.startsWith('tech-');
+}
+
+function extractFromToolEvents(rows: any[]): { skills: any[]; tools: any[]; reasoning: any[] } {
+  const tools: any[] = [];
+  const skills: any[] = [];
+  let lastEntry: any = null;
+
+  for (const row of rows) {
+    let data: any;
+    try { data = JSON.parse(row.data); } catch { continue; }
+
+    if (row.type === 'tool_call') {
+      const entry = {
+        toolName: data.tool || data.toolName || '(unknown)',
+        toolUseId: data.toolUseId || '',
+        input: data.input ?? data.params ?? {},
+        result: undefined as string | undefined,
+        startTime: row.createdAt,
+      };
+      if (isSkillTool(entry.toolName)) skills.push(entry);
+      else tools.push(entry);
+      lastEntry = entry;
+    } else if (row.type === 'tool_call_update' && lastEntry) {
+      const output: string = data.output ?? data.result ?? '';
+      const skillMatch = typeof output === 'string' && output.match(/Launching skill:\s*([^\s"\\]+)/);
+      lastEntry.result = typeof output === 'string' ? output.slice(0, 5000) : String(output).slice(0, 5000);
+      if (skillMatch) lastEntry.toolName = skillMatch[1];
+      lastEntry = null;
+    }
+  }
+  return { skills, tools, reasoning: [] };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -39,6 +76,8 @@ export async function GET(
     let csTask: any = null;
     let events: any[] | null = null;
     let eventCount = 0;
+    let skillCount = 0;
+    let toolCount = 0;
     let execLogs: any[] | null = null;
     let execLogCount = 0;
     let sessionExtract: any = null;
@@ -90,6 +129,53 @@ export async function GET(
       ` as any[];
       eventCount = countRows[0]?.cnt ?? 0;
 
+      // 1. Check session_extract_history cache
+      if (csTask?.sessionId) {
+        const cacheRows = await prisma.$queryRaw`
+          SELECT "rawData" FROM "session_extract_history"
+          WHERE "sessionId" = ${csTask.sessionId}
+          ORDER BY "extractedAt" DESC
+          LIMIT 1
+        ` as any[];
+        if (cacheRows[0]?.rawData) {
+          try {
+            const raw = JSON.parse(cacheRows[0].rawData);
+            sessionExtract = { skills: raw.skills || [], tools: raw.tools || [], reasoning: raw.reasoning || [] };
+            skillCount = sessionExtract.skills.length;
+            toolCount = sessionExtract.tools.length;
+          } catch {}
+        }
+      }
+
+      // 2. Cache miss → extract from tool_call events + cache
+      if (!sessionExtract && eventCount > 0) {
+        const toolEvents = await prisma.$queryRaw`
+          SELECT type, data, "createdAt"
+          FROM "CodeswarmEvent"
+          WHERE "taskId" = ${instance.codeswarmTaskId} AND type IN ('tool_call', 'tool_call_update')
+          ORDER BY "createdAt" ASC
+        ` as any[];
+
+        if (toolEvents.length > 0) {
+          sessionExtract = extractFromToolEvents(toolEvents);
+          skillCount = sessionExtract.skills.length;
+          toolCount = sessionExtract.tools.length;
+
+          // Cache result
+          if (csTask?.sessionId) {
+            try {
+              const rawData = JSON.stringify(sessionExtract);
+              await prisma.$executeRaw`
+                INSERT INTO "session_extract_history" ("id", "sessionId", "workspacePath", "skillsCount", "toolsCount", "messageCount", "lastActivity", "extractedAt", "rawData")
+                VALUES (gen_random_uuid(), ${csTask.sessionId}, ${csTask.workspacePath || ''}, ${skillCount}, ${toolCount}, ${eventCount}, NOW(), NOW(), ${rawData})
+              `;
+            } catch (e: any) {
+              logger.warn(LOG_MODULES.AGENT, '缓存 session_extract 失败', { details: { error: e.message } });
+            }
+          }
+        }
+      }
+
       // Paginated events
       if (includeEvents && eventCount > 0) {
         const rawEvents = await prisma.$queryRaw`
@@ -110,21 +196,6 @@ export async function GET(
           }
         });
       }
-
-      if (csTask?.sessionId) {
-        const rows = await prisma.$queryRaw`
-          SELECT "rawData" FROM "session_extract_history"
-          WHERE "sessionId" = ${csTask.sessionId}
-          ORDER BY "extractedAt" DESC
-          LIMIT 1
-        ` as any[];
-        if (rows[0]?.rawData) {
-          try {
-            const raw = JSON.parse(rows[0].rawData);
-            sessionExtract = { skills: raw.skills || [], tools: raw.tools || [], reasoning: raw.reasoning || [] };
-          } catch {}
-        }
-      }
     }
 
     return NextResponse.json({
@@ -132,6 +203,8 @@ export async function GET(
       csTask,
       events,
       eventCount,
+      skillCount,
+      toolCount,
       execLogs,
       execLogCount,
       sessionExtract,
