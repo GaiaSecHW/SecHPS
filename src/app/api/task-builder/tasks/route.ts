@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
   try {
     const conditions: any[] = [];
 
-    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant && !payload.roles?.includes('admin')) {
+    if (!tenant.isPlatformAdmin && !(tenant.isIcsTenant && (payload.roles?.includes('admin') || payload.roles?.includes('developer')))) {
       conditions.push({ userId: payload.userId });
     }
 
