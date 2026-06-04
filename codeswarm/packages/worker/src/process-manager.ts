@@ -66,6 +66,7 @@ export interface AgentEvent {
   level?: 'worker' | 'agent';
   stream?: 'stdout' | 'stderr';
   skill?: string;
+  title?: string;
 }
 
 export interface AgentEventCallback {
@@ -569,6 +570,7 @@ function registerEventHandlers(
         onEvent({
           type: 'tool_call_update',
           output,
+          title: title || undefined,
           timestamp: new Date().toISOString(),
         });
       }
