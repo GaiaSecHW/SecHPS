@@ -31,7 +31,6 @@ export async function POST(request: Request) {
         systemType: systemType || null,
         arch: arch || null,
         status: 'online',
-        lastHeartbeat: new Date(),
         updatedAt: new Date(),
       },
       create: {
@@ -50,10 +49,13 @@ export async function POST(request: Request) {
 
     // currentTasks 用 GREATEST 保证 DB 值不小于 Worker 上报值
     // 防止心跳覆盖刚分发但 Worker 尚未确认的任务计数
+    // lastHeartbeat 使用 CURRENT_TIMESTAMP 而非 Node.js new Date()，
+    // 确保写入与 NOW()-INTERVAL 比较使用同一时钟源（PostgreSQL），消除跨服务器时钟偏移
     const reportedTasks = currentTasks || 0;
     await prisma.$executeRaw`
       UPDATE "CodeswarmWorker"
-      SET "currentTasks" = GREATEST("currentTasks", ${reportedTasks})
+      SET "currentTasks" = GREATEST("currentTasks", ${reportedTasks}),
+          "lastHeartbeat" = CURRENT_TIMESTAMP
       WHERE "nodeId" = ${nodeId}
     `;
 
