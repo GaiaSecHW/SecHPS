@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chirmera-worker
+  namespace: secflow-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: chirmera-worker
+  template:
+    metadata:
+      labels:
+        name: chirmera-worker
+    spec:
+      containers:
+        - name: chirmera-worker
+          image: ghcr.io/gaiasechw/codeswarm-worker:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: chirmera-worker-config
+            - secretRef:
+                name: chirmera-worker-secret
+          ports:
+            - containerPort: 8090
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "4"

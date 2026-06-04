@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chirmera-sechps-config
+  namespace: secflow-ns
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  NEXT_PUBLIC_BASE_URL: http://chirmera-sechps:3000
+  REDIS_URL: redis://chirmera-redis:6379/3
+  TASK_INPUT_DIR: vlu_scan_code
+  CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: "600000"
+  TASK_TIMEOUT_SEC: "604800"
+  MINIO_ENDPOINT: minio.example.local
+  MINIO_PORT: "9000"
+  MINIO_USE_SSL: "false"
+  MINIO_BUCKET: codedmap-dbs
+  MINIO_VULN_FILE_BUCKET: vuln-file
+  GITEA_URL: http://gitea.example.local:30030
+  GITEA_REPO_OWNER: your-owner
+  GITEA_REPO_NAME: your-repo
+  GITEA_BRANCH: main
+  SKILLS_GITEA_URL: http://gitea.example.local:30030
+  SKILLS_GITEA_REPO_OWNER: your-owner
+  SKILLS_GITEA_REPO_NAME: skill-repo
+  SKILLS_GITEA_BRANCH: main
+  SKILL_LOCAL_PATH: ./skill_management
+  GITEA_ORG_URL: http://gitea.example.local:30030
+  GITEA_ORG_NAME: your-org
+  AGENT_HARNESS_LOCAL_PATH: ./AgentHarness

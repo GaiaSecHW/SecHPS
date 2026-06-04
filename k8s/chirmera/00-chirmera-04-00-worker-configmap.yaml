@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chirmera-worker-config
+  namespace: secflow-ns
+data:
+  NODE_ID: worker-01
+  PORT: "8090"
+  MAX_CONCURRENT: "5"
+  ORCHESTRATOR_URL: http://chirmera-sechps:3000
+  WORKER_ADDRESS: chirmera-worker:8090
+  TASK_TIMEOUT_SEC: "604800"
+  TASK_INPUT_DIR: vlu_scan_code
+  ACP_LOG_LEVEL: INFO
+  CODEDMAP_HOME: /opt/codedmap
+  JOERN_HOME: /opt/joern-cli
+  JAVA_HOME: /opt/jdk-21
+  MINIO_ENDPOINT: minio.example.local
+  MINIO_PORT: "9000"
+  MINIO_BUCKET: codedmap-dbs
+  MINIO_USE_SSL: "false"

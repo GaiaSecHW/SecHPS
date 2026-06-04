@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chirmera-postgresql
+  namespace: secflow-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: chirmera-postgresql
+  template:
+    metadata:
+      labels:
+        name: chirmera-postgresql
+    spec:
+      containers:
+        - name: chirmera-postgresql
+          image: postgres:16
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: chirmera-postgresql-secret
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: chirmera-postgresql-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 5432
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1"
+      volumes:
+        - name: chirmera-postgresql-data
+          persistentVolumeClaim:
+            claimName: chirmera-postgresql-data-pvc

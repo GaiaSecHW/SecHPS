@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chirmera-sechps
+  namespace: secflow-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: chirmera-sechps
+  template:
+    metadata:
+      labels:
+        name: chirmera-sechps
+    spec:
+      containers:
+        - name: chirmera-sechps
+          image: ghcr.io/gaiasechw/sechps:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: chirmera-sechps-config
+            - secretRef:
+                name: chirmera-sechps-secret
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: chirmera-sechps-data
+              mountPath: /app/data
+            - name: chirmera-sechps-uploads
+              mountPath: /app/uploads
+            - name: chirmera-sechps-skills
+              mountPath: /app/skill_management
+            - name: chirmera-sechps-agent-harness
+              mountPath: /app/AgentHarness
+          livenessProbe:
+            httpGet:
+              path: /api/global/health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/global/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+      volumes:
+        - name: chirmera-sechps-data
+          persistentVolumeClaim:
+            claimName: chirmera-sechps-data-pvc
+        - name: chirmera-sechps-uploads
+          persistentVolumeClaim:
+            claimName: chirmera-sechps-uploads-pvc
+        - name: chirmera-sechps-skills
+          persistentVolumeClaim:
+            claimName: chirmera-sechps-skills-pvc
+        - name: chirmera-sechps-agent-harness
+          persistentVolumeClaim:
+            claimName: chirmera-sechps-agent-harness-pvc
