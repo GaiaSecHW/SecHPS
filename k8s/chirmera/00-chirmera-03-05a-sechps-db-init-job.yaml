@@ -15,7 +15,7 @@ spec:
       containers:
         - name: db-init
           image: ghcr.io/gaiasechw/sechps:dev
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: chirmera-sechps-config
@@ -46,4 +46,3 @@ spec:
               fi
 
               echo "[db-init] completed"
-

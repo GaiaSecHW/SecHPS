@@ -16,7 +16,7 @@ spec:
       initContainers:
         - name: wait-for-db-init
           image: ghcr.io/gaiasechw/sechps:dev
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: chirmera-sechps-config
