@@ -225,9 +225,150 @@ location 字段中可能包含以下格式的文件路径注解：
 - 低危、low、Low → `low`
 - 信息、info、Informational → `info`
 
+## JSON 字符串安全规则
+
+**输出 JSON 时，所有字符串值必须严格遵守 JSON 转义规范，确保最终输出是可直接解析的有效 JSON。location、POC 等字段允许包含原始源代码片段，但必须正确转义。**
+
+### 必须转义的特殊字符
+
+| 原字符 | JSON 转义写法 | 说明 |
+|--------|---------------|------|
+| 双引号 `"` | `\"` | **最常见导致 JSON 格式错乱的字符** |
+| 反斜杠 `\` | `\\` | 路径和正则中常见，必须双重转义 |
+| 换行符 | `\n` | **禁止在 JSON 字符串中直接换行**，必须用 `\n` 转义表示 |
+| 制表符 | `\t` | 必须用 `\t` 转义表示 |
+| 回车符 | `\r` | 必须用 `\r` 转义表示 |
+
+### 嵌入代码片段的转义规则
+
+location、POC、description 等字段允许包含原始源代码片段，这是业务要求。但代码中的特殊字符必须严格转义，否则会破坏 JSON 结构。
+
+**关键原则**：代码原文必须保留，但其中破坏 JSON 结构的字符必须转义。
+
+#### 转义处理流程
+
+1. 将代码片段原样保留
+2. 遍历代码片段，按以下规则逐字符转义：
+   - 遇到 `\` → 替换为 `\\`（但已经是合法 JSON 转义序列如 `\n` `\t` `\r` `\uXXXX` 的除外）
+   - 遇到 `"` → 替换为 `\"`
+   - 遇到物理换行 → 替换为 `\n`
+   - 遇到物理制表符 → 替换为 `\t`
+3. 将转义后的代码片段放入 JSON 字符串值中
+
+#### 转义示例
+
+**原始代码**：`password='Huawei12#$'`
+
+**转义后 JSON**：`"password='Huawei12#$'"`（此例无需转义，因不含 `"` 或 `\`）
+
+---
+
+**原始代码**：`conn.execute("SELECT * FROM users WHERE id = " + user_id)`
+
+**错误写法**（裸引号破坏 JSON）：`"conn.execute("SELECT * FROM users WHERE id = " + user_id)"`
+
+**正确写法**（转义引号）：`"conn.execute(\"SELECT * FROM users WHERE id = \" + user_id)"`
+
+---
+
+**原始 location 含多行代码**：
+
+```
+// opencode.json:40 -- 受限权限
+"bash": { "*": "ask" }
+// .opencode/agents/nazhua-audit.md:21 -- 冲突
+bash: allow
+```
+
+**正确写法**（转义引号和换行）：`"// opencode.json:40 -- 受限权限\n\"bash\": { \"*\": \"ask\" }\n// .opencode/agents/nazhua-audit.md:21 -- 冲突\nbash: allow"`
+
+---
+
+**原始 POC 含双引号**：`grep -o "password='[^']*" ssh_check.py`
+
+**正确写法**：`"grep -o \"password='[^']*\" ssh_check.py"`
+
+### Base64 编码兜底方案
+
+当代码片段转义过于复杂（如包含大量引号、多层嵌套转义、超长多行代码），手动转义极易出错时，使用 Base64 编码作为兜底：
+
+1. **优先使用转义方案**：对于简单代码片段，按上述规则手动转义
+2. **Base64 兜底触发条件**：
+   - 代码片段包含 3 个及以上需要转义的双引号
+   - 代码片段超过 200 个字符且含多层嵌套转义
+   - 手动转义后自检发现 JSON 格式仍错乱
+3. **Base64 编码流程**：
+   - 将原始代码片段（未转义）进行 Base64 编码
+   - 在字段值前添加 `base64:` 前缀标识
+   - 示例：原始代码 `conn.execute("SELECT * FROM users")` → Base64 编码 → `"base64:Y29ubi5leGVjdXRlKCJTRUxFQ1QgKiBGUk9NIHVzZXJzIik="`
+
+### 转义检查清单
+
+输出 JSON 前必须逐项检查：
+
+1. 所有字符串值中的 `"` 是否已替换为 `\"`（除非使用了 Base64 编码）
+2. 所有字符串值中的 `\`（非转义前缀）是否已替换为 `\\`（除非使用了 Base64 编码）
+3. 字符串值中**不存在**物理换行（必须用 `\n` 表示）
+4. 含代码片段的字段是否已正确转义，代码原文是否保留
+5. 使用了 Base64 编码的字段是否以 `base64:` 前缀标识
+
+### 自检步骤
+
+**输出前必须执行以下自检**：
+
+1. 将输出的完整 JSON 字符串尝试解析为 JSON 对象
+2. 如果解析失败，定位格式错误并修复：
+   - 检查是否有未转义的 `"` 或 `\`
+   - 检查是否有物理换行残留在字符串值中
+   - 对仍无法修复的字段，改用 Base64 编码兜底方案
+3. 解析成功后，检查代码片段字段的内容是否完整保留了原始代码（不含 Base64 前缀的字段需还原转义验证原文完整性）
+4. 重复自检直到 JSON 可正确解析且代码原文完整
+5. **确认最终输出是合法 JSON 且代码片段完整后才返回**
+
 ## 输出格式
 
-仅返回 JSON 对象，不添加额外的 markdown 格式或说明。输出应为可直接解析的有效 JSON。
+**输出的全部内容必须是纯粹的 JSON 对象，不得包含任何其他格式或文字。**
+
+### 严格禁止的输出格式
+
+以下输出格式**全部禁止**，任何一种都会导致返回内容无法被正确解析为 JSON：
+
+1. **禁止用 markdown 代码块包裹**：
+   - ❌ 错误：```json\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}\n```
+   - ❌ 错误：```\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}\n```
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+
+2. **禁止添加说明文字**：
+   - ❌ 错误：以下是解析结果：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+   - ❌ 错误：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]} 以上为审计报告解析结果。
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+
+3. **禁止添加 markdown 格式标记**：
+   - ❌ 错误：# 审计报告解析结果\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+   - ❌ 错误：**结果**：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+
+4. **禁止在 JSON 前后添加任何字符**：
+   - ❌ 错误：\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}\n（含多余换行）
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}（首字符为 `{`，末字符为 `}`）
+
+### 正确输出格式要求
+
+1. **整个输出**仅包含一个 JSON 对象，从 `{` 开始到 `}` 结束
+2. **首字符**必须是 `{`，**末字符**必须是 `}`
+3. **中间不允许**插入任何非 JSON 内容（包括换行、空格、注释等，除非是 JSON 结构本身的一部分）
+4. 输出必须能被 `JSON.parse()` 直接解析成功，无需任何预处理或去除包装
+5. **输出前必须完成上述"自检步骤"，确保 JSON 格式无误**
+
+### 自检输出格式的额外步骤
+
+在自检 JSON 内容合法性之外，还需检查输出格式：
+
+1. 检查输出的首字符是否为 `{`（不是 `、换行、空格或其他字符）
+2. 检查输出的末字符是否为 `}`（不是 `、换行、空格或其他字符）
+3. 检查整个输出中是否包含 ``` 或 ```json 等 markdown 代码块标记
+4. 检查 JSON 对象前后是否有任何说明文字、标题、换行等非 JSON 内容
+5. 如发现以上任何问题，**去除所有非 JSON 内容后重新输出**
 
 ## 使用示例
 
