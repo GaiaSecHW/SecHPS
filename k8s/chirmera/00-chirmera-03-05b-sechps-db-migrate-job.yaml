@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chirmera-sechps-db-migrate
+  namespace: secflow-ns
+spec:
+  suspend: true
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: chirmera-sechps-db-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-migrate
+          image: ghcr.io/gaiasechw/sechps:dev
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: chirmera-sechps-config
+            - secretRef:
+                name: chirmera-sechps-secret
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              set -euo pipefail
+              if [ -z "${DB_MIGRATION_COMMAND:-}" ]; then
+                echo "[db-migrate] DB_MIGRATION_COMMAND is empty"
+                echo "[db-migrate] example: DB_MIGRATION_COMMAND='npx tsx scripts/migrate-workflow-to-agent-team.ts'"
+                exit 1
+              fi
+
+              echo "[db-migrate] applying prisma schema before migration..."
+              npx prisma db push --skip-generate
+
+              echo "[db-migrate] running: ${DB_MIGRATION_COMMAND}"
+              eval "${DB_MIGRATION_COMMAND}"
+
+              echo "[db-migrate] completed"
+

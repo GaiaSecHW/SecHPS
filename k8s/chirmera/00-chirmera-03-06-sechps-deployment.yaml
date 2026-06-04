@@ -13,9 +13,34 @@ spec:
       labels:
         name: chirmera-sechps
     spec:
+      initContainers:
+        - name: wait-for-db-init
+          image: ghcr.io/gaiasechw/sechps:dev
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: chirmera-sechps-config
+            - secretRef:
+                name: chirmera-sechps-secret
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              set -euo pipefail
+              echo "[wait-for-db-init] waiting for table CodeswarmWorker..."
+              for i in $(seq 1 120); do
+                if node -e "const { Client } = require('pg'); const client = new Client({ connectionString: process.env.DATABASE_URL }); client.connect().then(() => client.query('SELECT to_regclass(\\'public.\"CodeswarmWorker\"\\') AS reg')).then((res) => client.end().then(() => { const exists = !!res.rows?.[0]?.reg; process.exit(exists ? 0 : 1); })).catch(() => process.exit(1));"; then
+                  echo "[wait-for-db-init] CodeswarmWorker exists"
+                  exit 0
+                fi
+                echo "[wait-for-db-init] schema not ready, retry ${i}/120"
+                sleep 5
+              done
+              echo "[wait-for-db-init] timeout waiting for schema"
+              exit 1
       containers:
         - name: chirmera-sechps
-          image: ghcr.io/gaiasechw/sechps:latest
+          image: ghcr.io/gaiasechw/sechps:dev
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

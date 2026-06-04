@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: chirmera-worker
-          image: ghcr.io/gaiasechw/codeswarm-worker:latest
+          image: ghcr.io/gaiasechw/codeswarm-worker:dev
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

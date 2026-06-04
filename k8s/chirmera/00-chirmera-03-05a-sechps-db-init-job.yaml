@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chirmera-sechps-db-init
+  namespace: secflow-ns
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: chirmera-sechps-db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          image: ghcr.io/gaiasechw/sechps:dev
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: chirmera-sechps-config
+            - secretRef:
+                name: chirmera-sechps-secret
+          command:
+            - /bin/bash
+            - -lc
+            - |
+              set -euo pipefail
+              echo "[db-init] waiting for postgresql..."
+              for i in $(seq 1 60); do
+                if node -e "const { Client } = require('pg'); const client = new Client({ connectionString: process.env.DATABASE_URL }); client.connect().then(() => client.end()).then(() => process.exit(0)).catch(() => process.exit(1));"; then
+                  break
+                fi
+                echo "[db-init] postgresql not ready, retry ${i}/60"
+                sleep 5
+              done
+
+              echo "[db-init] applying prisma schema..."
+              npx prisma db push --skip-generate
+
+              if [ "${DB_SEED_ENABLED:-true}" = "true" ]; then
+                echo "[db-init] running base seed..."
+                npx tsx prisma/seed.ts
+              else
+                echo "[db-init] base seed disabled"
+              fi
+
+              echo "[db-init] completed"
+
