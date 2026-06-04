@@ -343,7 +343,8 @@ export class ProcessManager {
         const text = data.toString();
         stderr += text;
         text.split('\n').filter(Boolean).forEach(line => {
-          logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
+          const { isCritical } = classifyAcpError(line);
+          isCritical ? logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`) : logger.info(LOG_MODULES.PROCESS, `[stderr] ${line}`);
         });
       });
 
@@ -537,22 +538,30 @@ function registerEventHandlers(
       }
     },
 
-    toolCallUpdate: (output: string) => {
-      taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}..."`);
+    toolCallUpdate: (output: string, title?: string, rawInput?: unknown) => {
+      taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}...", title="${title}"`) : logger.info(LOG_MODULES.PROCESS, `EVENT toolCallUpdate: "${output?.substring(0, 50)}...", title="${title}"`);
 
-      if (state.currentSkill === 'unknown' && output) {
-        const launchMatch = output.match(/(?:Launching|Invoking|Running|Executing)\s+skill[:\s]+([a-zA-Z][a-zA-Z0-9_-]+)/i);
-        if (launchMatch && launchMatch[1]) {
-          taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Skill name resolved from output: ${launchMatch[1]}`) : logger.info(LOG_MODULES.PROCESS, `Skill name resolved from output: ${launchMatch[1]}`);
-          state.currentSkill = launchMatch[1];
-          if (onEvent) {
-            onEvent({
-              type: 'skill_start',
-              skill: state.currentSkill,
-              content: `Skill 名称已修正: ${state.currentSkill}`,
-              timestamp: new Date().toISOString(),
-            });
-          }
+      // Try to resolve skill name from three sources (priority order):
+      // 1. rawInput.name (from ACP tool_call_update rawInput field)
+      // 2. title "Loaded skill: xxx" pattern (from OpenCode skill.ts)
+      // 3. <skill_content name="xxx"> tag in output (from skill execution result)
+      const inputSkillName = extractSkillName(rawInput);
+      const titleSkillMatch = title?.match(/^Loaded skill:\s*(.+)/);
+      const titleSkillName = titleSkillMatch?.[1]?.trim();
+      const contentSkillMatch = output?.match(/<skill_content name="([^"]+)"/);
+      const contentSkillName = contentSkillMatch?.[1];
+      const resolvedSkillName = inputSkillName || titleSkillName || contentSkillName;
+
+      if (resolvedSkillName && state.currentSkill !== resolvedSkillName) {
+        taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Skill name resolved from tool_call_update: ${resolvedSkillName} (prev: ${state.currentSkill || 'none'}, source: ${inputSkillName ? 'rawInput' : titleSkillName ? 'title' : 'skill_content'})`) : logger.info(LOG_MODULES.PROCESS, `Skill name resolved from tool_call_update: ${resolvedSkillName} (prev: ${state.currentSkill || 'none'})`);
+        state.currentSkill = resolvedSkillName;
+        if (onEvent) {
+          onEvent({
+            type: 'skill_start',
+            skill: state.currentSkill,
+            content: `Skill 名称已修正: ${state.currentSkill}`,
+            timestamp: new Date().toISOString(),
+          });
         }
       }
 
@@ -583,7 +592,12 @@ function registerEventHandlers(
       const line = content.trim();
       if (!line) return;
       state.stderr += line + '\n';
-      taskId ? logger.taskWarn(taskId, LOG_MODULES.PROCESS, `[stderr] ${line}`) : logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
+      const { isCritical } = classifyAcpError(line);
+      if (isCritical) {
+        taskId ? logger.taskWarn(taskId, LOG_MODULES.PROCESS, `[stderr] ${line}`) : logger.warn(LOG_MODULES.PROCESS, `[stderr] ${line}`);
+      } else {
+        taskId ? logger.taskInfo(taskId, LOG_MODULES.PROCESS, `[stderr] ${line}`) : logger.info(LOG_MODULES.PROCESS, `[stderr] ${line}`);
+      }
       if (!onEvent) return;
 
       if (/process exited with|terminated by signal|Failed to write to process stdin/i.test(line)) {
