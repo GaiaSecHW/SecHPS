@@ -327,7 +327,48 @@ bash: allow
 
 ## 输出格式
 
-仅返回 JSON 对象，不添加额外的 markdown 格式或说明。输出应为可直接解析的有效 JSON。**输出前必须完成上述"自检步骤"，确保 JSON 格式无误。**
+**输出的全部内容必须是纯粹的 JSON 对象，不得包含任何其他格式或文字。**
+
+### 严格禁止的输出格式
+
+以下输出格式**全部禁止**，任何一种都会导致返回内容无法被正确解析为 JSON：
+
+1. **禁止用 markdown 代码块包裹**：
+   - ❌ 错误：```json\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}\n```
+   - ❌ 错误：```\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}\n```
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+
+2. **禁止添加说明文字**：
+   - ❌ 错误：以下是解析结果：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+   - ❌ 错误：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]} 以上为审计报告解析结果。
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+
+3. **禁止添加 markdown 格式标记**：
+   - ❌ 错误：# 审计报告解析结果\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+   - ❌ 错误：**结果**：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}
+
+4. **禁止在 JSON 前后添加任何字符**：
+   - ❌ 错误：\n{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}\n（含多余换行）
+   - ✅ 正确：{"evaluationId":"","skillExecutionId":"","vulnerabilities":[]}（首字符为 `{`，末字符为 `}`）
+
+### 正确输出格式要求
+
+1. **整个输出**仅包含一个 JSON 对象，从 `{` 开始到 `}` 结束
+2. **首字符**必须是 `{`，**末字符**必须是 `}`
+3. **中间不允许**插入任何非 JSON 内容（包括换行、空格、注释等，除非是 JSON 结构本身的一部分）
+4. 输出必须能被 `JSON.parse()` 直接解析成功，无需任何预处理或去除包装
+5. **输出前必须完成上述"自检步骤"，确保 JSON 格式无误**
+
+### 自检输出格式的额外步骤
+
+在自检 JSON 内容合法性之外，还需检查输出格式：
+
+1. 检查输出的首字符是否为 `{`（不是 `、换行、空格或其他字符）
+2. 检查输出的末字符是否为 `}`（不是 `、换行、空格或其他字符）
+3. 检查整个输出中是否包含 ``` 或 ```json 等 markdown 代码块标记
+4. 检查 JSON 对象前后是否有任何说明文字、标题、换行等非 JSON 内容
+5. 如发现以上任何问题，**去除所有非 JSON 内容后重新输出**
 
 ## 使用示例
 
