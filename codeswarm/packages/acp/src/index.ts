@@ -26,8 +26,8 @@ export interface ACPClientEvents {
   text: (content: string) => void;
   /** Tool call started. `tool` = kind (category: read/edit/execute/other), `input` = rawInput, `title` = actual tool name */
   toolCall: (tool: string, input: unknown, title?: string) => void;
-  /** Tool call result */
-  toolCallUpdate: (output: string) => void;
+  /** Tool call result. `title` and `rawInput` passed for skill name extraction from completed skill tool_calls. */
+  toolCallUpdate: (output: string, title?: string, rawInput?: unknown) => void;
   /** Error from agent */
   error: (message: string) => void;
   /** Agent stderr output chunk (ACP spec: "Clients MAY capture, forward, or ignore this logging") */
@@ -113,7 +113,9 @@ export class ACPClient {
     if (config.args) {
       args = config.args;
     } else {
-      args = ['acp', '--pure', '--print-logs', '--log-level', 'DEBUG', '--cwd', config.cwd];
+      // ACP_LOG_LEVEL: 生产环境默认 INFO，调试时可设 DEBUG
+      const logLevel = process.env.ACP_LOG_LEVEL || 'INFO';
+      args = ['acp', '--pure', '--print-logs', '--log-level', logLevel, '--cwd', config.cwd];
     }
 
     // Build environment
@@ -394,7 +396,11 @@ export class ACPClient {
           const output = update.rawOutput
             ? JSON.stringify(update.rawOutput)
             : '';
-          this.eventHandlers.toolCallUpdate?.(output);
+          const title = update.title || '';
+          const rawInput = update.rawInput || {};
+          console.log(`[ACP] tool_call_update: status=${status}, title=${title}`);
+          console.log(`[ACP] tool_call_update rawInput: ${JSON.stringify(rawInput)?.slice(0, 300)}`);
+          this.eventHandlers.toolCallUpdate?.(output, title, rawInput);
         }
         break;
       }
