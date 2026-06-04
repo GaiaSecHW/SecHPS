@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink, Download, Shield, Eye, X, Bug, Ban } from 'lucide-react';
+import { ArrowLeft, Settings, FileText, Clock, Play, CheckCircle, XCircle, Loader2, ChevronRight, Wrench, Activity, Cpu, ShieldAlert, Download, Shield, Eye, Ban } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -65,13 +65,6 @@ const statusConfig: Record<string, { bg: string; text: string; label: string; ic
   failed:      { bg: 'bg-red-100', text: 'text-red-400', label: '失败', icon: XCircle },
 };
 
-const logLevelConfig: Record<string, { bg: string; text: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
-  info: { bg: 'bg-blue-900/20', text: 'text-blue-400', icon: AlertCircle },
-  warning: { bg: 'bg-yellow-900/20', text: 'text-yellow-400', icon: AlertCircle },
-  error: { bg: 'bg-red-900/20', text: 'text-red-400', icon: XCircle },
-  success: { bg: 'bg-green-900/20', text: 'text-green-400', icon: CheckCircle },
-};
-
 const getDisplayStatus = (task: TaskInstance): 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed' => {
   if (task.displayStatus) return task.displayStatus;
   // Fallback: compute from task.status and codeswarmStatus
@@ -105,7 +98,7 @@ export default function TaskDetailPage() {
   const [expandedVulnId, setExpandedVulnId] = useState<string | null>(null);
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-  const sortedVulnList = useMemo(() => [...vulnList].sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)), [vulnList]);
+  const sortedVulnList = useMemo(() => [...vulnList].sort((a: any, b: any) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)), [vulnList]);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -120,20 +113,16 @@ export default function TaskDetailPage() {
       if (response.ok) {
         const data = await response.json();
         setTask(data.task || null);
-        setLogs(data.logs || []);
         setCodeswarmStatus(data.codeswarmStatus || null);
-        // Merge displayStatus into task object for convenience
         if (data.task && data.displayStatus) {
           setTask({ ...data.task, displayStatus: data.displayStatus });
         }
       } else {
         setTask(null);
-        setLogs([]);
         setCodeswarmStatus(null);
       }
     } catch {
       setTask(null);
-      setLogs([]);
       setCodeswarmStatus(null);
     } finally {
       setLoading(false);
@@ -191,13 +180,29 @@ export default function TaskDetailPage() {
   }, [task?.status, task?.startedAt]);
 
   // 轮询 CodeswarmTask 状态（running 时持续轮询，completed 后继续 60 秒以捕获 VulnParse 日志）
+  // 轮询 CodeswarmTask 状态（running 最长 30 分钟，completed 后继续 60 秒）
   useEffect(() => {
     const completedAtMs = task?.completedAt ? new Date(task.completedAt).getTime() : 0;
 
     if (task?.status === 'running' || task?.displayStatus === 'running' || task?.displayStatus === 'queued' || task?.displayStatus === 'dispatched') {
+      const startedAt = Date.now();
+      const MAX_DURATION = 30 * 60 * 1000;
+      const maxTimeout = setTimeout(() => {
+        if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      }, MAX_DURATION);
+
       pollingRef.current = setInterval(() => {
+        if (Date.now() - startedAt > MAX_DURATION) {
+          if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+          return;
+        }
         fetchTaskDetail(taskId, false);
       }, 5000);
+
+      return () => {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        clearTimeout(maxTimeout);
+      };
     } else if ((task?.status === 'completed' || task?.status === 'failed') && completedAtMs > 0) {
       const elapsed = Date.now() - completedAtMs;
       if (elapsed < 60000) {
@@ -230,13 +235,17 @@ export default function TaskDetailPage() {
     });
   };
 
+  const streamAbortRef = useRef<AbortController | null>(null);
+
   const subscribeToLogs = async (id: string) => {
     const token = localStorage.getItem('token');
     setIsStreaming(true);
+    streamAbortRef.current = new AbortController();
 
     try {
       const response = await fetch(`/api/task-builder/tasks/${id}/logs/stream`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: streamAbortRef.current.signal,
       });
 
       if (!response.ok || !response.body) {
@@ -443,6 +452,7 @@ export default function TaskDetailPage() {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
+      streamAbortRef.current?.abort();
     };
   }, []);
 
@@ -893,322 +903,6 @@ export default function TaskDetailPage() {
               }
             })()}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Simple markdown-ish renderer for agent output text */
-function renderAgentText(text: string) {
-  const lines = text.split('\n');
-  const elements: React.ReactNode[] = [];
-  let inCodeBlock = false;
-  let codeBlockLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.startsWith('```')) {
-      if (inCodeBlock) {
-        elements.push(
-          <pre key={`code-${i}`} className="bg-black/40 text-emerald-300 p-3 rounded-md text-xs overflow-x-auto my-2 font-mono border border-gray-700/50">
-            {codeBlockLines.join('\n')}
-          </pre>
-        );
-        codeBlockLines = [];
-        inCodeBlock = false;
-      } else {
-        inCodeBlock = true;
-      }
-      continue;
-    }
-
-    if (inCodeBlock) {
-      codeBlockLines.push(line);
-      continue;
-    }
-
-    // Headers
-    if (line.startsWith('### ')) {
-      elements.push(<h4 key={`h4-${i}`} className="text-sm font-bold text-emerald-300 mt-3 mb-1">{line.slice(4)}</h4>);
-      continue;
-    }
-    if (line.startsWith('## ')) {
-      elements.push(<h3 key={`h3-${i}`} className="text-base font-bold text-emerald-300 mt-3 mb-1">{line.slice(3)}</h3>);
-      continue;
-    }
-    if (line.startsWith('# ')) {
-      elements.push(<h2 key={`h2-${i}`} className="text-lg font-bold text-emerald-300 mt-3 mb-1">{line.slice(2)}</h2>);
-      continue;
-    }
-
-    // Horizontal rule
-    if (/^---+$/.test(line.trim())) {
-      elements.push(<hr key={`hr-${i}`} className="border-gray-700/50 my-3" />);
-      continue;
-    }
-
-    // Table row
-    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
-      elements.push(
-        <div key={`tbl-${i}`} className="text-xs font-mono text-gray-300 leading-relaxed">{line}</div>
-      );
-      continue;
-    }
-
-    // List item
-    if (/^[-*]\s/.test(line.trim())) {
-      elements.push(
-        <div key={`li-${i}`} className="flex gap-2 text-sm leading-relaxed">
-          <span className="text-gray-600 flex-shrink-0">•</span>
-          <span>{renderInlineMarkdown(line.trim().replace(/^[-*]\s/, ''))}</span>
-        </div>
-      );
-      continue;
-    }
-
-    // Numbered list
-    if (/^\d+\.\s/.test(line.trim())) {
-      const match = line.trim().match(/^(\d+\.)\s(.*)$/);
-      elements.push(
-        <div key={`ol-${i}`} className="flex gap-2 text-sm leading-relaxed">
-          <span className="text-gray-500 flex-shrink-0 font-mono">{match?.[1]}</span>
-          <span>{renderInlineMarkdown(match?.[2] || '')}</span>
-        </div>
-      );
-      continue;
-    }
-
-    // Empty line
-    if (line.trim() === '') {
-      elements.push(<div key={`br-${i}`} className="h-2" />);
-      continue;
-    }
-
-    // Regular paragraph
-    elements.push(<p key={`p-${i}`} className="text-sm leading-relaxed">{renderInlineMarkdown(line)}</p>);
-  }
-
-  return elements;
-}
-
-function renderInlineMarkdown(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  const regex = /(\*\*[^*]+\*\*)|(`[^`]+`)|(\[[^\]]+\]\([^)]+\))/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    const m = match[0];
-    if (m.startsWith('**') && m.endsWith('**')) {
-      parts.push(<strong key={match.index} className="text-white font-semibold">{m.slice(2, -2)}</strong>);
-    } else if (m.startsWith('`') && m.endsWith('`')) {
-      parts.push(<code key={match.index} className="bg-black/40 text-amber-300 px-1.5 py-0.5 rounded text-xs font-mono">{m.slice(1, -1)}</code>);
-    } else {
-      parts.push(m);
-    }
-    lastIndex = match.index + m.length;
-  }
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts.length === 1 ? parts[0] : <>{parts}</>;
-}
-
-const toolDisplayNameMap: Record<string, string> = { other: '其他工具', unknown: '未知工具' };
-
-function LogsGroupedDisplay({ logs, formatDate }: { logs: TaskExecutionLog[], formatDate: (date: string) => string }) {
-  const [agentOutputExpanded, setAgentOutputExpanded] = useState(true);
-  const [toolCallsExpanded, setToolCallsExpanded] = useState(true);
-  const [errorsExpanded, setErrorsExpanded] = useState(true);
-  const [statusExpanded, setStatusExpanded] = useState(true);
-
-  const groupedLogs = useMemo(() => {
-    const agentOutputLogs = logs.filter(l => l.message === 'Agent 输出');
-    const toolCallLogs = logs.filter(l => l.message === '工具调用');
-    const errorLogs = logs.filter(l => l.level === 'error');
-    const statusLogs = logs.filter(l =>
-      !['Agent 输出', '工具调用', '工具结果'].includes(l.message) && l.level !== 'error'
-    );
-
-    const agentOutputText = agentOutputLogs.map(l => l.details || '').join('');
-
-    // Tool call summary
-    const toolCounts: Record<string, number> = {};
-    toolCallLogs.forEach(l => {
-      const rawName = l.details?.replace(/^工具:\s*/, '') || 'unknown';
-      const toolName = toolDisplayNameMap[rawName] || rawName;
-      toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
-    });
-
-    return {
-      agentOutput: { logs: agentOutputLogs, text: agentOutputText },
-      toolCalls: { logs: toolCallLogs, counts: toolCounts },
-      errors: { logs: errorLogs },
-      status: { logs: statusLogs },
-    };
-  }, [logs]);
-
-  const agentCharCount = groupedLogs.agentOutput.text.length;
-
-  return (
-    <div className="space-y-4">
-      {/* Agent 输出流 */}
-      {groupedLogs.agentOutput.logs.length > 0 && (
-        <div className="rounded-lg border border-green-500/20 overflow-hidden">
-          <button
-            onClick={() => setAgentOutputExpanded(!agentOutputExpanded)}
-            className="w-full flex items-center justify-between p-3 bg-green-500/5 hover:bg-green-500/10 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Activity size={16} className="text-green-400" />
-              <span className="text-sm font-medium text-green-400">Agent 输出流</span>
-              <span className="text-xs text-gray-500">({groupedLogs.agentOutput.logs.length} 条 · {agentCharCount > 1000 ? `${(agentCharCount / 1000).toFixed(1)}k` : agentCharCount} 字符)</span>
-            </div>
-            {agentOutputExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-          </button>
-
-          {agentOutputExpanded && (
-            <div className="border-t border-green-500/10">
-              <div className="p-4 max-h-[500px] overflow-y-auto bg-[#0a0f0a]/50">
-                <div className="text-gray-200">
-                  {renderAgentText(groupedLogs.agentOutput.text)}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 工具调用统计 */}
-      {groupedLogs.toolCalls.logs.length > 0 && (
-        <div className="rounded-lg border border-blue-500/20 overflow-hidden">
-          <button
-            onClick={() => setToolCallsExpanded(!toolCallsExpanded)}
-            className="w-full flex items-center justify-between p-3 bg-blue-500/5 hover:bg-blue-500/10 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Wrench size={16} className="text-blue-400" />
-              <span className="text-sm font-medium text-blue-400">工具调用</span>
-              <span className="text-xs text-gray-500">({groupedLogs.toolCalls.logs.length} 次)</span>
-              <div className="hidden sm:flex items-center gap-1.5 ml-2">
-                {Object.entries(groupedLogs.toolCalls.counts).map(([name, count]) => (
-                  <span key={name} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                    {name} <span className="text-blue-400/60 ml-1">×{count}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-            {toolCallsExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-          </button>
-
-          {toolCallsExpanded && (
-            <div className="border-t border-blue-500/10 px-3 pb-3">
-              <div className="space-y-0.5 max-h-40 overflow-y-auto py-2">
-                {groupedLogs.toolCalls.logs.map((log, idx) => (
-                  <div key={log.id} className="flex items-center gap-2 text-xs">
-                    <span className="text-gray-600 font-mono w-6 text-right">{idx + 1}.</span>
-                    <span className="text-blue-300">{toolDisplayNameMap[log.details?.replace(/^工具:\s*/, '') || 'unknown'] || log.details}</span>
-                    <span className="text-gray-700 ml-auto">{formatDate(log.timestamp)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 错误信息 */}
-      {groupedLogs.errors.logs.length > 0 && (
-        <div className="rounded-lg border border-red-500/20 overflow-hidden">
-          <button
-            onClick={() => setErrorsExpanded(!errorsExpanded)}
-            className="w-full flex items-center justify-between p-3 bg-red-500/5 hover:bg-red-500/10 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <XCircle size={16} className="text-red-400" />
-              <span className="text-sm font-medium text-red-400">错误信息</span>
-              <span className="text-xs text-gray-500">({groupedLogs.errors.logs.length} 条)</span>
-            </div>
-            {errorsExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-          </button>
-
-          {errorsExpanded && (
-            <div className="border-t border-red-500/10 px-3 pb-3">
-              <div className="space-y-2 py-2">
-                {groupedLogs.errors.logs.map((log) => (
-                  <div key={log.id} className="bg-red-500/5 p-3 rounded-md border border-red-500/10">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-red-400">{log.message}</span>
-                      <span className="text-xs text-gray-600">{formatDate(log.timestamp)}</span>
-                    </div>
-                    {log.details && (
-                      <pre className="text-xs text-red-300/80 whitespace-pre-wrap overflow-x-auto mt-1 font-mono">
-                        {log.details}
-                      </pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 执行状态时间线 */}
-      {groupedLogs.status.logs.length > 0 && (
-        <div className="rounded-lg border border-gray-700/30 overflow-hidden">
-          <button
-            onClick={() => setStatusExpanded(!statusExpanded)}
-            className="w-full flex items-center justify-between p-3 bg-gray-500/5 hover:bg-gray-500/10 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Activity size={16} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-300">执行状态时间线</span>
-              <span className="text-xs text-gray-500">({groupedLogs.status.logs.length} 步)</span>
-            </div>
-            {statusExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-          </button>
-
-          {statusExpanded && (
-            <div className="border-t border-gray-700/20 px-4 pb-3">
-              <div className="space-y-0 max-h-64 overflow-y-auto py-3">
-                {groupedLogs.status.logs.map((log, idx) => {
-                  const logConfig = logLevelConfig[log.level] || logLevelConfig.info;
-                  const isPhase = log.message === '阶段开始' || log.message === '阶段完成' || log.message === '知识图谱预处理' || log.message === '知识图谱就绪';
-                  const dotColor = log.message.includes('完成') || log.message.includes('就绪')
-                    ? 'bg-green-500'
-                    : log.message.includes('开始') || log.message.includes('预处理')
-                      ? 'bg-blue-500'
-                      : log.level === 'error' ? 'bg-red-500' : 'bg-gray-500';
-
-                  return (
-                    <div key={log.id} className="flex items-start gap-3 relative">
-                      {/* Timeline dot and line */}
-                      <div className="flex flex-col items-center flex-shrink-0 w-4">
-                        <div className={`w-2 h-2 rounded-full ${dotColor} ${isPhase ? 'ring-2 ring-offset-1 ring-offset-[#0a0f0a]' : ''} ${isPhase && dotColor === 'bg-green-500' ? 'ring-green-500/30' : isPhase && dotColor === 'bg-blue-500' ? 'ring-blue-500/30' : ''}`} />
-                        {idx < groupedLogs.status.logs.length - 1 && (
-                          <div className="w-px flex-1 bg-gray-700/30 min-h-[20px]" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 pb-3">
-                        <div className="flex items-center justify-between">
-                          <span className={`text-sm ${isPhase ? 'font-medium' : ''} ${logConfig.text}`}>{log.message}</span>
-                          <span className="text-xs text-gray-600 flex-shrink-0 ml-4">{formatDate(log.timestamp)}</span>
-                        </div>
-                        {log.details && (
-                          <p className="text-xs text-gray-500 mt-0.5">{log.details}</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

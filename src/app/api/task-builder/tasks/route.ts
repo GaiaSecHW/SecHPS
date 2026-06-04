@@ -32,6 +32,43 @@ function mapDisplayStatus(
   }
 }
 
+async function fetchCodeswarmMeta(codeswarmTaskIds: string[]) {
+  const codeswarmStateMap = new Map<string, string>();
+  const workerMap = new Map<string, { workerNodeId: string | null; workerStatus: string | null }>();
+
+  if (codeswarmTaskIds.length === 0) return [codeswarmStateMap, workerMap] as const;
+
+  const [stateRows, workerRows] = await Promise.all([
+    prisma.$queryRaw<{ taskId: string; state: string }[]>`
+      SELECT ct."taskId", ct."state"
+      FROM "CodeswarmTask" ct
+      WHERE ct."taskId" IN (${Prisma.join(codeswarmTaskIds)})
+    `,
+    prisma.$queryRaw<{ taskId: string; workerNodeId: string | null; workerStatus: string | null }[]>`
+      SELECT ct."taskId", w."nodeId" as "workerNodeId", w."status" as "workerStatus"
+      FROM "CodeswarmTask" ct
+      LEFT JOIN "CodeswarmWorker" w ON ct."workerId" = w.id
+      WHERE ct."taskId" IN (${Prisma.join(codeswarmTaskIds)})
+    `,
+  ]);
+
+  for (const row of stateRows) codeswarmStateMap.set(row.taskId, row.state);
+  for (const row of workerRows) workerMap.set(row.taskId, { workerNodeId: row.workerNodeId, workerStatus: row.workerStatus });
+
+  return [codeswarmStateMap, workerMap] as const;
+}
+
+function augmentTask(task: any, codeswarmStateMap: Map<string, string>, workerMap: Map<string, { workerNodeId: string | null; workerStatus: string | null }>) {
+  const hasCsid = task.codeswarmTaskId !== null && task.codeswarmTaskId !== undefined;
+  const csState = hasCsid ? codeswarmStateMap.get(task.codeswarmTaskId!) ?? null : null;
+  return {
+    ...task,
+    displayStatus: mapDisplayStatus(task.status, csState, hasCsid),
+    workerNodeId: hasCsid ? (workerMap.get(task.codeswarmTaskId!)?.workerNodeId ?? null) : null,
+    workerStatus: hasCsid ? (workerMap.get(task.codeswarmTaskId!)?.workerStatus ?? null) : null,
+  };
+}
+
 export async function POST(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
@@ -132,82 +169,71 @@ export async function GET(request: NextRequest) {
     }
 
     const where = conditions.length > 0 ? { AND: conditions } : {};
+    const taskSelect = {
+      id: true,
+      name: true,
+      status: true,
+      agentId: true,
+      agentName: true,
+      modelId: true,
+      modelName: true,
+      notes: true,
+      errorMessage: true,
+      createdAt: true,
+      codeswarmTaskId: true,
+      User: { select: { username: true } },
+    };
 
-    const allTasks = await prisma.taskInstance.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        agentId: true,
-        agentName: true,
-        modelId: true,
-        modelName: true,
-        notes: true,
-        errorMessage: true,
-        createdAt: true,
-        codeswarmTaskId: true,
-        User: { select: { username: true } },
-      },
-    });
+    // 有 displayStatus 筛选时需要全量查（displayStatus 是 JS 计算的派生字段，无法下推 DB）
+    if (displayStatusFilter) {
+      const allTasks = await prisma.taskInstance.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: taskSelect,
+      });
 
-    const codeswarmTaskIds = allTasks
+      const codeswarmTaskIds = allTasks
+        .map(t => t.codeswarmTaskId)
+        .filter((id): id is string => id !== null && id !== undefined);
+
+      const [codeswarmStateMap, workerMap] = await fetchCodeswarmMeta(codeswarmTaskIds);
+
+      const augmentedTasks = allTasks.map(task => augmentTask(task, codeswarmStateMap, workerMap));
+      const filteredTasks = augmentedTasks.filter(t => t.displayStatus === displayStatusFilter);
+
+      const total = filteredTasks.length;
+      const totalPages = Math.ceil(total / limit);
+      const skip = (page - 1) * limit;
+      const paginatedTasks = filteredTasks.slice(skip, skip + limit);
+
+      return NextResponse.json({
+        tasks: paginatedTasks,
+        pagination: { total, page, limit, totalPages },
+      });
+    }
+
+    // 无 displayStatus 筛选时走 DB 分页（常见路径）
+    const [total, paginatedTasks] = await Promise.all([
+      prisma.taskInstance.count({ where }),
+      prisma.taskInstance.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: taskSelect,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    const codeswarmTaskIds = paginatedTasks
       .map(t => t.codeswarmTaskId)
       .filter((id): id is string => id !== null && id !== undefined);
 
-    let codeswarmStateMap = new Map<string, string>();
+    const [codeswarmStateMap, workerMap] = await fetchCodeswarmMeta(codeswarmTaskIds);
+    const tasks = paginatedTasks.map(task => augmentTask(task, codeswarmStateMap, workerMap));
 
-    if (codeswarmTaskIds.length > 0) {
-      const stateRows: { taskId: string; state: string }[] =
-        await prisma.$queryRaw`
-          SELECT ct."taskId", ct."state"
-          FROM "CodeswarmTask" ct
-          WHERE ct."taskId" IN (${Prisma.join(codeswarmTaskIds)})
-        `;
-      for (const row of stateRows) {
-        codeswarmStateMap.set(row.taskId, row.state);
-      }
-    }
-
-    let workerMap = new Map<string, { workerNodeId: string | null; workerStatus: string | null }>();
-
-    if (codeswarmTaskIds.length > 0) {
-      const workerRows: { taskId: string; workerNodeId: string | null; workerStatus: string | null }[] =
-        await prisma.$queryRaw`
-          SELECT ct."taskId", w."nodeId" as "workerNodeId", w."status" as "workerStatus"
-          FROM "CodeswarmTask" ct
-          LEFT JOIN "CodeswarmWorker" w ON ct."workerId" = w.id
-          WHERE ct."taskId" IN (${Prisma.join(codeswarmTaskIds)})
-        `;
-      for (const row of workerRows) {
-        workerMap.set(row.taskId, { workerNodeId: row.workerNodeId, workerStatus: row.workerStatus });
-      }
-    }
-
-    const augmentedTasks = allTasks.map(task => {
-      const hasCsid = task.codeswarmTaskId !== null && task.codeswarmTaskId !== undefined;
-      const csState = hasCsid ? codeswarmStateMap.get(task.codeswarmTaskId!) ?? null : null;
-      const displayStatus = mapDisplayStatus(task.status, csState, hasCsid);
-      return {
-        ...task,
-        displayStatus,
-        workerNodeId: hasCsid ? (workerMap.get(task.codeswarmTaskId!)?.workerNodeId ?? null) : null,
-        workerStatus: hasCsid ? (workerMap.get(task.codeswarmTaskId!)?.workerStatus ?? null) : null,
-      };
-    });
-
-    const filteredTasks = displayStatusFilter
-      ? augmentedTasks.filter(t => t.displayStatus === displayStatusFilter)
-      : augmentedTasks;
-
-    const total = filteredTasks.length;
     const totalPages = Math.ceil(total / limit);
-    const skip = (page - 1) * limit;
-    const paginatedTasks = filteredTasks.slice(skip, skip + limit);
-
     return NextResponse.json({
-      tasks: paginatedTasks,
+      tasks,
       pagination: { total, page, limit, totalPages },
     });
   } catch (error) {

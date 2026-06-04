@@ -63,17 +63,6 @@ export async function GET(
         projectPath: true,
         codeswarmTaskId: true,
         userId: true,
-        TaskExecutionLog: {
-          orderBy: { timestamp: 'asc' },
-          select: {
-            id: true,
-            timestamp: true,
-            level: true,
-            message: true,
-            details: true,
-            taskId: true,
-          },
-        },
       },
     });
 
@@ -116,7 +105,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ task, logs: task.TaskExecutionLog, codeswarmStatus, displayStatus: mapDisplayStatusLocal(task.status, codeswarmStatus?.state, task.codeswarmTaskId) });
+    return NextResponse.json({ task, codeswarmStatus, displayStatus: mapDisplayStatusLocal(task.status, codeswarmStatus?.state, task.codeswarmTaskId) });
   } catch (error) {
     logger.error(LOG_MODULES.AGENT, '获取任务详情失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '获取任务详情失败' }, { status: 500 });

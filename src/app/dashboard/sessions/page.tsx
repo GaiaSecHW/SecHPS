@@ -228,23 +228,30 @@ export default function SessionsPage() {
     fetchAgentApps();
   }, []); // 只在组件挂载时执行一次
 
-  // 单独的 effect 处理自动刷新
+  // 单独的 effect 处理自动刷新（最长 30 分钟）
   useEffect(() => {
     if (!hasRunningEvaluation) {
-      return; // 如果没有运行中的评估，不启动定时器
+      return;
     }
 
     console.log('[Auto Refresh] Starting auto-refresh due to running evaluation');
-    
+    const startedAt = Date.now();
+    const MAX_DURATION = 30 * 60 * 1000;
+
     const interval = setInterval(() => {
+      if (Date.now() - startedAt > MAX_DURATION) {
+        console.log('[Auto Refresh] Max duration reached, stopping');
+        clearInterval(interval);
+        return;
+      }
       fetchProjects();
     }, 5000);
-    
+
     return () => {
       console.log('[Auto Refresh] Clearing auto-refresh interval');
       clearInterval(interval);
     };
-  }, [hasRunningEvaluation]); // 只在 hasRunningEvaluation 变化时重新运行
+  }, [hasRunningEvaluation]);
 
   // 获取模型列表（评估时使用：用户自己的模型 + 公开的模型）
   const fetchModels = async () => {

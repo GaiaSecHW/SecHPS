@@ -82,6 +82,7 @@ export default function ClaudeSessionPage({
   const [fileEditorOpen, setFileEditorOpen] = useState(false);
   const [pendingToolCall, setPendingToolCall] = useState<ToolCall | null>(null);
   const [toolCallHistory, setToolCallHistory] = useState<ToolCall[]>([]);
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   const loadProject = async () => {
     try {
@@ -218,6 +219,7 @@ export default function ClaudeSessionPage({
       const sessionId = currentSession?.id || '';
       
       // SSE 流式请求
+      streamAbortRef.current = new AbortController();
       const response = await fetch(`/api/claude/${encodeURIComponent(projName)}/stream?sessionId=${encodeURIComponent(sessionId)}`, {
         method: 'POST',
         headers: {
@@ -225,6 +227,7 @@ export default function ClaudeSessionPage({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ message: userMessage }),
+        signal: streamAbortRef.current.signal,
       });
 
       if (!response.ok) {
@@ -377,6 +380,10 @@ export default function ClaudeSessionPage({
   useEffect(() => {
     loadProject();
   }, [projectName]);
+
+  useEffect(() => {
+    return () => { streamAbortRef.current?.abort(); };
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

@@ -40,24 +40,22 @@ export async function GET(
         ` as any[]
       : null;
 
-    // 优先从 CodeswarmEvent 表读取事件，回退到旧 JSON 字段
-    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
-    const newEvents = await prisma.$queryRaw`
-      SELECT id, "taskId", data, "createdAt"
-      FROM "CodeswarmEvent"
-      WHERE "taskId" = ${task.taskId}
-      ORDER BY "createdAt" ASC
-    ` as any[];
+    // 优先从 CodeswarmEvent 表读取事件计数，回退到旧 JSON 字段
+    const eventCount = await prisma.codeswarmEvent.count({
+      where: { taskId: task.taskId },
+    });
 
-    const events = newEvents.length > 0
-      ? newEvents.map(e => ({ ...JSON.parse(e.data), _id: e.id, _createdAt: e.createdAt }))
-      : (task.events ? JSON.parse(task.events) : null);
+    let events = null;
+    if (eventCount === 0 && task.events) {
+      try { events = JSON.parse(task.events); } catch { events = null; }
+    }
 
     return NextResponse.json({
       task: {
         ...task,
         skills: task.skills ? JSON.parse(task.skills) : null,
         mcps: task.mcps ? JSON.parse(task.mcps) : null,
+        eventCount,
         events,
         CodeswarmWorker: worker ? worker[0] : null,
       },

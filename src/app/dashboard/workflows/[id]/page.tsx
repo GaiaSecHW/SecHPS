@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, AlertCircle, Loader2, Eye, Edit2, Lock } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -78,6 +78,11 @@ export default function WorkflowEditPage() {
   const router = useRouter();
   const params = useParams();
   const workflowId = params.id as string;
+
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => {
+    return () => { timersRef.current.forEach(clearTimeout); };
+  }, []);
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [initialData, setInitialData] = useState<WorkflowData | undefined>(undefined);
@@ -246,7 +251,8 @@ export default function WorkflowEditPage() {
       }
 
       setSuccessMessage('保存成功');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      const id = setTimeout(() => setSuccessMessage(''), 3000);
+      timersRef.current.push(id);
     } catch (err) {
       console.error('Save error:', err);
       alert(err instanceof Error ? err.message : '保存失败');

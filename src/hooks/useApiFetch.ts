@@ -83,6 +83,7 @@ export function useApiFetch<T = unknown>(
 
   // 使用 ref 避免闭包问题
   const cancelledRef = useRef(false);
+  const fetchedRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     if (!url) return;
@@ -126,11 +127,14 @@ export function useApiFetch<T = unknown>(
   // 初始化或依赖变化时请求
   useEffect(() => {
     if (immediate && url) {
+      if (fetchedRef.current) return;
+      fetchedRef.current = true;
       fetchData();
     }
 
     return () => {
       cancelledRef.current = true;
+      fetchedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, immediate, ...deps]);

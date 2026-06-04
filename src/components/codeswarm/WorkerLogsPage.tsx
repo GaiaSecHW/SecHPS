@@ -113,21 +113,51 @@ export function WorkerLogsPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resultCollapsed, setResultCollapsed] = useState(true);
   const [instructionCollapsed, setInstructionCollapsed] = useState(true);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logsLoading, setLogsLoading] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: tasksData, loading: tasksLoading, refetch: refetchTasks } = useApiFetch<{ tasks: Task[] }>('/api/codeswarm/tasks');
 
-  const buildLogsUrl = useCallback(() => {
-    if (!selectedTaskId) return null;
+  const LOG_PAGE_SIZE = 200;
+
+  const fetchLogs = useCallback(async (taskId: string, append = false) => {
     const params = new URLSearchParams();
     if (levelFilter !== 'all') params.set('level', levelFilter);
     if (streamFilter !== 'all') params.set('stream', streamFilter);
-    return `/api/codeswarm/tasks/${selectedTaskId}/logs?${params.toString()}`;
-  }, [selectedTaskId, levelFilter, streamFilter]);
+    const offset = append ? logs.length : 0;
+    params.set('offset', String(offset));
+    params.set('limit', String(LOG_PAGE_SIZE));
 
-  const logsUrl = buildLogsUrl();
-  const { data: logsData, loading: logsLoading, refetch: refetchLogs } = useApiFetch<LogsResponse>(logsUrl);
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`/api/codeswarm/tasks/${taskId}/logs?${params.toString()}`);
+      if (res.ok) {
+        const data: LogsResponse = await res.json();
+        if (append) {
+          setLogs(prev => [...prev, ...(data.logs || [])]);
+        } else {
+          setLogs(data.logs || []);
+        }
+        setLogsTotal(data.total);
+      }
+    } catch {} finally {
+      setLogsLoading(false);
+    }
+  }, [levelFilter, streamFilter, logs.length]);
+
+  // 初始加载 + 切换任务/筛选时重置
+  useEffect(() => {
+    if (selectedTaskId) {
+      setLogs([]);
+      fetchLogs(selectedTaskId);
+    } else {
+      setLogs([]);
+      setLogsTotal(0);
+    }
+  }, [selectedTaskId, levelFilter, streamFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (selectedTaskId) {
@@ -141,7 +171,6 @@ export function WorkerLogsPage() {
   }, [selectedTaskId]);
 
   const tasks = tasksData?.tasks || [];
-  const logs = logsData?.logs || [];
 
   const statusCounts = tasks.reduce((acc, task) => {
     acc[task.state] = (acc[task.state] || 0) + 1;
@@ -160,7 +189,7 @@ export function WorkerLogsPage() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     if (autoRefresh && selectedTaskId) {
       intervalRef.current = setInterval(() => {
-        refetchLogs();
+        fetchLogs(selectedTaskId, true);
         fetch(`/api/codeswarm/tasks/${selectedTaskId}`)
           .then(res => res.json())
           .then(data => { if (data.task) setTaskDetail(data.task); })
@@ -168,7 +197,7 @@ export function WorkerLogsPage() {
       }, 2000);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [autoRefresh, selectedTaskId, refetchLogs]);
+  }, [autoRefresh, selectedTaskId, fetchLogs]);
 
   useEffect(() => {
     if (logs.length > 0) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -312,7 +341,7 @@ export function WorkerLogsPage() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => setSidebarCollapsed(true)} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded" title="收起侧栏"><PanelLeftClose size={14} /></button>
-                <button onClick={() => { refetchTasks(); refetchLogs(); }} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded"><RefreshCw size={14} /></button>
+                <button onClick={() => { refetchTasks(); if (selectedTaskId) fetchLogs(selectedTaskId); }} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded"><RefreshCw size={14} /></button>
               </div>
             </div>
             <div className="relative">

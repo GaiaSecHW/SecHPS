@@ -257,30 +257,37 @@ function SessionDetailContent({
     loadAllData();
   }, [evaluationId]);
 
-  // 定时轮询：评估运行时自动刷新（5秒间隔）
+  // 定时轮询：评估运行时自动刷新（5秒间隔，最长 30 分钟）
   useEffect(() => {
     if (!evaluationId) return;
 
     let isPolling = true;
-    
+    const startedAt = Date.now();
+    const MAX_POLL_DURATION = 30 * 60 * 1000; // 30 分钟
+
     const pollLoop = async () => {
       while (isPolling) {
+        if (Date.now() - startedAt > MAX_POLL_DURATION) {
+          console.log('[Poll] Max poll duration reached, stopping');
+          break;
+        }
+
         const evalData = await fetchEvaluation();
-        
+
         // 评估完成后停止轮询
         if (evalData?.status === 'completed' || evalData?.status === 'cancelled' || evalData?.status === 'failed') {
           console.log('[Poll] Evaluation completed, stopping polling');
           fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
           break;
         }
-        
+
         // 运行中，刷新节点状态
         fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
-        
+
         await new Promise(r => setTimeout(r, 5000));  // 5秒间隔
       }
     };
-    
+
     pollLoop();
 
     return () => {
@@ -475,18 +482,26 @@ function SessionDetailContent({
     }
   };
   
-  // 启动节点级轮询（仅对运行中的节点）
+  // 启动节点级轮询（仅对运行中的节点，最长 10 分钟）
   const startNodePolling = (nodeId: string) => {
     // 先停止之前的轮询
     stopNodePolling();
-    
+
     nodePollingRef.current.nodeId = nodeId;
     console.log('[NodePoll] Started for node:', nodeId);
-    
+
+    const startedAt = Date.now();
+    const MAX_DURATION = 10 * 60 * 1000;
+
     nodePollingRef.current.intervalId = setInterval(() => {
+      if (Date.now() - startedAt > MAX_DURATION) {
+        console.log('[NodePoll] Max duration reached, stopping');
+        stopNodePolling();
+        return;
+      }
       console.log('[NodePoll] Refreshing node data...');
       fetchNodeData(nodeId, 'running');
-    }, 10000); // 每 10 秒刷新
+    }, 10000);
   };
   
   // 停止节点级轮询

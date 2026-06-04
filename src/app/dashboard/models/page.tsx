@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Cpu,
   Plus,
@@ -69,6 +69,16 @@ interface ModelFormData {
 }
 
 export default function ModelsPage() {
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const scheduleCleanup = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(fn, ms);
+    timersRef.current.push(id);
+  }, []);
+
+  useEffect(() => {
+    return () => { timersRef.current.forEach(clearTimeout); };
+  }, []);
+
   const [user, setUser] = useState<any>(null);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [models, setModels] = useState<ModelConfig[]>([]);
@@ -158,7 +168,7 @@ export default function ModelsPage() {
       })));
     } catch (err) {
       setError('加载模型列表失败');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -187,7 +197,7 @@ export default function ModelsPage() {
     // 只能编辑自己创建的模型，管理员可编辑所有
     if (!isIcsOrAdmin && model.userId !== user?.id && model.userId !== null) {
       setError('只能编辑自己创建的模型');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
       return;
     }
     
@@ -232,21 +242,21 @@ export default function ModelsPage() {
     // 表单验证
     if (!formData.name || !formData.apiBaseUrl || !formData.models) {
       setError('请填写必填字段');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
       return;
     }
 
     // 新建时必须填写 API Key
     if (!editingModel && !formData.apiKey) {
       setError('请填写 API Key');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
       return;
     }
 
     // 编辑时如果确认修改 API Key，必须填写
     if (editingModel && formData.changeApiKey && !formData.apiKey) {
       setError('请填写新的 API Key');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
       return;
     }
 
@@ -291,12 +301,12 @@ export default function ModelsPage() {
       }
 
       setSuccess(editingModel ? '模型更新成功' : '模型创建成功');
-      setTimeout(() => setSuccess(null), 3000);
+      scheduleCleanup(() => setSuccess(null), 3000);
       handleCloseModal();
       fetchModels();
     } catch (err) {
       setError('保存模型失败');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
     } finally {
       setSaving(false);
     }
@@ -306,7 +316,7 @@ export default function ModelsPage() {
     // 只能删除自己创建的模型
     if (!isIcsOrAdmin && model.userId !== user?.id) {
       setError('只能删除自己创建的模型');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
       return;
     }
     
@@ -332,13 +342,13 @@ export default function ModelsPage() {
       }
 
       setSuccess('模型删除成功');
-      setTimeout(() => setSuccess(null), 3000);
+      scheduleCleanup(() => setSuccess(null), 3000);
       setShowDeleteConfirm(false);
       setDeletingModel(null);
       fetchModels();
     } catch (err) {
       setError('删除模型失败');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
     } finally {
       setSaving(false);
     }
@@ -376,15 +386,15 @@ export default function ModelsPage() {
 
       if (data.success) {
         setSuccess(`模型 "${model.name}" 连接测试成功${data.response ? `: ${data.response.substring(0, 100)}${data.response.length > 100 ? '...' : ''}` : ''}`);
-        setTimeout(() => setSuccess(null), 10000);  // 延长到10秒
+        scheduleCleanup(() => setSuccess(null), 10000);  // 延长到10秒
       } else {
         setError(data.message || '连接失败');
-        setTimeout(() => setError(null), 10000);
+        scheduleCleanup(() => setError(null), 10000);
       }
     } catch (err: any) {
       const errorMsg = err.message || '模型连接测试失败';
       setError(errorMsg);
-      setTimeout(() => setError(null), 5000);
+      scheduleCleanup(() => setError(null), 5000);
       setTestResults({
         ...testResults,
         [model.id]: {
@@ -411,10 +421,10 @@ export default function ModelsPage() {
       setModels(models.map(m => m.id === modelId ? { ...m, contextWindow: 0 } : m));
       if (editingModel?.id === modelId) setEditingModel({ ...editingModel, contextWindow: 0 });
       setSuccess('Context Window 已复位');
-      setTimeout(() => setSuccess(null), 3000);
+      scheduleCleanup(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message);
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
     } finally {
       setResettingContextWindow(null);
     }
@@ -433,11 +443,11 @@ export default function ModelsPage() {
         throw new Error(data.error || '复制失败');
       }
       setSuccess(`已复制模型 "${model.name}"`);
-      setTimeout(() => setSuccess(null), 3000);
+      scheduleCleanup(() => setSuccess(null), 3000);
       fetchModels();
     } catch (err: any) {
       setError(err.message || '复制模型失败');
-      setTimeout(() => setError(null), 3000);
+      scheduleCleanup(() => setError(null), 3000);
     }
   };
 
