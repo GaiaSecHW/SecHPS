@@ -30,7 +30,7 @@ export async function GET(
         SkillCategory: { select: { id: true, name: true, displayName: true, icon: true, hasSubDimension: true } },
         AttackPattern: {
           select: {
-            id: true, name: true, parent_id: true,
+            id: true, name: true, level: true, parent_id: true, library_id: true,
           },
         },
         SkillProductTag: { select: { id: true, productTagId: true, ProductTag: { select: { id: true, name: true, displayName: true } } } },

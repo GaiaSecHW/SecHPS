@@ -69,7 +69,7 @@ class GitSkillSync {
       } else {
         this.git = simpleGit();
         
-        await this.git.clone(repoUrl, repoPath, ['-b', GITEA_CONFIG.branch]);
+        await this.git.clone(this.getRepoUrlWithAuth(), repoPath, ['-b', GITEA_CONFIG.branch]);
         this.git = simpleGit(repoPath);
         
         // 设置带认证的 remote URL
