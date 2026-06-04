@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!task) return notFound('Task not found');
 
     // 5. 验证 evaluationId 归属（必须属于当前 taskId 关联的 project）
-    if (evaluationId && typeof evaluationId === 'string') {
+    if (evaluationId && typeof evaluationId === 'string' && evaluationId.trim()) {
       const evalSession = await prisma.evaluationSession.findUnique({
         where: { id: evaluationId },
         select: { projectId: true },
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. 验证 skillExecutionId 存在
-    if (skillExecutionId && typeof skillExecutionId === 'string') {
+    if (skillExecutionId && typeof skillExecutionId === 'string' && skillExecutionId.trim()) {
       const skillExec = await prisma.skillExecution.findUnique({
         where: { id: skillExecutionId },
         select: { id: true },

@@ -36,33 +36,45 @@ interface ParsedVulnerabilityReport {
   }>;
 }
 
-function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
-  try {
-    let jsonStr = '';
-    logger.info(LOG_MODULES.CODESWARM, `parseVulnerabilityJson 输出长度: ${output.length}, 前200字符: ${output.substring(0, 200)}`);
+function stripAnsi(str: string): string {
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+}
 
-    if (output.includes('```json')) {
+function parseVulnerabilityJson(rawOutput: string): ParsedVulnerabilityReport | null {
+  try {
+    const output = stripAnsi(rawOutput);
+    let jsonStr = '';
+    logger.info(LOG_MODULES.CODESWARM, `parseVulnerabilityJson 输入长度: ${output.length}, 前200字符: ${output.substring(0, 200)}`);
+
+    // Strategy 0: try direct parse of entire output (fastest if Skill obeys "pure JSON" rule)
+    try {
+      const directParsed = JSON.parse(output.trim());
+      if (directParsed && directParsed.vulnerabilities && Array.isArray(directParsed.vulnerabilities)) {
+        logger.info(LOG_MODULES.CODESWARM, 'JSON 直接解析成功（纯 JSON 输出）');
+        jsonStr = output.trim();
+      }
+    } catch { /* not pure JSON, continue to extraction */ }
+
+    // Strategy 1: extract from ```json code blocks
+    if (!jsonStr && output.includes('```json')) {
       const matches = output.match(/```json\s*([\s\S]*?)\s*```/g);
       if (matches) {
-
         for (const match of matches) {
           const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
           if (inner.includes('vulnerabilities')) {
-try {
+            try {
               JSON.parse(inner);
               jsonStr = inner;
-
               break;
             } catch {
               continue;
             }
           }
         }
-      } else {
-// ```json 块正则无匹配
       }
     }
 
+    // Strategy 2: brace-counting extraction around "vulnerabilities" keyword
     if (!jsonStr && output.includes('"vulnerabilities"')) {
       const startIdx = output.indexOf('{');
       if (startIdx !== -1) {
@@ -78,51 +90,101 @@ try {
       }
     }
 
+    // Strategy 3: find last outermost JSON object containing "vulnerabilities"
+    if (!jsonStr && output.includes('"vulnerabilities"')) {
+      const lastBraceIdx = output.lastIndexOf('}');
+      if (lastBraceIdx > 0) {
+        for (let si = lastBraceIdx - 1; si >= 0; si--) {
+          if (output[si] === '{') {
+            const candidate = output.slice(si, lastBraceIdx + 1);
+            if (candidate.includes('"vulnerabilities"')) {
+              try {
+                const test = JSON.parse(candidate);
+                if (test.vulnerabilities) { jsonStr = candidate; break; }
+              } catch { continue; }
+            }
+          }
+        }
+      }
+    }
+
     if (!jsonStr) {
       logger.info(LOG_MODULES.CODESWARM, `未提取到 JSON 字符串, 输出不含 \`\`\`json 或 "vulnerabilities"`);
       return null;
     }
 
-    // Try direct parse first; if it fails, attempt common JSON repairs
     let parsed: any;
     try {
       parsed = JSON.parse(jsonStr);
     } catch (parseErr) {
-      // Repair 0: remove trailing commas (most common LLM JSON error)
+      // Repair 0: remove trailing commas
       if (!parsed) {
         const noTrailingCommas = jsonStr.replace(/,(\s*[}\]])/g, '$1');
         try { parsed = JSON.parse(noTrailingCommas); } catch { /* continue */ }
         if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by removing trailing commas'); }
       }
       // Repair 1: remove trailing content after last closing brace
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (lastBrace > 0 && lastBrace < jsonStr.length - 1) {
-        const trimmed = jsonStr.slice(0, lastBrace + 1);
-        try { parsed = JSON.parse(trimmed); } catch { /* continue */ }
-        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by trimming trailing content'); }
-      }
-      // Repair 2: escape unescaped control characters (newlines, tabs inside string values)
       if (!parsed) {
-        const repaired = jsonStr.replace(/[\x00-\x1f]/g, (ch) => {
+        const lastBrace = jsonStr.lastIndexOf('}');
+        if (lastBrace > 0 && lastBrace < jsonStr.length - 1) {
+          const trimmed = jsonStr.slice(0, lastBrace + 1);
+          try { parsed = JSON.parse(trimmed); } catch { /* continue */ }
+          if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by trimming trailing content'); }
+        }
+      }
+      // Repair 2: strip remaining ANSI codes + escape control characters
+      if (!parsed) {
+        const cleaned = stripAnsi(jsonStr).replace(/[\x00-\x1f]/g, (ch) => {
           if (ch === '\n') return '\\n';
           if (ch === '\r') return '\\r';
           if (ch === '\t') return '\\t';
           return '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0');
         });
-        try { parsed = JSON.parse(repaired); } catch { /* continue */ }
-        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by escaping control characters'); }
+        try { parsed = JSON.parse(cleaned); } catch { /* continue */ }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by stripping ANSI + escaping control chars'); }
       }
-      // Repair 3: remove markdown bold/italic markers inside JSON values (**text**)
+      // Repair 3: remove JS-style comments (// and /* */)
+      if (!parsed) {
+        const noComments = jsonStr.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+        try { parsed = JSON.parse(noComments); } catch { /* continue */ }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by removing comments'); }
+      }
+      // Repair 4: remove markdown bold/italic markers (**text**)
       if (!parsed) {
         const cleaned = jsonStr.replace(/\*{1,2}(.*?)\*{1,2}/g, '$1');
-        try { parsed = JSON.parse(cleaned); } catch { /* final failure */ }
+        try { parsed = JSON.parse(cleaned); } catch { /* continue */ }
         if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by removing markdown bold markers'); }
       }
+      // Repair 5: strip BOM + leading/trailing non-JSON whitespace
       if (!parsed) {
-        logger.error(LOG_MODULES.CODESWARM, 'JSON 解析失败 (all repairs exhausted)', { details: { error: parseErr instanceof Error ? parseErr.message : String(parseErr) } });
+        const noBom = jsonStr.replace(/^\uFEFF/, '').trim();
+        try { parsed = JSON.parse(noBom); } catch { /* continue */ }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by stripping BOM'); }
+      }
+      // Repair 6: combine all repairs
+      if (!parsed) {
+        const allRepairs = stripAnsi(jsonStr)
+          .replace(/^\uFEFF/, '')
+          .replace(/\/\/.*$/gm, '')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/,(\s*[}\]])/g, '$1')
+          .replace(/[\x00-\x1f]/g, (ch) => {
+            if (ch === '\n') return '\\n';
+            if (ch === '\r') return '\\r';
+            if (ch === '\t') return '\\t';
+            return '\\u' + ch.charCodeAt(0).toString(16).padStart(4, '0');
+          });
+        const lastBrace = allRepairs.lastIndexOf('}');
+        const candidate = lastBrace > 0 ? allRepairs.slice(0, lastBrace + 1) : allRepairs;
+        try { parsed = JSON.parse(candidate); } catch { /* final failure */ }
+        if (parsed) { logger.info(LOG_MODULES.CODESWARM, 'JSON repaired by combined all-repairs strategy'); }
+      }
+      if (!parsed) {
+        logger.error(LOG_MODULES.CODESWARM, 'JSON 解析失败 (all repairs exhausted)', { details: { error: parseErr instanceof Error ? parseErr.message : String(parseErr), snippet: jsonStr.substring(0, 50) } });
         return null;
       }
     }
+
     if (!Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
       logger.info(LOG_MODULES.CODESWARM, `JSON 解析成功但 vulnerabilities 为空或非数组: ${JSON.stringify(parsed).substring(0, 200)}`);
       return null;
@@ -154,11 +216,12 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
   try {
     const args: string[] = ['run', instruction];
 
-    const env: Record<string, string> = { TERM: 'dumb', NO_COLOR: '1' };
-    if (process.env.NODE_ENV) env.NODE_ENV = process.env.NODE_ENV;
+    const env: Record<string, string> = {};
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined) env[key] = value;
     }
+    env.TERM = 'dumb';
+    env.NO_COLOR = '1';
 
     let cmd: string;
     let finalArgs: string[];
@@ -336,7 +399,7 @@ function executeVulnerabilityParseAsync(
         const uploadResult = await uploadReportFolder(taskId, reportFolder, productName, taskName);
 
         if (uploadResult.success) {
-          filePath = JSON.stringify(uploadResult.urls);
+          filePath = uploadResult.urls.length > 0 ? uploadResult.urls.join(',') : projectPath;
           logger.info(LOG_MODULES.CODESWARM, `[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
           await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
         } else {
@@ -413,6 +476,8 @@ if (instructionPhase1) {
       const vulnRequestBody = {
         taskId: effectiveTaskId,
         filePath,
+        evaluationId: report.evaluationId || '',
+        skillExecutionId: report.skillExecutionId || '',
         vulnerabilities: report.vulnerabilities,
       };
 
