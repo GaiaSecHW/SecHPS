@@ -28,10 +28,9 @@ export async function GET(
       where: { id },
       include: {
         SkillCategory: { select: { id: true, name: true, displayName: true, icon: true, hasSubDimension: true } },
-        VulnerabilityTree: {
+        AttackPattern: {
           select: {
-            id: true, name: true, level: true, parent_id: true, library_id: true,
-            AttackPattern: { select: { id: true, name: true, parent_id: true } },
+            id: true, name: true, parent_id: true,
           },
         },
         SkillProductTag: { select: { id: true, productTagId: true, ProductTag: { select: { id: true, name: true, displayName: true } } } },
