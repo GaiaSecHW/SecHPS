@@ -33,10 +33,17 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
    - **合并所有校验通过的 JSON 数据**：将所有校验通过的 JSON 文件中的 vulnerabilities 数组合并为一个统一的 vulnerabilities 数组
    - **补全顶层缺失字段**：如果合并后的结果中缺少 `evaluationId` 或 `skillExecutionId` 字段，补上这两个字段，值设为空字符串 `""`
    - **过滤非漏洞条目**：检查每个漏洞对象的 `vulnerable` 字段，如果值为 `false`，表示该条目不是漏洞，**从结果中排除该条目**，不构造到返回的 vulnerabilities 数组中
-   - **处理 rawReport 字段**：检查每个漏洞的 rawReport 字段
-     - 如果 rawReport 为空字符串，需要从 location 字段解析文件路径
-     - location 字段中可能包含文件路径注解，格式如 `filename:line` 或 `// filename:line -- comment`
-     - 提取所有文件名，结合工作区路径构建绝对路径，多个文件用分号分隔
+- **处理 rawReport 字段**：检查每个漏洞的 rawReport 字段
+      - **获取工作区绝对路径**：使用 Bash 工具执行 `pwd` 命令获取当前工作区的真实绝对路径
+      - 如果 rawReport 为空字符串，需要从 location 字段解析文件路径
+      - location 字段中可能包含文件路径注解，格式如 `filename:line` 或 `// filename:line -- comment`
+      - 提取所有文件名，**禁止直接拼接工作区根路径+文件名**（因为文件可能在子文件夹中，如 `/data/Shared-workspace/xxx/src/ssh_check.py` 而非 `/data/Shared-workspace/xxx/ssh_check.py`）
+      - **必须使用 Glob 递归搜索实际路径**：在工作区内使用 Glob 搜索 `**/*filename*` 模式定位文件的真实绝对路径（例如文件名为 `ssh_check.py`，则搜索 `**/*ssh_check.py`）
+      - 如果 Glob 搜索到唯一结果，使用该绝对路径作为 rawReport
+      - 如果 Glob 搜索到多个结果，优先选择最短路径或与 location 注解中路径最匹配的结果
+      - 如果 Glob 搜索无结果，使用工作区根路径+文件名拼接作为 fallback，并添加 `(path-not-found)` 标记
+      - 多个文件用分号分隔
+      - 如果 rawReport 已有内容（非空字符串），同样需要验证其中路径是否实际存在，不存在则添加 `(path-not-found)` 标记
    - 如果所有 JSON 文件均校验失败或不存在 JSON 文件，继续下一步
 
 3. **解析 Markdown 文件（仅限 Report 文件夹内，当所有 JSON 格式不符或无 JSON 时）**：
@@ -86,7 +93,7 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
 | vulnerabilities[].POC | string | 否 | POC 验证代码 |
 | vulnerabilities[].vulnerable | boolean | 否 | 是否确认存在漏洞（默认 true，值为 false 时排除该条目不纳入结果） |
 | vulnerabilities[].fixSuggestion | string | 否 | 修复建议 |
-| vulnerabilities[].rawReport | string | 否 | 漏洞涉及的文件绝对路径，多个文件使用分号分隔（如 `E:/project/file1.py;E:/project/file2.js`） |
+| vulnerabilities[].rawReport | string | 否 | 漏洞涉及的文件**本地绝对路径**（必须通过工具获取工作区路径后拼接，不可猜测），多个文件使用分号分隔，路径不存在时标记 `(path-not-found)`（如 `E:/project/file1.py;E:/project/file2.json(path-not-found)`） |
 
 ## JSON 格式校验
 
@@ -138,7 +145,7 @@ description: 仅解析 Report 文件夹中的漏洞数据。优先校验并读�
 ### vulnerabilities 数组中的字段
 
 1. **字符串类型可选字段**（description、cwe、skill、location、POC、fixSuggestion）：如果缺失，使用空字符串 `""`
-2. **rawReport 字段**：漏洞涉及的文件绝对路径，多个文件使用分号 `;` 分隔。格式示例：`E:/work/project/ssh_check.py` 或 `E:/work/project/opencode.json;E:/work/project/.opencode/agents/nazhua-audit.md`
+2. **rawReport 字段**：漏洞涉及的文件**本地绝对路径**，必须通过 Bash 工具获取工作区路径后拼接（禁止凭空猜测路径）。多个文件使用分号 `;` 分隔。格式示例：`E:/work/project/ssh_check.py` 或 `E:/work/project/opencode.json;E:/work/project/.opencode/agents/nazhua-audit.md`。路径不存在时在末尾标记 `(path-not-found)`
 3. **布尔类型可选字段**（vulnerable）：如果缺失，使用默认值 `true`；**如果值为 `false`，表示不是漏洞，该条目从结果中排除，不纳入 vulnerabilities 数组**
 4. **severity 字段**：如果缺失，使用默认值 `"medium"`
 5. **必填字段**（title、type）：必须从文档中提取，无法提取时应返回合理推测值或报错
@@ -203,11 +210,27 @@ location 字段中可能包含以下格式的文件路径注解：
 
 ### 处理流程
 
-1. 使用正则表达式匹配 location 字符串中的文件路径模式
-2. 提取文件名部分（去除行号）
-3. 将工作区绝对路径与文件名拼接，得到完整路径
-4. 多个文件使用分号 `;` 分隔
-5. 如果 location 中无法解析出文件路径，rawReport 保持空字符串
+1. **先获取工作区绝对路径**：使用 Bash 工具执行 `pwd` 命令获取当前工作区的真实绝对路径（注意：必须通过工具实际执行获取，不可凭记忆猜测或自行编造路径）
+2. 使用正则表达式匹配 location 字符串中的文件路径模式
+3. 提取文件名部分（去除行号）
+4. **禁止直接拼接工作区根路径+文件名**，因为文件可能位于子文件夹中（如 `src/ssh_check.py` 而非直接在根目录 `ssh_check.py`）
+5. **使用 Glob 递归搜索**：在工作区内搜索 `**/*filename*` 模式，定位文件的真实绝对路径
+   - 搜索到唯一结果 → 直接使用该路径
+   - 搜索到多个结果 → 选择最短路径或与 location 注解中路径最匹配的结果
+   - 搜索无结果 → 使用工作区根路径+文件名作为 fallback，添加 `(path-not-found)` 标记
+6. 多个文件使用分号 `;` 分隔
+7. 如果 location 中无法解析出文件路径，rawReport 保持空字符串
+
+### 路径构建示例
+
+假设工作区绝对路径为 `/data/Shared-workspace/xxx`：
+
+| location 中的文件名 | Glob 搜索模式 | Glob 搜索结果 | rawReport 最终值 |
+|---------------------|---------------|---------------|-------------------|
+| `ssh_check.py` | `**/*ssh_check.py` | `/data/Shared-workspace/xxx/src/ssh_check.py` | `/data/Shared-workspace/xxx/src/ssh_check.py` |
+| `ssh_check.py` | `**/*ssh_check.py` | 无结果 | `/data/Shared-workspace/xxx/ssh_check.py(path-not-found)` |
+| `config.json` | `**/*config.json` | 3个结果，最短路径为 `/data/Shared-workspace/xxx/config.json` | `/data/Shared-workspace/xxx/config.json` |
+| `.opencode/agents/nazhua-audit.md` | `**/*nazhua-audit.md` | `/data/Shared-workspace/xxx/.opencode/agents/nazhua-audit.md` | `/data/Shared-workspace/xxx/.opencode/agents/nazhua-audit.md` |
 
 ### 正则模式参考
 
