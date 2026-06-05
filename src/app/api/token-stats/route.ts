@@ -3,6 +3,7 @@ import { prisma, Prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
 import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { SYSTEM_USER_ID } from '@/lib/system-token-tracker';
 import { getBeijingPeriodStart, getBeijingNow } from '@/lib/beijing-time';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
@@ -305,13 +306,46 @@ export async function GET(request: Request) {
           userTokenMap.set(project.userId, existing);
         }
       }
+
+      // EvaluationSession 无数据时，从 TokenUsage 按 userId 聚合
+      if (userTokenMap.size === 0) {
+        const tokenUserStats = await prisma.tokenUsage.groupBy({
+          by: ['userId'],
+          where: tokenWhereClause,
+          _sum: {
+            outputTokens: true,
+            estimatedCost: true,
+          },
+          _max: {
+            inputTokens: true,
+          },
+          _count: {
+            id: true,
+          },
+        });
+
+        for (const stat of tokenUserStats) {
+          const uid = stat.userId || SYSTEM_USER_ID;
+          userTokenMap.set(uid, {
+            inputTokens: stat._max.inputTokens || 0,
+            outputTokens: stat._sum.outputTokens || 0,
+            cost: stat._sum.estimatedCost || 0,
+            count: stat._count.id,
+          });
+        }
+      }
       
       // 构建用户统计数组
+      const allUserIds = Array.from(userTokenMap.keys());
+      const allUsers = allUserIds.length > 0 ? await prisma.user.findMany({
+        where: { id: { in: allUserIds } },
+        select: { id: true, username: true, name: true },
+      }) : [];
       userStats = Array.from(userTokenMap.entries()).map(([userId, data]) => {
-        const user = users.find(u => u.id === userId);
+        const user = allUsers.find(u => u.id === userId);
         return {
           userId,
-          username: user?.username || user?.name || '未知用户',
+          username: userId === SYSTEM_USER_ID ? '系统' : (user?.username || user?.name || '未知用户'),
           inputTokens: data.inputTokens,
           outputTokens: data.outputTokens,
           totalTokens: data.inputTokens + data.outputTokens,
