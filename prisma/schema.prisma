@@ -1684,6 +1684,7 @@ model TaskInstance {
   mergedScripts    String?
   executionResult  String?
   reportPath       String?
+  reportFilePath   String?
   codeswarmTaskId  String?
   filesCleanedAt   DateTime?          @db.Timestamptz
   createdAt        DateTime           @default(now()) @db.Timestamptz

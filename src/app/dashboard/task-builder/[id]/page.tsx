@@ -27,6 +27,7 @@ interface TaskInstance {
   errorMessage: string | null;
   executionResult: string | null;
   reportPath: string | null;
+  reportFilePath: string | null;
   codeswarmTaskId: string | null;
   createdAt: string;
   updatedAt: string;

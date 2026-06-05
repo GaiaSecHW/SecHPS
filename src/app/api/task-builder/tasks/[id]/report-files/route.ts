@@ -18,13 +18,23 @@ export async function GET(
     select: { filePath: true },
   });
 
-  if (!vuln?.filePath) {
-    return NextResponse.json({ error: '无报告文件', hasReport: false }, { status: 200 });
+  let filePath = vuln?.filePath;
+
+  if (!filePath) {
+    const taskInstance = await prisma.taskInstance.findUnique({
+      where: { id },
+      select: { reportFilePath: true },
+    });
+    filePath = taskInstance?.reportFilePath;
+  }
+
+  if (!filePath) {
+    return NextResponse.json({ hasReport: false });
   }
 
   let files: { name: string }[] = [];
   try {
-    const parsed = JSON.parse(vuln.filePath);
+    const parsed = JSON.parse(filePath);
     if (Array.isArray(parsed)) {
       files = parsed.map((url: string) => ({
         name: url.split('/').pop()?.split('?')[0] || 'report',
@@ -33,7 +43,7 @@ export async function GET(
       files = [{ name: parsed.split('/').pop()?.split('?')[0] || 'report' }];
     }
   } catch {
-    files = [{ name: vuln.filePath.split('/').pop()?.split('?')[0] || 'report' }];
+    files = [{ name: filePath.split('/').pop()?.split('?')[0] || 'report' }];
   }
 
   return NextResponse.json({ hasReport: true, files });

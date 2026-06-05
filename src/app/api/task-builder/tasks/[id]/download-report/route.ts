@@ -22,20 +22,30 @@ export async function GET(
     select: { filePath: true },
   });
 
-  if (!vuln?.filePath) {
+  let filePath = vuln?.filePath;
+
+  if (!filePath) {
+    const taskInstance = await prisma.taskInstance.findUnique({
+      where: { id },
+      select: { reportFilePath: true },
+    });
+    filePath = taskInstance?.reportFilePath;
+  }
+
+  if (!filePath) {
     return NextResponse.json({ error: '无报告文件' }, { status: 404 });
   }
 
   let files: string[] = [];
   try {
-    const parsed = JSON.parse(vuln.filePath);
+    const parsed = JSON.parse(filePath);
     if (Array.isArray(parsed)) {
       files = parsed;
     } else if (typeof parsed === 'string') {
       files = [parsed];
     }
   } catch {
-    files = [vuln.filePath];
+    files = [filePath];
   }
 
   if (fileIndex < 0 || fileIndex >= files.length) {

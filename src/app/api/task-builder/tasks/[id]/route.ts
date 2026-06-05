@@ -55,6 +55,7 @@ export async function GET(
         errorMessage: true,
         executionResult: true,
         reportPath: true,
+        reportFilePath: true,
         skills: true,
         scripts: true,
         mergedSkills: true,
