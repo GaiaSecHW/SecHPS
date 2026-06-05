@@ -847,7 +847,7 @@ function SkillsPageContent() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {totalPages >= 1 && (
         <div className="flex items-center justify-between bg-dark-surface rounded-xl shadow-sm border border-gray-700/50 px-4 py-3">
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-400">
