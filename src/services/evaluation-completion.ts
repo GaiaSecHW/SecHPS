@@ -78,6 +78,57 @@ export async function completeEvaluation(
     return { success: false, vulnSaved: 0, error: `更新状态失败: ${dbError}` };
   }
 
+  // 1.1 同步写入 TokenUsage 表（评估 token 不走 model-client，需在此补录）
+  const inputTokens = totalInputTokens || 0;
+  const outputTokens = totalOutputTokens || 0;
+  if (inputTokens > 0 || outputTokens > 0) {
+    // 防重复：同一 evaluationId 的 evaluation 类型记录只写一次
+    const existingRecord = await prisma.tokenUsage.findFirst({
+      where: { evaluationId, callType: 'evaluation' },
+      select: { id: true },
+    });
+    if (existingRecord) {
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} TokenUsage 已存在，跳过补录`, { evaluationId, existingId: existingRecord.id });
+    } else {
+    const inputCost = (inputTokens / 1_000_000) * 6;
+    const outputCost = (outputTokens / 1_000_000) * 22;
+    try {
+      const evalSession = await prisma.evaluationSession.findUnique({
+        where: { id: evaluationId },
+        select: { modelName: true, providerType: true, project: { select: { userId: true } } },
+      });
+      const userId: string = (evalSession?.project as any)?.userId ?? 'unknown';
+      const userModel = userId !== 'unknown' ? await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, name: true },
+      }) : null;
+      await prisma.tokenUsage.create({
+        data: {
+          id: `token-eval-${evaluationId}-${Date.now()}`,
+          userId,
+          username: userModel?.username || userModel?.name || userId,
+          evaluationId,
+          projectId,
+          apiProvider: evalSession?.providerType ?? 'claude',
+          modelName: evalSession?.modelName ?? 'unknown',
+          callType: 'evaluation',
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          cachedTokens: 0,
+          estimatedCost: inputCost + outputCost,
+          requestStartedAt: new Date(),
+          requestCompletedAt: new Date(),
+          status: 'success',
+        },
+      });
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} TokenUsage 已记录`, { inputTokens, outputTokens });
+    } catch (tokenErr) {
+      logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} TokenUsage 记录失败`, { error: tokenErr instanceof Error ? tokenErr.message : String(tokenErr) });
+    }
+    } // else: 已存在，跳过
+  }
+
   // 2. 如果评估成功完成，从 vulnerabilities/ 目录读取漏洞文件入库
   if (status === 'completed') {
     const vulnDirPath = `${projectPath}/vulnerabilities`;
