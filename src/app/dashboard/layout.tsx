@@ -382,8 +382,8 @@ function DashboardLayoutContent({
 
                   {showUserMenu && (
                     <>
-                      <div className="fixed inset-0 z-20" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-30 py-1">
+                      <div className="fixed inset-0 z-[60]" onClick={() => setShowUserMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-[70] py-1">
                         <Link
                           href="/dashboard/profile"
                           onClick={() => setShowUserMenu(false)}

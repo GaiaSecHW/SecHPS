@@ -389,36 +389,44 @@ export default function TokenStatsPage() {
           <div>
             <h3 className="text-sm font-medium text-gray-300 mb-3">项目消耗明细</h3>
             <div className="space-y-2">
-              {projectStats.map((stat) => (
-                <Link
-                  key={stat.projectId}
-                  href={`/dashboard/token-stats/project/${stat.projectId}`}
-                  className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50 hover:bg-blue-600/100/100/10 hover:border-blue-500/20 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <span className="text-xs font-medium text-purple-700">
-                        {stat.projectName.substring(0, 2).toUpperCase()}
-                      </span>
+              {projectStats.map((stat) => {
+                  const isSystem = stat.projectId === '__system__';
+                  const content = (
+                    <>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <span className="text-xs font-medium text-purple-700">
+                            {stat.projectName.substring(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-100">{stat.projectName}</p>
+                          <p className="text-xs text-gray-500">
+                            {stat.evaluationCount} 次调用
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          {formatTokensWithColor(stat.totalInputTokens, stat.totalOutputTokens)}
+                          <p className="text-xs text-gray-500 mt-1">
+                            <CostWithTooltip cost={stat.estimatedCost || 0} />
+                          </p>
+                        </div>
+                        {!isSystem && <ChevronRight className="text-gray-400" size={20} />}
+                      </div>
+                    </>
+                  );
+                  return isSystem ? (
+                    <div key={stat.projectId} className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50">
+                      {content}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-100">{stat.projectName}</p>
-                      <p className="text-xs text-gray-500">
-                        {stat.evaluationCount} 次评估
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      {formatTokensWithColor(stat.totalInputTokens, stat.totalOutputTokens)}
-                      <p className="text-xs text-gray-500 mt-1">
-                        <CostWithTooltip cost={stat.estimatedCost || 0} />
-                      </p>
-                    </div>
-                    <ChevronRight className="text-gray-400" size={20} />
-                  </div>
-                </Link>
-              ))}
+                  ) : (
+                    <Link key={stat.projectId} href={`/dashboard/token-stats/project/${stat.projectId}`} className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50 hover:bg-blue-600/10 hover:border-blue-500/20 transition-colors cursor-pointer">
+                      {content}
+                    </Link>
+                  );
+                })}
             </div>
           </div>
         )}

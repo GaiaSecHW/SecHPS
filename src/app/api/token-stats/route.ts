@@ -90,46 +90,7 @@ export async function GET(request: Request) {
 
     // 对于"今日"统计，优先使用 TokenUsage（实时数据）
     // 因为当天的评估可能还没完成，EvaluationSession 还没更新
-    let summaryInputTokens = evaluationStats._sum.totalInputTokens || 0;
-    let summaryOutputTokens = evaluationStats._sum.totalOutputTokens || 0;
-    let summaryTotalTokens = evaluationStats._sum.totalTokens || 0;
-    let summaryCost = evaluationStats._sum.estimatedCost || 0;
-    
-    // 如果是"今日"且 EvaluationSession 为空，从 TokenUsage 计算
-    if (period === 'day' && evaluationStats._count.id === 0) {
-      // 查询今日所有 TokenUsage
-      const todayTokens = await prisma.tokenUsage.findMany({
-        where: tokenWhereClause,
-        select: {
-          inputTokens: true,
-          outputTokens: true,
-          estimatedCost: true,
-          evaluationId: true,
-        },
-      });
-      
-      // 按 evaluationId 分组，每个评估取最后一次的 input + 累计 output
-      const evalMap = new Map<string, { lastInput: number; totalOutput: number; cost: number }>();
-      
-      for (const token of todayTokens) {
-        const evalId = token.evaluationId || 'system';
-        const existing = evalMap.get(evalId) || { lastInput: 0, totalOutput: 0, cost: 0 };
-        existing.lastInput = Math.max(existing.lastInput, token.inputTokens);
-        existing.totalOutput += token.outputTokens;
-        existing.cost += token.estimatedCost || 0;
-        evalMap.set(evalId, existing);
-      }
-      
-      // 累计所有评估的数据
-      for (const [, data] of evalMap) {
-        summaryInputTokens += data.lastInput;
-        summaryOutputTokens += data.totalOutput;
-        summaryCost += data.cost;
-      }
-      summaryTotalTokens = summaryInputTokens + summaryOutputTokens;
-    }
-
-    // 查询详细的 token 使用记录
+    // 查询 TokenUsage 汇总（提前查询，用于 fallback 判断和明细统计）
     const tokenUsageStats = await prisma.tokenUsage.aggregate({
       where: tokenWhereClause,
       _sum: {
@@ -142,6 +103,45 @@ export async function GET(request: Request) {
         id: true,
       },
     });
+
+    let summaryInputTokens = evaluationStats._sum.totalInputTokens || 0;
+    let summaryOutputTokens = evaluationStats._sum.totalOutputTokens || 0;
+    let summaryTotalTokens = evaluationStats._sum.totalTokens || 0;
+    let summaryCost = evaluationStats._sum.estimatedCost || 0;
+    
+    // 当 EvaluationSession 没数据或汇总为0，但 TokenUsage 有数据时，从 TokenUsage 计算
+    if (evaluationStats._count.id === 0 || (summaryTotalTokens === 0 && tokenUsageStats._count.id > 0)) {
+      const fallbackTokens = await prisma.tokenUsage.findMany({
+        where: tokenWhereClause,
+        select: {
+          inputTokens: true,
+          outputTokens: true,
+          estimatedCost: true,
+          evaluationId: true,
+        },
+      });
+      
+      const evalMap = new Map<string, { lastInput: number; totalOutput: number; cost: number }>();
+      
+      for (const token of fallbackTokens) {
+        const evalId = token.evaluationId || 'system';
+        const existing = evalMap.get(evalId) || { lastInput: 0, totalOutput: 0, cost: 0 };
+        existing.lastInput = Math.max(existing.lastInput, token.inputTokens);
+        existing.totalOutput += token.outputTokens;
+        existing.cost += token.estimatedCost || 0;
+        evalMap.set(evalId, existing);
+      }
+      
+      summaryInputTokens = 0;
+      summaryOutputTokens = 0;
+      summaryCost = 0;
+      for (const [, data] of evalMap) {
+        summaryInputTokens += data.lastInput;
+        summaryOutputTokens += data.totalOutput;
+        summaryCost += data.cost;
+      }
+      summaryTotalTokens = summaryInputTokens + summaryOutputTokens;
+    }
 
     // 查询每个模型的统计（不累加 input，只累加 output）
     // 注意：TokenUsage 的 input 包含历史上下文，累加会重复计算
@@ -192,7 +192,6 @@ export async function GET(request: Request) {
         },
       });
 
-      // 按项目聚合
       const projectMap = new Map<string, any>();
       for (const evaluation of evaluations) {
         const existing = projectMap.get(evaluation.projectId) || {
@@ -211,18 +210,47 @@ export async function GET(request: Request) {
         projectMap.set(evaluation.projectId, existing);
       }
 
-      // 获取项目名称
-      const projectIds = Array.from(projectMap.keys());
-      const projects = await prisma.project.findMany({
+      // EvaluationSession 无数据时，从 TokenUsage 按 projectId 聚合
+      if (projectMap.size === 0 && tokenUsageStats._count.id > 0) {
+        const tokenProjectStats = await prisma.tokenUsage.groupBy({
+          by: ['projectId'],
+          where: tokenWhereClause,
+          _sum: {
+            outputTokens: true,
+            estimatedCost: true,
+          },
+          _max: {
+            inputTokens: true,
+          },
+          _count: {
+            id: true,
+          },
+        });
+
+        for (const stat of tokenProjectStats) {
+          const pid = stat.projectId || '__system__';
+          projectMap.set(pid, {
+            projectId: pid,
+            totalInputTokens: stat._max.inputTokens || 0,
+            totalOutputTokens: stat._sum.outputTokens || 0,
+            totalTokens: (stat._max.inputTokens || 0) + (stat._sum.outputTokens || 0),
+            estimatedCost: stat._sum.estimatedCost || 0,
+            evaluationCount: stat._count.id,
+          });
+        }
+      }
+
+      const projectIds = Array.from(projectMap.keys()).filter(id => id !== '__system__');
+      const projects = projectIds.length > 0 ? await prisma.project.findMany({
         where: { id: { in: projectIds } },
         select: { id: true, name: true },
-      });
+      }) : [];
 
       projectStats = Array.from(projectMap.values()).map(stat => {
         const project = projects.find(p => p.id === stat.projectId);
         return {
           ...stat,
-          projectName: project?.name || '未知项目',
+          projectName: stat.projectId === '__system__' ? '系统/其他' : (project?.name || '未知项目'),
         };
       });
     }
