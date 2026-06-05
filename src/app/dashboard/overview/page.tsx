@@ -25,14 +25,6 @@ import { extractErrorMessage } from '@/lib/api-client';
 import dynamic from 'next/dynamic';
 const QueueMonitor = dynamic(() => import('@/components/evaluation/QueueMonitor').then(m => ({ default: m.QueueMonitor })), { ssr: false });
 
-interface TaskInstance {
-  id: string;
-  name: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface Stats {
   total: number;
   completed: number;
@@ -60,7 +52,6 @@ interface TokenStats {
 }
 
 export default function OverviewPage() {
-  const [tasks, setTasks] = useState<TaskInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<Stats>({
@@ -112,7 +103,7 @@ export default function OverviewPage() {
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/task-builder/tasks?limit=1000', {
+      const response = await fetch('/api/codeswarm/tasks', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -127,10 +118,9 @@ export default function OverviewPage() {
 
       const data = await response.json();
       const taskList = data.tasks || [];
-      setTasks(taskList);
 
-      const hasRunning = taskList.some((t: TaskInstance) =>
-        t.status === 'running' || t.status === 'pending'
+      const hasRunning = taskList.some((t: any) =>
+        t.state === 'running' || t.state === 'dispatched' || t.state === 'queued'
       );
       setHasRunningTasks(hasRunning);
 
@@ -140,14 +130,18 @@ export default function OverviewPage() {
       let pending = 0;
 
       for (const task of taskList) {
-        const status = task.status;
-        if (status === 'completed') {
+        const state = task.state;
+        // 已完成 = completed
+        if (state === 'completed') {
           completed++;
-        } else if (status === 'failed') {
+        } else if (state === 'failed') {
+          // 失败 = failed
           failed++;
-        } else if (status === 'running') {
+        } else if (state === 'running' || state === 'building') {
+          // 运行中 = 执行中（running）+ 构建中（building）
           running++;
-        } else if (status === 'pending') {
+        } else if (state === 'queued' || state === 'dispatched' || state === 'pending') {
+          // 待执行 = 未执行（pending）+ 排队中（queued）+ 已分发（dispatched）
           pending++;
         }
       }
