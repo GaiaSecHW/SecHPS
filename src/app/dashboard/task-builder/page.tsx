@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle, Server, X, Check, ChevronDown, ListOrdered, Send } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
@@ -65,12 +65,14 @@ const ENGINE_PROVIDER_MAP: Record<string, string[]> = {
 
 export default function TaskBuilderPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [tasks, setTasks] = useState<TaskInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showModeSelect, setShowModeSelect] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page') || '1'));
+  const [pageSize, setPageSize] = useState(Number(searchParams.get('limit') || DEFAULT_PAGE_SIZE));
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -85,9 +87,25 @@ export default function TaskBuilderPage() {
     taskId: string | null;
     taskName: string;
   }>({ isOpen: false, taskId: null, taskName: '' });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed'>('all');
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed'>(searchParams.get('status') || 'all');
+
+  // URL 参数同步函数
+  const updateUrlParams = (updates: Record<string, string | number | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === '') {
+        params.delete(key);
+      } else if (key === 'page' && value === 1) {
+        params.delete(key); // page=1 时省略参数
+      } else {
+        params.set(key, String(value));
+      }
+    });
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(newUrl, { scroll: false });
+  };
 
   // 重试弹窗状态
   const [rerunModal, setRerunModal] = useState<{ isOpen: boolean; taskId: string | null; taskName: string; modelId: string; modelName: string }>({
@@ -301,19 +319,24 @@ export default function TaskBuilderPage() {
 
   const handlePrevPage = () => {
     if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+      const newPage = currentPage - 1;
+      setCurrentPage(newPage);
+      updateUrlParams({ page: newPage === 1 ? null : newPage });
     }
   };
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
+      const newPage = currentPage + 1;
+      setCurrentPage(newPage);
+      updateUrlParams({ page: newPage === 1 ? null : newPage });
     }
   };
 
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
     setCurrentPage(1);
+    updateUrlParams({ limit: newSize === DEFAULT_PAGE_SIZE ? null : newSize, page: null });
   };
 
   if (loading) {
@@ -363,22 +386,32 @@ export default function TaskBuilderPage() {
         <div className="px-5 py-4 border-b border-gray-700/50">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             {/* 搜索框 */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="搜索任务名称、Agent..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setSearchQuery(searchInput); setCurrentPage(1); } }}
-                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
-              />
+            <div className="flex gap-3 flex-1 w-full sm:max-w-md">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="搜索任务名称、Agent..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { setSearchQuery(searchInput); setCurrentPage(1); updateUrlParams({ search: searchInput || null, page: null }); } }}
+                  className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                />
+              </div>
+<button onClick={() => { setSearchQuery(searchInput); setCurrentPage(1); updateUrlParams({ search: searchInput || null, page: null, status: statusFilter === 'all' ? null : statusFilter, limit: pageSize === DEFAULT_PAGE_SIZE ? null : pageSize }); }} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
+              搜索
+            </button>
+            {searchQuery && (
+              <button onClick={() => { setSearchInput(''); setSearchQuery(''); setCurrentPage(1); updateUrlParams({ search: null, page: null }); }} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
+                清除
+              </button>
+            )}
             </div>
             
             {/* 状态筛选按钮组 */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('all'); setCurrentPage(1); updateUrlParams({ status: null, page: null }); }}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -386,7 +419,7 @@ export default function TaskBuilderPage() {
                 全部
               </button>
               <button
-                onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('pending'); setCurrentPage(1); updateUrlParams({ status: 'pending', page: null }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'pending' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -395,7 +428,7 @@ export default function TaskBuilderPage() {
                 未执行
               </button>
               <button
-                onClick={() => { setStatusFilter('queued'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('queued'); setCurrentPage(1); updateUrlParams({ status: 'queued', page: null }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'queued' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -404,7 +437,7 @@ export default function TaskBuilderPage() {
                 排队中
               </button>
               <button
-                onClick={() => { setStatusFilter('dispatched'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('dispatched'); setCurrentPage(1); updateUrlParams({ status: 'dispatched', page: null }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'dispatched' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -413,7 +446,7 @@ export default function TaskBuilderPage() {
                 已分发
               </button>
               <button
-                onClick={() => { setStatusFilter('running'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('running'); setCurrentPage(1); updateUrlParams({ status: 'running', page: null }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'running' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -422,7 +455,7 @@ export default function TaskBuilderPage() {
                 执行中
               </button>
               <button
-                onClick={() => { setStatusFilter('completed'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('completed'); setCurrentPage(1); updateUrlParams({ status: 'completed', page: null }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'completed' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}
@@ -431,7 +464,7 @@ export default function TaskBuilderPage() {
                 已完成
               </button>
               <button
-                onClick={() => { setStatusFilter('failed'); setCurrentPage(1); }}
+                onClick={() => { setStatusFilter('failed'); setCurrentPage(1); updateUrlParams({ status: 'failed', page: null }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   statusFilter === 'failed' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
                 }`}

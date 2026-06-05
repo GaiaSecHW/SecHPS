@@ -429,6 +429,7 @@ export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editTenant, setEditTenant] = useState<Tenant | null>(null);
   const [userModal, setUserModal] = useState<{ id: string; name: string } | null>(null);
@@ -524,16 +525,27 @@ export default function TenantsPage() {
       <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-gray-700/50">
         {/* Filters section */}
         <div className="px-5 py-4 border-b border-gray-700/50">
-          <form onSubmit={handleSearch} className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="搜索租户..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
-            />
-          </form>
+          <div className="flex gap-3 w-full sm:max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="搜索租户..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setSearch(searchInput); loadTenants(); } }}
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              />
+            </div>
+            <button onClick={() => { setSearch(searchInput); loadTenants(); }} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
+              搜索
+            </button>
+            {search && (
+              <button onClick={() => { setSearchInput(''); setSearch(''); loadTenants(); }} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
+                清除
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Table section */}
