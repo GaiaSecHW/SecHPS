@@ -338,12 +338,11 @@ const taskPayload = JSON.stringify({
             continue;
           }
 
-          const dispatched = await this.dispatchOne(dbTaskId);
+const dispatched = await this.dispatchOne(dbTaskId);
           await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
           if (!dispatched) {
-            // 分发失败，重新入队
-            await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+            // 任务保持在 DB queued 状态，等事件驱动触发分发
           }
           recovered++;
         }
@@ -383,9 +382,8 @@ const taskPayload = JSON.stringify({
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                // Worker 全满，任务保持 queued，等待事件驱动或兜底轮询触发
-                // 重新入队，让 tryDispatchNext 或兜底轮询可以捡起
-                await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+                // Worker 全满，任务保持在 DB queued 状态，不重新入队
+                // 等 Worker 释放容量后由事件驱动触发（result 回调/心跳/兜底轮询）
               }
             })
           );
@@ -419,7 +417,11 @@ const taskPayload = JSON.stringify({
       // 优先使用指定的 Worker，否则自动分配
       let worker = this.selectWorker(task.preferredWorkerNodeId ?? undefined);
       if (!worker) {
-        logger.info(LOG_MODULES.CODESWARM, '指定 Worker 不可用，尝试自动分配...');
+        const now = Date.now();
+        if (now - this.lastPreferredUnavailableLogTime > 60_000) {
+          this.lastPreferredUnavailableLogTime = now;
+          logger.info(LOG_MODULES.CODESWARM, '指定 Worker 不可用，尝试自动分配...');
+        }
         worker = this.selectWorker();
       }
       if (!worker) {
@@ -581,8 +583,10 @@ const taskPayload = JSON.stringify({
     }
   }
 
-  private lastNoWorkerLogTime = 0;
+private lastNoWorkerLogTime = 0;
+  private lastPreferredUnavailableLogTime = 0;
   private lastDbErrorTaskId: string | null = null;
+
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
   private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
   private cleanupSchedulerActive = false;
@@ -686,8 +690,7 @@ const taskPayload = JSON.stringify({
           await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
           if (!dispatched) {
-            // 仍无可用 Worker，重新入队，等待下次触发
-            await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+            // 任务保持在 DB queued 状态，等事件驱动触发分发
           }
         }
       }
