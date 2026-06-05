@@ -27,9 +27,9 @@ export async function GET(
   if (!filePath) {
     const taskInstance = await prisma.taskInstance.findUnique({
       where: { id },
-      select: { reportPath: true, reportFilePath: true },
+      select: { reportFilePath: true },
     });
-    filePath = taskInstance?.reportPath || taskInstance?.reportFilePath;
+    filePath = taskInstance?.reportFilePath;
   }
 
   if (!filePath) {
