@@ -243,23 +243,26 @@ const taskPayload = JSON.stringify({
     return false;
   }
 
-  // Worker 心跳：更新内存拓扑
+  // Worker 心跳：选择性更新内存拓扑
+  // currentTasks 由 dispatcher 通过乐观递增（分发）和递减（完成/超时/离线）管理，
+  // 不被心跳覆盖，避免过期心跳抹掉递增或回滚递减导致永久虚高
   onHeartbeat(data: { nodeId: string; id: string; address: string; maxConcurrent: number; currentTasks?: number }) {
     const existing = this.workers.get(data.nodeId);
-    // Worker 上报的 currentTasks 是权威值（Worker 自身最清楚实际运行数）
-    // 直接使用上报值，不取 max：
-    // 1. 避免 dispatcher 侧 phantom increment 导致的残留虚高无法被纠正
-    // 2. 已分发但 Worker 尚未确认的短暂窗口（<30s）在下一次心跳自然修正
-    const reportedTasks = data.currentTasks ?? 0;
-    const currentTasks = reportedTasks;
-    this.workers.set(data.nodeId, {
-      id: data.id,
-      nodeId: data.nodeId,
-      address: data.address,
-      maxConcurrent: data.maxConcurrent,
-      currentTasks,
-      lastHeartbeat: Date.now(),
-    });
+    if (existing) {
+      existing.id = data.id;
+      existing.address = data.address;
+      existing.maxConcurrent = data.maxConcurrent;
+      existing.lastHeartbeat = Date.now();
+    } else {
+      this.workers.set(data.nodeId, {
+        id: data.id,
+        nodeId: data.nodeId,
+        address: data.address,
+        maxConcurrent: data.maxConcurrent,
+        currentTasks: data.currentTasks ?? 0,
+        lastHeartbeat: Date.now(),
+      });
+    }
   }
 
   // 任务完成：仅更新内存负载（DB decrement 已在调用方的事务中处理）
@@ -286,7 +289,7 @@ const taskPayload = JSON.stringify({
   syncWorkerLoad(nodeId: string, currentTasks: number) {
     const worker = this.workers.get(nodeId);
     if (worker) {
-      worker.currentTasks = Math.max(worker.currentTasks, currentTasks);
+      worker.currentTasks = currentTasks;
     }
   }
 
