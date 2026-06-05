@@ -116,6 +116,7 @@ export async function DELETE(
       });
       if (worker) {
         codeswarmDispatcher.decrementWorkerMemoryLoad(worker.nodeId);
+        codeswarmDispatcher.tryDispatchNext().catch(() => {});
       }
     }
 

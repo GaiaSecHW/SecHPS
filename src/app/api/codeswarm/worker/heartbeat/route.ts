@@ -131,6 +131,14 @@ export async function POST(request: Request) {
       dispatchQueuedTasks().catch(err => {
         logger.error(LOG_MODULES.CODESWARM, 'Background dispatch error', { details: { error: err instanceof Error ? err.message : String(err) } });
       });
+    } else {
+      // Redis 可用：Worker 容量减少时触发事件驱动分发排队任务
+      const prevTasks = worker.currentTasks;
+      if (typeof currentTasks === 'number' && currentTasks < prevTasks) {
+        codeswarmDispatcher.tryDispatchNext().catch(e =>
+          logger.warn(LOG_MODULES.CODESWARM, '心跳触发分发失败', { details: { error: e instanceof Error ? e.message : String(e) } })
+        );
+      }
     }
 
     return NextResponse.json(response);
