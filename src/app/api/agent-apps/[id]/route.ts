@@ -132,7 +132,7 @@ export async function PUT(
     });
 
     if (!existing) {
-      return NextResponse.json({ error: '应用不存在' }, { status: 404 });
+      return NextResponse.json({ error: '应用不存在或无权限更新公共资源' }, { status: 404 });
     }
 
     let agentHarnessPath = existing.agentHarnessPath;
