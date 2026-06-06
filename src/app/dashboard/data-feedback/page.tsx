@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown } from 'lucide-react';
+import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { apiGet } from '@/lib/api-client';
 
@@ -179,34 +179,55 @@ function EventsTab({ events, hasMore, loadingMore, onLoadMore }: {
   onLoadMore: () => void;
 }) {
   const sentinelRef = useInfiniteScroll(hasMore, loadingMore, onLoadMore);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const merged = mergeChunks(events);
 
   if (merged.length === 0 && !hasMore) return <Empty text="暂无事件记录" />;
 
   return (
-    <div className="bg-gray-900 rounded-lg p-3 overflow-y-auto">
-      <div className="space-y-0.5 font-mono text-xs">
-        {merged.map((ev, i) => {
-          const { badge, text, color } = getEventDisplay(ev);
-          const ts = ev._createdAt || ev.timestamp;
-          return (
-            <div key={ev._id || i} className="flex items-start gap-2 py-0.5">
-              <span className="text-gray-600 shrink-0 w-20 text-right">
-                {ts ? new Date(ts).toLocaleTimeString('zh-CN') : ''}
-              </span>
-              <span className={`px-1.5 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
-              {text && <span className="text-gray-300 break-all">{text}</span>}
-            </div>
-          );
-        })}
+    <div>
+      <div ref={scrollRef} className="bg-gray-900 rounded-lg p-3 overflow-y-auto scroll-smooth max-h-[500px]">
+        <div className="space-y-0.5 font-mono text-xs">
+          {merged.map((ev, i) => {
+            const { badge, text, color } = getEventDisplay(ev);
+            const ts = ev._createdAt || ev.timestamp;
+            return (
+              <div key={ev._id || i} className="flex items-start gap-2 py-0.5">
+                <span className="text-gray-600 shrink-0 w-20 text-right">
+                  {ts ? new Date(ts).toLocaleTimeString('zh-CN') : ''}
+                </span>
+                <span className={`px-1.5 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
+                {text && <span className="text-gray-300 break-all">{text}</span>}
+              </div>
+            );
+          })}
+        </div>
+        {hasMore && (
+          <div ref={sentinelRef} className="py-3 text-center">
+            {loadingMore ? (
+              <Loader2 className="w-4 h-4 animate-spin mx-auto text-gray-400" />
+            ) : (
+              <span className="text-xs text-gray-500">向下滚动加载更多</span>
+            )}
+          </div>
+        )}
+        <div ref={bottomRef} />
       </div>
-      {hasMore && (
-        <div ref={sentinelRef} className="py-3 text-center">
-          {loadingMore ? (
-            <Loader2 className="w-4 h-4 animate-spin mx-auto text-gray-400" />
-          ) : (
-            <span className="text-xs text-gray-500">向下滚动加载更多</span>
-          )}
+      {merged.length > 30 && (
+        <div className="mt-2 flex justify-center gap-2">
+          <button
+            onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+          >
+            <ArrowUp size={12} /> 顶部
+          </button>
+          <button
+            onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+          >
+            <ArrowDown size={12} /> 最新
+          </button>
         </div>
       )}
     </div>
@@ -329,6 +350,8 @@ function ResultTab({ csTask, instance, execLogs, logHasMore, loadingLogs, onLoad
   resultTruncated: boolean;
 }) {
   const sentinelRef = useInfiniteScroll(logHasMore, loadingLogs, onLoadMoreLogs);
+  const logScrollRef = useRef<HTMLDivElement>(null);
+  const logBottomRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="space-y-4">
@@ -359,7 +382,7 @@ function ResultTab({ csTask, instance, execLogs, logHasMore, loadingLogs, onLoad
       {(execLogs?.length > 0 || loadingLogs) && (
         <div>
           <h4 className="text-xs font-medium text-gray-400 mb-1">执行日志 ({execLogs.length})</h4>
-          <div className="bg-gray-900 rounded-lg p-3 space-y-0.5 font-mono text-xs">
+          <div ref={logScrollRef} className="bg-gray-900 rounded-lg p-3 space-y-0.5 font-mono text-xs overflow-y-auto scroll-smooth max-h-[500px]">
             {execLogs.map((log, i) => (
               <div key={i} className="flex gap-2">
                 <span className="text-gray-600 shrink-0">{new Date(log.timestamp).toLocaleTimeString('zh-CN')}</span>
@@ -367,10 +390,27 @@ function ResultTab({ csTask, instance, execLogs, logHasMore, loadingLogs, onLoad
                 <span className="text-gray-300 break-all">{log.message}</span>
               </div>
             ))}
+            {logHasMore && (
+              <div ref={sentinelRef} className="py-2 text-center">
+                {loadingLogs ? <Loader2 className="w-4 h-4 animate-spin mx-auto text-gray-400" /> : <span className="text-xs text-gray-500">向下滚动加载更多日志</span>}
+              </div>
+            )}
+            <div ref={logBottomRef} />
           </div>
-          {logHasMore && (
-            <div ref={sentinelRef} className="py-2 text-center">
-              {loadingLogs ? <Loader2 className="w-4 h-4 animate-spin mx-auto text-gray-400" /> : <span className="text-xs text-gray-500">向下滚动加载更多日志</span>}
+          {execLogs.length > 30 && (
+            <div className="mt-2 flex justify-center gap-2">
+              <button
+                onClick={() => logScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+              >
+                <ArrowUp size={12} /> 顶部
+              </button>
+              <button
+                onClick={() => logBottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+              >
+                <ArrowDown size={12} /> 最新
+              </button>
             </div>
           )}
         </div>
