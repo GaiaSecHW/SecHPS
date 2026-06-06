@@ -89,7 +89,7 @@ export default function TaskBuilderPage() {
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
-  const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running', 'completed', 'failed'] as const;
+const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running', 'completed', 'failed'] as const;
   type StatusFilter = typeof validStatusFilters[number];
   const initialStatus = searchParams.get('status');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
