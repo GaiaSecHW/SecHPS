@@ -29,6 +29,8 @@ class CodeswarmDispatcher {
   private timeoutCheckTimer: ReturnType<typeof setInterval> | null = null;
   private pendingRetryTimer: ReturnType<typeof setInterval> | null = null;
   private streamCleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private dispatchedStuckTimer: ReturnType<typeof setInterval> | null = null;
+  private dbQueuedScanTimer: ReturnType<typeof setInterval> | null = null;
 
   async init() {
     if (this.initialized) return;
@@ -127,11 +129,28 @@ class CodeswarmDispatcher {
     }
   }
 
+  private scheduleRetry(dbTaskId: string, delayMs: number) {
+    if (!this.redis || !this.running) return;
+    const retryKey = `codeswarm:task:retrying:${dbTaskId}`;
+    setTimeout(async () => {
+      if (!this.redis || !this.running) return;
+      try {
+        const acquired = await this.redis.set(retryKey, '1', 'PX', Math.max(delayMs, 1000), 'NX');
+        if (!acquired) return;
+        await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+      } catch (e) {
+        logger.warn(LOG_MODULES.CODESWARM, 'Retry re-enqueue failed', {
+          details: { dbTaskId, error: e instanceof Error ? e.message : String(e) },
+        });
+      }
+    }, delayMs);
+  }
+
   // 统一的分发方法：向 Worker 发送任务并更新 DB
   // 使用两阶段提交确保原子性：
   // 1. 先更新 DB 为 dispatched（Worker 收到任务后不会重复分发）
   // 2. 再发送 HTTP 请求（如果失败，DB 已是 dispatched 状态，下次调度会跳过）
-  async sendTaskToWorker(task: any, worker: { id: string; address: string }): Promise<boolean> {
+  async sendTaskToWorker(task: any, worker: WorkerInfo): Promise<boolean> {
     // 处理逗号分隔的地址列表，按可达性优先排序（172.x > localhost > 其他 > 198.18.x）
     const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
 
@@ -161,19 +180,51 @@ class CodeswarmDispatcher {
       return score(a.trim()) - score(b.trim());
     });
 
-    // 阶段 1：先更新 DB 状态（乐观锁，防止重复分发）
-    // updateMany 支持 where 中带非唯一字段做条件更新
-    const updateResult = await prisma.codeswarmTask.updateMany({
-      where: { id: task.id, state: 'queued' },
-      data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
+    // 阶段 1(P0-2 改造):事务性抢占 Worker 槽位 + 标记任务 dispatched
+    // 用一条 SQL 完成条件 +1(currentTasks < maxConcurrent),DB 内部保证不超发
+    // 再在同一事务内标记任务 dispatched,任一失败则回滚槽位
+    const txResult = await prisma.$transaction(async (tx) => {
+      // 1. 原子抢占:DB 内部校验 currentTasks < maxConcurrent,PostgreSQL 单语句原子
+      const claim = await tx.$executeRaw`
+        UPDATE "CodeswarmWorker"
+        SET "currentTasks" = "currentTasks" + 1
+        WHERE id = ${worker.id}
+          AND status = 'online'
+          AND "currentTasks" < "maxConcurrent"
+      `;
+      if (claim === 0) {
+        return { ok: false as const, reason: 'no_capacity' };
+      }
+      // 2. 标记任务 dispatched(乐观锁,防止重复分发)
+      const taskUpdate = await tx.codeswarmTask.updateMany({
+        where: { id: task.id, state: 'queued' },
+        data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
+      });
+      if (taskUpdate.count === 0) {
+        // 任务已不是 queued(被并发/超时改写),回滚 currentTasks 抢占
+        await tx.$executeRaw`
+          UPDATE "CodeswarmWorker"
+          SET "currentTasks" = "currentTasks" - 1
+          WHERE id = ${worker.id} AND "currentTasks" > 0
+        `;
+        return { ok: false as const, reason: 'task_not_queued' };
+      }
+      return { ok: true as const };
     });
-    if (updateResult.count === 0) {
-      logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} is no longer queued, skipping`);
-      return true;
+
+    if (!txResult.ok) {
+      logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} pre-dispatch skipped: ${txResult.reason}`);
+      if (txResult.reason === 'no_capacity') {
+        this.scheduleRetry(task.id, 1000);
+      }
+      return false;
     }
 
+    // 内存同步(乐观递增):事务内 DB 已 +1,此处镜像到内存供 selectWorker 后续判断
+    worker.currentTasks++;
+
     // 阶段 2：依次尝试多个地址发送 HTTP 请求
-const taskPayload = JSON.stringify({
+    const taskPayload = JSON.stringify({
       taskId: task.taskId,
       instruction: task.instruction || undefined,
       projectPath: task.projectPath || undefined,
@@ -202,26 +253,33 @@ const taskPayload = JSON.stringify({
         });
 
         if (resp.ok) {
-          await prisma.codeswarmWorker.update({
-            where: { id: worker.id },
-            data: { currentTasks: { increment: 1 } },
-          });
+          // P0-2 改造:DB currentTasks 已在阶段 1 事务内 +1,此处不再重复 +1
           logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} dispatched to ${worker.id} via ${addr}`);
           return true;
         }
 
         const respBody = await resp.text().catch(() => '');
         // Worker reports task is already being executed (dedup)
+        // 409 路径不需要 -1:Worker 实际在跑这个任务,占用槽位是真实状态
         if (resp.status === 409) {
           logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} already executing on worker, skipping duplicate`);
           return true;
         }
         if (resp.status === 400) {
+          // P0-2 改造:Worker 拒绝执行(payload 校验失败),需事务性回滚 currentTasks + 标记 failed
           logger.error(LOG_MODULES.CODESWARM, `Task ${task.taskId} payload validation failed (400), marking as failed`, { details: { body: respBody.substring(0, 200) } });
-          await prisma.codeswarmTask.update({
-            where: { id: task.id },
-            data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
-          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+          await prisma.$transaction(async (tx) => {
+            await tx.codeswarmTask.update({
+              where: { id: task.id },
+              data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
+            });
+            await tx.$executeRaw`
+              UPDATE "CodeswarmWorker"
+              SET "currentTasks" = "currentTasks" - 1
+              WHERE id = ${worker.id} AND "currentTasks" > 0
+            `;
+          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '400 路径回滚失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+          worker.currentTasks = Math.max(worker.currentTasks - 1, 0);
           return true;
         }
 
@@ -233,13 +291,32 @@ const taskPayload = JSON.stringify({
 
 // 所有地址都失败，回滚 DB 状态（仅当任务仍为 dispatched 时回滚，避免覆盖 running/completed）
     logger.error(LOG_MODULES.CODESWARM, 'All addresses failed for worker', { details: { id: worker.id, addresses: sorted.join(', ') } });
-    const rollbackResult = await prisma.codeswarmTask.updateMany({
-      where: { id: task.id, state: 'dispatched' },
-      data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
-    }).catch(e => { logger.error(LOG_MODULES.CODESWARM, '回滚任务状态失败', { details: { error: e instanceof Error ? e.message : String(e) } }); return { count: 0 }; });
-    if (rollbackResult.count === 0) {
+    const rollbackCount = await prisma.$transaction(async (tx) => {
+      const taskRollback = await tx.codeswarmTask.updateMany({
+        where: { id: task.id, state: 'dispatched' },
+        data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
+      });
+      if (taskRollback.count > 0) {
+        // P0-2 改造:阶段 1 事务已 +1 currentTasks,这里需 -1 补偿
+        await tx.$executeRaw`
+          UPDATE "CodeswarmWorker"
+          SET "currentTasks" = "currentTasks" - 1
+          WHERE id = ${worker.id} AND "currentTasks" > 0
+        `;
+      }
+      return taskRollback.count;
+    }).catch(e => {
+      logger.error(LOG_MODULES.CODESWARM, '回滚事务失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+      return 0;
+    });
+
+    if (rollbackCount === 0) {
       logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} rollback skipped — task no longer in dispatched state`);
+    } else {
+      worker.currentTasks = Math.max(worker.currentTasks - 1, 0);
+      this.scheduleRetry(task.id, 1000);
     }
+
     return false;
   }
 
@@ -253,6 +330,10 @@ const taskPayload = JSON.stringify({
       existing.address = data.address;
       existing.maxConcurrent = data.maxConcurrent;
       existing.lastHeartbeat = Date.now();
+      // Worker semaphore 是实时真相源，用心跳上报值修正内存漂移
+      if (typeof data.currentTasks === 'number') {
+        existing.currentTasks = data.currentTasks;
+      }
     } else {
       this.workers.set(data.nodeId, {
         id: data.id,
@@ -293,6 +374,11 @@ const taskPayload = JSON.stringify({
     }
   }
 
+  /** 主动触发排队任务分发（容量变更等场景调用） */
+  async triggerDispatch(): Promise<void> {
+    await this.scanDbQueuedTasks();
+  }
+
   /** 更新 Worker 的最大并发数（admin 在 Dashboard 修改时立即生效） */
   updateWorkerMaxConcurrent(nodeId: string, maxConcurrent: number) {
     const worker = this.workers.get(nodeId);
@@ -300,6 +386,52 @@ const taskPayload = JSON.stringify({
       worker.maxConcurrent = maxConcurrent;
       logger.info(LOG_MODULES.CODESWARM, `Worker ${nodeId} maxConcurrent 更新为 ${maxConcurrent}`);
     }
+  }
+
+  /** P1:主动推送 maxConcurrent 变更到 Worker,不等 30 秒心跳 */
+  async pushMaxConcurrentToWorker(nodeId: string, maxConcurrent: number): Promise<boolean> {
+    const memoryWorker = this.workers.get(nodeId);
+    const dbWorker = await prisma.codeswarmWorker.findUnique({
+      where: { nodeId },
+      select: { address: true, token: true },
+    });
+    const address = memoryWorker?.address || dbWorker?.address;
+    if (!address) return false;
+
+    const addresses = address.split(',').map(a => a.trim()).filter(Boolean);
+    // 复用 sendTaskToWorker 的地址排序逻辑:外部 IP > 内网 > Docker > localhost
+    const sorted = [...addresses].sort((a, b) => {
+      const score = (addr: string) => {
+        if (addr.startsWith('localhost') || addr.startsWith('127.')) return 4;
+        if (addr.startsWith('198.18.')) return 5;
+        if (/^172\.(17|18|19|20|21)\./.test(addr)) return 3;
+        if (addr.startsWith('172.')) return 2;
+        return 1;
+      };
+      return score(a.trim()) - score(b.trim());
+    });
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (dbWorker?.token) headers.Authorization = `Bearer ${dbWorker.token}`;
+
+    for (const addr of sorted) {
+      try {
+        const resp = await fetch(`http://${addr}/config`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ maxConcurrentOverride: maxConcurrent }),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (resp.ok) {
+          logger.info(LOG_MODULES.CODESWARM, `Pushed maxConcurrent=${maxConcurrent} to worker ${nodeId} via ${addr}`);
+          return true;
+        }
+      } catch {
+        // 试下一个地址
+      }
+    }
+    logger.warn(LOG_MODULES.CODESWARM, `Push maxConcurrent to worker ${nodeId} failed (all addresses unreachable, heartbeat fallback will apply)`);
+    return false;
   }
 
   /** 从内存拓扑中移除 Worker（地址冲突检测等场景使用） */
@@ -342,7 +474,7 @@ const dispatched = await this.dispatchOne(dbTaskId);
           await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
           if (!dispatched) {
-            // 任务保持在 DB queued 状态，等事件驱动触发分发
+            this.scheduleRetry(dbTaskId, 3000);
           }
           recovered++;
         }
@@ -382,8 +514,8 @@ const dispatched = await this.dispatchOne(dbTaskId);
               await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
               if (!dispatched) {
-                // Worker 全满，任务保持在 DB queued 状态，不重新入队
-                // 等 Worker 释放容量后由事件驱动触发（result 回调/心跳/兜底轮询）
+                // 失败时重新入队，避免 DB queued 任务失去 Stream 触发源
+                this.scheduleRetry(dbTaskId, 3000);
               }
             })
           );
@@ -414,6 +546,15 @@ const dispatched = await this.dispatchOne(dbTaskId);
       const task = await prisma.codeswarmTask.findUnique({ where: { id: dbTaskId } });
       if (!task || task.state !== 'queued') return true;
 
+      // P0-1 修复:1 秒内被回滚的任务延迟重试,避免 Worker 容量未恢复时形成 503 风暴
+      // 场景:Worker Semaphore 调整期间(改 maxConcurrent 后 30 秒窗口),所有分发都会被 503
+      // 如果不加间隔,5 秒 BLOCK 周期内会持续打 Worker,放大负载
+      const recentlyRolledBack = Date.now() - new Date(task.updatedAt).getTime() < 1000;
+      if (recentlyRolledBack && this.redis && this.running) {
+        this.scheduleRetry(dbTaskId, 1000);
+        return false;
+      }
+
       // 优先使用指定的 Worker，否则自动分配
       let worker = this.selectWorker(task.preferredWorkerNodeId ?? undefined);
       if (!worker) {
@@ -433,24 +574,17 @@ const dispatched = await this.dispatchOne(dbTaskId);
         return false;
       }
 
-      // 乐观递增：防止并行分发时多个任务选中同一 Worker
-      worker.currentTasks++;
-      let success = false;
-      try {
-        success = await this.sendTaskToWorker(task, worker);
-      } catch (e) {
-        worker.currentTasks--;
-        throw e;
-      }
+      // P0-2 改造:移除手工 worker.currentTasks++/--
+      // 抢占/回滚 currentTasks 已在 sendTaskToWorker 阶段 1 事务内原子完成
+      // 失败路径(503 全部失败/400)也在 sendTaskToWorker 内部事务性 -1
+      // 此处只需调用,异常时事务会自动回滚
+      const success = await this.sendTaskToWorker(task, worker);
       if (!success) {
-        worker.currentTasks--;
         return false;
       }
 
-      // 注册超时
-      if (task.timeoutSec) {
-        await this.registerTaskTimeout(dbTaskId, task.timeoutSec);
-      }
+      // 注册超时（无 timeoutSec 时使用默认 7 天，与 Worker 侧 TASK_TIMEOUT_SEC 一致）
+      await this.registerTaskTimeout(dbTaskId, task.timeoutSec || 604800);
 
       logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       return true;
@@ -510,18 +644,27 @@ const dispatched = await this.dispatchOne(dbTaskId);
         take: 200,
       });
 
-      const onlineCount = 0;
-      const offlineCount = 0;
-
       for (const w of workers) {
         const reachable = await this.pingWorker(w.address);
         if (reachable) {
+          // 自愈：统计该 Worker 实际 dispatched/running 任务数
+          const actualCount = await prisma.codeswarmTask.count({
+            where: { workerId: w.id, state: { in: ['dispatched', 'running'] } },
+          });
+          if (actualCount !== w.currentTasks) {
+            logger.warn(LOG_MODULES.CODESWARM, `Worker ${w.nodeId} 自愈: currentTasks ${w.currentTasks} -> ${actualCount}`);
+            await prisma.$executeRaw`
+              UPDATE "CodeswarmWorker"
+              SET "currentTasks" = ${actualCount}
+              WHERE id = ${w.id}
+            `.catch(e => logger.error(LOG_MODULES.CODESWARM, '自愈修正 currentTasks 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+          }
           this.workers.set(w.nodeId, {
             id: w.id,
             nodeId: w.nodeId,
             address: w.address,
             maxConcurrent: w.maxConcurrent,
-            currentTasks: w.currentTasks,
+            currentTasks: actualCount,
             lastHeartbeat: w.lastHeartbeat.getTime(),
           });
         } else {
@@ -634,6 +777,24 @@ private lastNoWorkerLogTime = 0;
                 const idStr = typeof msgId === 'string' ? msgId : msgId.toString();
 
                 await this.redisExec('XCLAIM', STREAM_KEY, CONSUMER_GROUP, CONSUMER_NAME, '0', idStr);
+
+                // 读取消息内容，检查 DB 任务状态，queued 任务重新入队
+                try {
+                  const msgData = await this.redis!.xrange(STREAM_KEY, idStr, idStr) as [string, string[]][] | null;
+                  if (msgData && msgData.length > 0) {
+                    const fields = msgData[0][1];
+                    const dbTaskId = fields[1];
+                    if (dbTaskId) {
+                      const task = await prisma.codeswarmTask.findUnique({ where: { id: dbTaskId }, select: { state: true } });
+                      if (task?.state === 'queued') {
+                        this.scheduleRetry(dbTaskId, 5000);
+                      }
+                    }
+                  }
+                } catch (e) {
+                  logger.warn(LOG_MODULES.CODESWARM, 'claimed 消息处理失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+                }
+
                 await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, idStr);
                 claimedCount++;
               }
@@ -690,7 +851,7 @@ private lastNoWorkerLogTime = 0;
           await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
 
           if (!dispatched) {
-            // 任务保持在 DB queued 状态，等事件驱动触发分发
+            this.scheduleRetry(dbTaskId, 3000);
           }
         }
       }
@@ -706,6 +867,75 @@ private lastNoWorkerLogTime = 0;
         logger.warn(LOG_MODULES.CODESWARM, '兜底轮询异常', { details: { error: e instanceof Error ? e.message : String(e) } })
       );
     }, INTERVAL_MS);
+  }
+
+  /** 扫描 DB 中 state='queued' 的任务，重新入队到 Redis Stream */
+  private async scanDbQueuedTasks() {
+    if (!this.redis || !this.running) return;
+    try {
+      const stuckTasks = await prisma.codeswarmTask.findMany({
+        where: { state: 'queued' },
+        select: { id: true },
+        take: 50,
+      });
+      if (stuckTasks.length === 0) return;
+
+      let requeued = 0;
+      for (const t of stuckTasks) {
+        // scheduleRetry 内部有 NX 去重，不会重复入队
+        this.scheduleRetry(t.id, 5000);
+        requeued++;
+      }
+      if (requeued > 0) {
+        logger.info(LOG_MODULES.CODESWARM, `DB queued 兜底扫描: 重新入队 ${requeued} 个任务`);
+      }
+    } catch (e) {
+      logger.warn(LOG_MODULES.CODESWARM, 'DB queued 扫描失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+    }
+  }
+
+  /** 扫描卡在 dispatched 状态超过 10 分钟的任务，重置为 queued 并重新入队 */
+  private async checkStuckDispatchedTasks() {
+    try {
+      const stuckTasks = await prisma.$queryRaw`
+        SELECT id, "taskId", "workerId"
+        FROM "CodeswarmTask"
+        WHERE state = 'dispatched'
+          AND "updatedAt" < NOW() - INTERVAL '30 minutes'
+        LIMIT 50
+      ` as any[];
+
+      if (stuckTasks.length === 0) return;
+
+      let resetCount = 0;
+      for (const task of stuckTasks) {
+        const updated = await prisma.$transaction(async (tx) => {
+          const result = await tx.codeswarmTask.updateMany({
+            where: { id: task.id, state: 'dispatched' },
+            data: { state: 'queued', workerId: null, updatedAt: new Date() },
+          });
+          if (result.count > 0 && task.workerId) {
+            await tx.$executeRaw`
+              UPDATE "CodeswarmWorker"
+              SET "currentTasks" = "currentTasks" - 1
+              WHERE id = ${task.workerId} AND "currentTasks" > 0
+            `;
+          }
+          return result.count;
+        });
+
+        if (updated > 0) {
+          this.scheduleRetry(task.id, 3000);
+          resetCount++;
+          logger.warn(LOG_MODULES.CODESWARM, `Stuck dispatched task ${task.taskId} reset to queued`);
+        }
+      }
+      if (resetCount > 0) {
+        logger.info(LOG_MODULES.CODESWARM, `Stuck dispatched scan: reset ${resetCount} tasks`);
+      }
+    } catch (e) {
+      logger.warn(LOG_MODULES.CODESWARM, 'Stuck dispatched scan failed', { details: { error: e instanceof Error ? e.message : String(e) } });
+    }
   }
 
   private startCleanupScheduler() {
@@ -756,6 +986,12 @@ private lastNoWorkerLogTime = 0;
     this.pendingRetryTimer = setInterval(() => this.recoverPendingMessages(), 30_000);
     // 每 5 分钟清理死消费者和过期 pending 消息
     this.streamCleanupTimer = setInterval(() => this.cleanupStaleConsumers(), 300_000);
+    // 每 60 秒扫描卡在 dispatched 的任务（Worker 在线但任务未进入 running）
+    this.dispatchedStuckTimer = setInterval(() => this.checkStuckDispatchedTasks(), 60_000);
+    // 每 30 秒扫描 DB queued 任务（捡起已 ACK 但仍为 queued 的任务，scheduleRetry 兜底）
+    this.dbQueuedScanTimer = setInterval(() => this.scanDbQueuedTasks().catch(e =>
+      logger.warn(LOG_MODULES.CODESWARM, 'DB queued 扫描异常', { details: { error: e instanceof Error ? e.message : String(e) } })
+    ), 30_000);
     // 每日清理过期任务文件
     this.startCleanupScheduler();
   }
@@ -849,21 +1085,24 @@ private lastNoWorkerLogTime = 0;
       }
 
       for (const task of stuckTasks) {
-        await prisma.codeswarmTask.update({
-          where: { id: task.id },
+        const rescheduled = await prisma.codeswarmTask.updateMany({
+          where: { id: task.id, state: { in: ['dispatched', 'running'] } },
           data: {
             state: 'queued',
-            CodeswarmWorker: { disconnect: true },
-            preferredWorkerNodeId: null,  // 清理：原 Worker 已掉线
+            workerId: null,
+            preferredWorkerNodeId: null,
             updatedAt: new Date()
           },
         });
 
-        if (this.redis) {
-          await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
+        if (rescheduled.count > 0) {
+          if (this.redis) {
+            await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
+          }
+          logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已重新入队`);
+        } else {
+          logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} reschedule 跳过 — 已处于终态`);
         }
-
-        logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已重新入队`);
       }
     } catch (e) {
       logger.error(LOG_MODULES.CODESWARM, 'rescheduleWorkerTasksById 异常', { details: { error: e instanceof Error ? e.message : String(e) } });
@@ -903,23 +1142,25 @@ private lastNoWorkerLogTime = 0;
           } catch { /* Worker 可能已离线 */ }
         }
 
-        // 改回 queued
-        await prisma.codeswarmTask.update({
-          where: { id: task.id },
+        // 改回 queued（条件更新：仅 dispatched/running 才重置，避免覆盖已完成的终态）
+        const rescheduled = await prisma.codeswarmTask.updateMany({
+          where: { id: task.id, state: { in: ['dispatched', 'running'] } },
           data: {
             state: 'queued',
-            CodeswarmWorker: { disconnect: true },
+            workerId: null,
             preferredWorkerNodeId: null,
             updatedAt: new Date()
           },
         });
 
-        // 重新提交到 Redis Stream
-        if (this.redis) {
-          await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
+        if (rescheduled.count > 0) {
+          if (this.redis) {
+            await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
+          }
+          logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已重新入队`);
+        } else {
+          logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} reschedule 跳过 — 已处于终态`);
         }
-
-        logger.info(LOG_MODULES.CODESWARM, `任务 ${task.taskId} 已重新入队`);
       }
     } catch (e) {
       logger.error(LOG_MODULES.CODESWARM, 'rescheduleWorkerTasks 异常', { details: { error: e instanceof Error ? e.message : String(e) } });
@@ -1035,6 +1276,8 @@ private lastNoWorkerLogTime = 0;
     if (this.timeoutCheckTimer) clearInterval(this.timeoutCheckTimer);
     if (this.pendingRetryTimer) clearInterval(this.pendingRetryTimer);
     if (this.streamCleanupTimer) clearInterval(this.streamCleanupTimer);
+    if (this.dispatchedStuckTimer) clearInterval(this.dispatchedStuckTimer);
+    if (this.dbQueuedScanTimer) clearInterval(this.dbQueuedScanTimer);
     if (this.fallbackPollTimer) clearInterval(this.fallbackPollTimer);
     if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
     this.teardownRedis();

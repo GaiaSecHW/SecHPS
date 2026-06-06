@@ -184,30 +184,77 @@ export async function GET(request: NextRequest) {
       User: { select: { username: true } },
     };
 
-    // 有 displayStatus 筛选时需要全量查（displayStatus 是 JS 计算的派生字段，无法下推 DB）
+    // displayStatus 筛选：SQL LEFT JOIN + CASE 下推 DB 层过滤和分页，避免全量加载到内存
     if (displayStatusFilter) {
-      const allTasks = await prisma.taskInstance.findMany({
-        where,
+      const VALID_STATUSES = ['pending', 'queued', 'dispatched', 'running', 'completed', 'failed'];
+      if (!VALID_STATUSES.includes(displayStatusFilter)) {
+        return NextResponse.json({ tasks: [], pagination: { total: 0, page, limit, totalPages: 0 } });
+      }
+
+      // 构建与上方 Prisma conditions 等价的 SQL WHERE 条件
+      const sqlConds: string[] = [];
+      const sqlParams: any[] = [];
+      let idx = 1;
+
+      const isAdmin = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles?.includes('admin'));
+      if (!isAdmin) {
+        sqlConds.push(`ti."userId" = $${idx++}`);
+        sqlParams.push(payload.userId);
+      }
+      if (search) {
+        sqlConds.push(`(ti.name ILIKE $${idx} OR ti."agentName" ILIKE $${idx} OR ti.notes ILIKE $${idx})`);
+        sqlParams.push(`%${search}%`);
+        idx++;
+      }
+
+      // displayStatus 计算表达式（与 mapDisplayStatus 逻辑一一对应）
+      const statusExpr = `CASE
+        WHEN ti."codeswarmTaskId" IS NULL OR ct.state IS NULL THEN
+          CASE ti.status WHEN 'completed' THEN 'completed' WHEN 'failed' THEN 'failed' WHEN 'running' THEN 'running' ELSE 'pending' END
+        ELSE
+          CASE ct.state WHEN 'queued' THEN 'queued' WHEN 'dispatched' THEN 'dispatched' WHEN 'building' THEN 'running' WHEN 'running' THEN 'running' WHEN 'completed' THEN 'completed' WHEN 'failed' THEN 'failed' ELSE 'pending' END
+      END`;
+
+      const baseWhere = sqlConds.length > 0
+        ? `WHERE ${sqlConds.join(' AND ')} AND (${statusExpr}) = $${idx}`
+        : `WHERE (${statusExpr}) = $${idx}`;
+
+      const offset = (page - 1) * limit;
+
+      // 查询 1: 总数
+      const countRows = await prisma.$queryRawUnsafe<{ total: number }[]>(
+        `SELECT COUNT(*)::int as total FROM "TaskInstance" ti LEFT JOIN "CodeswarmTask" ct ON ti."codeswarmTaskId" = ct."taskId" ${baseWhere}`,
+        ...sqlParams, displayStatusFilter
+      );
+      const total = countRows[0]?.total ?? 0;
+
+      if (total === 0) {
+        return NextResponse.json({ tasks: [], pagination: { total: 0, page, limit, totalPages: 0 } });
+      }
+
+      // 查询 2: 分页 ID
+      const idRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT ti.id FROM "TaskInstance" ti LEFT JOIN "CodeswarmTask" ct ON ti."codeswarmTaskId" = ct."taskId" ${baseWhere} ORDER BY ti."createdAt" DESC LIMIT $${idx + 1} OFFSET $${idx + 2}`,
+        ...sqlParams, displayStatusFilter, limit, offset
+      );
+
+      // 查询 3: 按 ID 批量获取完整数据（复用 taskSelect + User 关联）
+      const paginatedTasks = await prisma.taskInstance.findMany({
+        where: { id: { in: idRows.map(r => r.id) } },
         orderBy: { createdAt: 'desc' },
         select: taskSelect,
       });
 
-      const codeswarmTaskIds = allTasks
+      // 查询 4: 获取 codeswarm 元数据（仅当前页，复用已有函数）
+      const codeswarmTaskIds = paginatedTasks
         .map(t => t.codeswarmTaskId)
         .filter((id): id is string => id !== null && id !== undefined);
-
       const [codeswarmStateMap, workerMap] = await fetchCodeswarmMeta(codeswarmTaskIds);
+      const tasks = paginatedTasks.map(task => augmentTask(task, codeswarmStateMap, workerMap));
 
-      const augmentedTasks = allTasks.map(task => augmentTask(task, codeswarmStateMap, workerMap));
-      const filteredTasks = augmentedTasks.filter(t => t.displayStatus === displayStatusFilter);
-
-      const total = filteredTasks.length;
       const totalPages = Math.ceil(total / limit);
-      const skip = (page - 1) * limit;
-      const paginatedTasks = filteredTasks.slice(skip, skip + limit);
-
       return NextResponse.json({
-        tasks: paginatedTasks,
+        tasks,
         pagination: { total, page, limit, totalPages },
       });
     }

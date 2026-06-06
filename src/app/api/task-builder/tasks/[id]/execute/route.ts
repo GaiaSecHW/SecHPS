@@ -309,7 +309,14 @@ export async function POST(
         };
         const success = await codeswarmDispatcher.sendTaskToWorker(taskRow, worker);
         if (success) {
-          codeswarmDispatcher.syncWorkerLoad(worker.nodeId, (worker.currentTasks || 0) + 1);
+          // sendTaskToWorker 内部已事务性 +1 DB currentTasks + 内存镜像,只需用最新 DB 值同步 dispatcher 内存
+          const freshWorker = await prisma.codeswarmWorker.findUnique({
+            where: { id: worker.id },
+            select: { currentTasks: true },
+          });
+          if (freshWorker) {
+            codeswarmDispatcher.syncWorkerLoad(worker.nodeId, freshWorker.currentTasks);
+          }
         }
       }
     }

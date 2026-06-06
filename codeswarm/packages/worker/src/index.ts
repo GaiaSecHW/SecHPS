@@ -10,6 +10,7 @@ const config = {
   maxConcurrent: parseInt(process.env.MAX_CONCURRENT || '5'),
   orchestratorUrl: process.env.ORCHESTRATOR_URL || 'http://localhost:3000',
   address: process.env.WORKER_ADDRESS || undefined,  // 可访问的外部地址
+  workerToken: process.env.WORKER_TOKEN || undefined,
   taskTimeoutMs: parseInt(process.env.TASK_TIMEOUT_SEC || String(DEFAULT_TASK_TIMEOUT_SEC)) * 1000,
 };
 

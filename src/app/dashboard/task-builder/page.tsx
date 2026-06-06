@@ -89,7 +89,12 @@ export default function TaskBuilderPage() {
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed'>(searchParams.get('status') || 'all');
+  const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running', 'completed', 'failed'] as const;
+  type StatusFilter = typeof validStatusFilters[number];
+  const initialStatus = searchParams.get('status');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    validStatusFilters.includes(initialStatus as StatusFilter) ? initialStatus as StatusFilter : 'all'
+  );
 
   // URL 参数同步函数
   const updateUrlParams = (updates: Record<string, string | number | null>) => {

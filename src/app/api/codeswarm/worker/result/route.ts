@@ -58,6 +58,19 @@ export async function POST(request: Request) {
         return { alreadyTerminal: true, taskInstance: null, workerId: null };
       }
 
+      // 校验上报 Worker 仍持有该任务：防止 checkStuckDispatchedTasks 重调度后，
+      // 原始 Worker 的滞后 result 回调覆盖新 Worker 的 dispatch 状态并错误递减其 currentTasks
+      if (nodeId && codeswarmTask.workerId) {
+        const reportingWorker = await tx.codeswarmWorker.findFirst({
+          where: { nodeId },
+          select: { id: true },
+        });
+        if (reportingWorker && reportingWorker.id !== codeswarmTask.workerId) {
+          logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} rejected — task reassigned to different Worker (reporting=${reportingWorker.id}, assigned=${codeswarmTask.workerId})`);
+          return { alreadyTerminal: true, taskInstance: null, workerId: codeswarmTask.workerId };
+        }
+      }
+
       const updateResult = await tx.$executeRaw`
         UPDATE "CodeswarmTask"
         SET state = ${finalState},
@@ -109,9 +122,9 @@ export async function POST(request: Request) {
 
     if (txResult.alreadyTerminal) {
       // 任务已处于终态（超时/取消/掉线重调度），result 回调被忽略
-      // 重要：不再调用 onTaskCompleted()，因为超时/掉线处理已释放了 Worker 槽位
-      // 避免双重递减导致 currentTasks 虚低
-      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled), Worker slot already released`);
+      // DB decrement 已被 updateResult===0 正确跳过（不会双重递减）
+      // 内存漂移由 onHeartbeat 每 30s 用 Worker 上报值自校正
+      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — task already in terminal state (timeout/cancelled)`);
       return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_already_terminal' });
     }
 

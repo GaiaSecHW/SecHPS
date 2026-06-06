@@ -98,7 +98,16 @@ export async function PATCH(
     });
 
     if (maxConcurrent !== undefined) {
-      codeswarmDispatcher.updateWorkerMaxConcurrent(nodeId, Math.max(1, Math.min(50, maxConcurrent)));
+      const newMax = Math.max(1, Math.min(50, maxConcurrent));
+      codeswarmDispatcher.updateWorkerMaxConcurrent(nodeId, newMax);
+      // P1:主动推送到 Worker,消除 30 秒心跳延迟窗口;推送失败不阻塞,下次心跳兜底
+      codeswarmDispatcher.pushMaxConcurrentToWorker(nodeId, newMax).catch(e =>
+        logger.warn(LOG_MODULES.CODESWARM, 'Push maxConcurrent to worker failed (heartbeat fallback)', { details: { error: e instanceof Error ? e.message : String(e) } })
+      );
+      // 容量变更后立即尝试分发排队任务
+      codeswarmDispatcher.triggerDispatch().catch(e =>
+        logger.warn(LOG_MODULES.CODESWARM, 'Trigger dispatch after maxConcurrent change failed', { details: { error: e instanceof Error ? e.message : String(e) } })
+      );
     }
 
     return NextResponse.json({ success: true, worker });

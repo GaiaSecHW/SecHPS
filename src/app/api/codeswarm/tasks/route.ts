@@ -168,7 +168,14 @@ export async function POST(request: Request) {
 
         const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
         if (success) {
-          worker.currentTasks++;
+          const freshWorker = await prisma.codeswarmWorker.findUnique({
+            where: { id: worker.id },
+            select: { currentTasks: true },
+          });
+          if (freshWorker) {
+            worker.currentTasks = freshWorker.currentTasks;
+            codeswarmDispatcher.syncWorkerLoad(worker.nodeId, freshWorker.currentTasks);
+          }
           dispatched++;
         }
       }
@@ -239,7 +246,14 @@ export async function POST(request: Request) {
 
         const success = await codeswarmDispatcher.sendTaskToWorker(task, targetWorker);
         if (success) {
-          codeswarmDispatcher.syncWorkerLoad(targetWorker.nodeId, (targetWorker.currentTasks || 0) + 1);
+          // sendTaskToWorker 内部已事务性 +1 DB currentTasks + 内存镜像,只需用最新 DB 值同步 dispatcher 内存
+          const freshWorker = await prisma.codeswarmWorker.findUnique({
+            where: { id: targetWorker.id },
+            select: { currentTasks: true },
+          });
+          if (freshWorker) {
+            codeswarmDispatcher.syncWorkerLoad(targetWorker.nodeId, freshWorker.currentTasks);
+          }
         } else {
           await withRetry(() => prisma.codeswarmTask.update({
             where: { id: task.id },

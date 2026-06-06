@@ -74,6 +74,7 @@ interface WorkerDaemonConfig {
   orchestratorUrl: string;
   /** Worker 外部可达地址（跨服务器部署时必须设置，否则心跳上报自动检测的容器内网 IP + localhost） */
   address?: string;
+  workerToken?: string;
   /** 单任务超时时间（毫秒），默认 7*24*3600*1000 = 7天，可通过 TASK_TIMEOUT_SEC 环境变量配置 */
   taskTimeoutMs: number;
 }
@@ -95,9 +96,11 @@ export class WorkerDaemon {
   private readonly activeTasks = new Map<string, TaskPayload>();
   /** Track task IDs cancelled via /task/cancel to avoid duplicate result posts. */
   private readonly cancelledTasks = new Set<string>();
+  private workerToken?: string;
 
   constructor(config: WorkerDaemonConfig) {
     this.config = config;
+    this.workerToken = config.workerToken;
     this.server = Fastify({ logger: true });
     this.envFactory = new EnvironmentFactory();
     this.processMgr = new ProcessManager();
@@ -204,6 +207,29 @@ this.server.get('/health', async () => ({
       available: this.semaphore.available,
       maxConcurrent: this.semaphore.max,
     }));
+
+    this.server.post('/config', async (request, reply) => {
+      const authHeader = request.headers.authorization;
+      if (this.workerToken && authHeader !== `Bearer ${this.workerToken}`) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const body = request.body as { maxConcurrentOverride?: number };
+      if (typeof body.maxConcurrentOverride !== 'number' || !Number.isFinite(body.maxConcurrentOverride)) {
+        return reply.status(400).send({ error: 'Invalid maxConcurrentOverride' });
+      }
+
+      const nextMax = Math.max(1, Math.min(50, Math.floor(body.maxConcurrentOverride)));
+      const currentMax = this.semaphore.max;
+      if (nextMax !== currentMax) {
+        this.semaphore.resize(nextMax);
+        this.server.log.info(
+          { previousMax: currentMax, newMax: nextMax },
+          'maxConcurrent adjusted via push config'
+        );
+      }
+      return reply.send({ success: true, maxConcurrent: this.semaphore.max });
+    });
 
     // Cancel task endpoint
     this.server.post('/task/cancel', async (request, reply) => {
@@ -382,9 +408,12 @@ this.server.get('/health', async () => ({
       const systemType = os.platform() === 'win32' ? 'windows' : os.platform() === 'darwin' ? 'darwin' : 'linux';
       const arch = os.arch() === 'x64' ? 'x64' : os.arch() === 'arm64' ? 'arm64' : os.arch();
       const currentMax = this.semaphore.max;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (this.workerToken) headers.Authorization = `Bearer ${this.workerToken}`;
+
       const resp = await fetch(`${this.config.orchestratorUrl}/api/codeswarm/worker/heartbeat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           nodeId: this.config.nodeId,
           maxConcurrent: currentMax,
@@ -398,7 +427,10 @@ this.server.get('/health', async () => ({
       
       if (resp.ok) {
         try {
-          const data = await resp.json() as { maxConcurrentOverride?: number };
+          const data = await resp.json() as { maxConcurrentOverride?: number; token?: string };
+          if (typeof data.token === 'string' && data.token) {
+            this.workerToken = data.token;
+          }
           if (typeof data.maxConcurrentOverride === 'number' && data.maxConcurrentOverride !== currentMax) {
             this.semaphore.resize(data.maxConcurrentOverride);
             this.server.log.info(

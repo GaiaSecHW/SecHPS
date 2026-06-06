@@ -61,24 +61,46 @@ export async function POST(
       logger.info(LOG_MODULES.CODESWARM, `指定的 Worker ${task.preferredWorkerNodeId} 不在线或满载，fallback 到 ${targetWorker.nodeId}`);
     }
 
-    const updated = await prisma.codeswarmTask.updateMany({
-      where: { id: task.id, state: 'queued' },
-      data: {
-        state: 'dispatched',
-        workerId: targetWorker.id,
-        startedAt: new Date(),
-        updatedAt: new Date(),
-      },
+    // P0-2 改造:事务性抢占 Worker 槽位 + 标记任务 dispatched(与 sendTaskToWorker 阶段 1 同逻辑)
+    const dispatchTx = await prisma.$transaction(async (tx) => {
+      const claim = await tx.$executeRaw`
+        UPDATE "CodeswarmWorker"
+        SET "currentTasks" = "currentTasks" + 1
+        WHERE id = ${targetWorker.id}
+          AND status = 'online'
+          AND "currentTasks" < "maxConcurrent"
+      `;
+      if (claim === 0) {
+        return { ok: false as const, reason: 'no_capacity' };
+      }
+      const taskUpdate = await tx.codeswarmTask.updateMany({
+        where: { id: task.id, state: 'queued' },
+        data: {
+          state: 'dispatched',
+          workerId: targetWorker.id,
+          startedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+      if (taskUpdate.count === 0) {
+        await tx.$executeRaw`
+          UPDATE "CodeswarmWorker"
+          SET "currentTasks" = "currentTasks" - 1
+          WHERE id = ${targetWorker.id} AND "currentTasks" > 0
+        `;
+        return { ok: false as const, reason: 'task_not_queued' };
+      }
+      return { ok: true as const };
     });
 
-    if (updated.count === 0) {
-      return NextResponse.json({ error: 'Task is no longer queued, cannot dispatch' }, { status: 400 });
+    if (!dispatchTx.ok) {
+      return NextResponse.json({ error: `Worker 不可用: ${dispatchTx.reason}` }, { status: 400 });
     }
 
     const addresses: string[] = targetWorker.address.split(',').map((a: string) => a.trim()).filter(Boolean);
     if (addresses.length === 0) {
       logger.error(LOG_MODULES.CODESWARM, `Worker ${targetWorker.id} has no valid address`);
-      await rollbackDispatch(task.id);
+      await rollbackDispatch(task.id, targetWorker.id);
       return NextResponse.json({ error: 'Worker 地址无效' }, { status: 500 });
     }
 
@@ -132,10 +154,17 @@ export async function POST(
         if (resp.status === 400) {
           const respBody = await resp.text().catch(() => '');
           logger.error(LOG_MODULES.CODESWARM, `Task ${task.taskId} payload validation failed (400): ${respBody.substring(0, 200)}`);
-          await prisma.codeswarmTask.update({
-            where: { id: task.id },
-            data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
-          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed 失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+          await prisma.$transaction(async (tx) => {
+            await tx.codeswarmTask.update({
+              where: { id: task.id },
+              data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
+            });
+            await tx.$executeRaw`
+              UPDATE "CodeswarmWorker"
+              SET "currentTasks" = "currentTasks" - 1
+              WHERE id = ${targetWorker.id} AND "currentTasks" > 0
+            `;
+          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '标记任务 failed + 释放 Worker 槽位失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
           return NextResponse.json({ error: 'Payload validation failed' }, { status: 400 });
         }
 
@@ -150,21 +179,21 @@ export async function POST(
 
     if (!dispatchedAddr) {
       logger.error(LOG_MODULES.CODESWARM, `All addresses failed for worker ${targetWorker.id}: [${sorted.join(', ')}]`);
-      await rollbackDispatch(task.id);
+      await rollbackDispatch(task.id, targetWorker.id);
       return NextResponse.json({ error: `Worker 不可达: ${lastError || 'all addresses failed'}` }, { status: 500 });
     }
 
-    // 递增 Worker currentTasks（DB + 内存同步）
-    await prisma.codeswarmWorker.update({
+    // DB currentTasks 已在上方事务内 +1,此处只需同步 dispatcher 内存
+    const freshWorker = await prisma.codeswarmWorker.findUnique({
       where: { id: targetWorker.id },
-      data: { currentTasks: { increment: 1 } },
+      select: { currentTasks: true },
     });
-    codeswarmDispatcher.syncWorkerLoad(targetWorker.nodeId, (targetWorker.currentTasks || 0) + 1);
-
-    // 注册任务超时
-    if (task.timeoutSec) {
-      await codeswarmDispatcher.registerTaskTimeout(task.id, task.timeoutSec);
+    if (freshWorker) {
+      codeswarmDispatcher.syncWorkerLoad(targetWorker.nodeId, freshWorker.currentTasks);
     }
+
+    // 注册任务超时（无 timeoutSec 时使用默认 7 天，与 Worker 侧 TASK_TIMEOUT_SEC 一致）
+    await codeswarmDispatcher.registerTaskTimeout(task.id, task.timeoutSec || 604800);
 
     logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} dispatched to ${targetWorker.id} via ${dispatchedAddr}`);
 
@@ -179,9 +208,18 @@ export async function POST(
   }
 }
 
-async function rollbackDispatch(taskId: string) {
-  await prisma.codeswarmTask.updateMany({
-    where: { id: taskId, state: 'dispatched' },
-    data: { state: 'queued', workerId: null, updatedAt: new Date() },
+async function rollbackDispatch(taskId: string, workerId?: string) {
+  await prisma.$transaction(async (tx) => {
+    const taskRollback = await tx.codeswarmTask.updateMany({
+      where: { id: taskId, state: 'dispatched' },
+      data: { state: 'queued', workerId: null, updatedAt: new Date() },
+    });
+    if (taskRollback.count > 0 && workerId) {
+      await tx.$executeRaw`
+        UPDATE "CodeswarmWorker"
+        SET "currentTasks" = "currentTasks" - 1
+        WHERE id = ${workerId} AND "currentTasks" > 0
+      `;
+    }
   }).catch(e => logger.error(LOG_MODULES.CODESWARM, '回滚任务状态失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
 }

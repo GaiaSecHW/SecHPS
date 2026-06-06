@@ -234,9 +234,15 @@ async function dispatchQueuedTasks(): Promise<void> {
 
       const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
       if (success) {
-        worker.currentTasks++;
-        // 同步 dispatcher 内存负载，避免后续分发超出容量
-        codeswarmDispatcher.syncWorkerLoad(worker.nodeId, worker.currentTasks);
+        // sendTaskToWorker 内部已事务性 +1 DB currentTasks + 内存镜像,不再需要外部递增
+        // 只需用最新 DB 值同步 dispatcher 内存(因为 worker 对象是 $queryRaw 快照,不是 dispatcher 内存中的 WorkerInfo)
+        const freshWorker = await prisma.codeswarmWorker.findUnique({
+          where: { id: worker.id },
+          select: { currentTasks: true },
+        });
+        if (freshWorker) {
+          codeswarmDispatcher.syncWorkerLoad(worker.nodeId, freshWorker.currentTasks);
+        }
         logger.info(LOG_MODULES.CODESWARM, `DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       }
     }
