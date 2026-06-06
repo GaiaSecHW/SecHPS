@@ -185,8 +185,12 @@ export class WorkerDaemon {
           this.server.log.error({ taskId: payload.taskId, error: err }, 'Task execution failed');
         })
         .finally(() => {
-          this.activeTasks.delete(payload.taskId);
-          this.semaphore.release();
+          // Fallback: only release if executeTask didn't release early after postResult
+          // (e.g. executeTask threw before reaching postResult)
+          if (this.activeTasks.has(payload.taskId)) {
+            this.activeTasks.delete(payload.taskId);
+            this.semaphore.release();
+          }
         });
 
       return reply.status(202).send({ taskId: payload.taskId, message: 'Task accepted' });
@@ -714,6 +718,15 @@ this.server.get('/health', async () => ({
       }).catch(err => {
         this.server.log.warn({ taskId, error: err }, 'postResult (success path) failed (non-blocking)');
       });
+
+      // Early release: postResult 已提交，任务槽位可立即释放
+      // 确保 Worker 上报的 semaphore 计数与 DB currentTasks 同步，
+      // 防止心跳 GREATEST 把已递减的 DB 值刷回旧值
+      if (this.activeTasks.has(taskId)) {
+        this.activeTasks.delete(taskId);
+        this.semaphore.release();
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released early after postResult (success path)`);
+      }
     } catch (error) {
       const isCancelled = this.cancelledTasks.has(taskId);
       const errorMsg = isCancelled ? 'Task cancelled by user' : (error instanceof Error ? error.message : String(error));
@@ -737,6 +750,13 @@ this.server.get('/health', async () => ({
       }).catch(err => {
         this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed (non-blocking)');
       });
+
+      // Early release: postResult 已提交，任务槽位可立即释放
+      if (this.activeTasks.has(taskId)) {
+        this.activeTasks.delete(taskId);
+        this.semaphore.release();
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released early after postResult (error path)`);
+      }
     } finally {
       clearTaskLogFile(taskId);
       this.cancelledTasks.delete(taskId);

@@ -31,6 +31,7 @@ class CodeswarmDispatcher {
   private streamCleanupTimer: ReturnType<typeof setInterval> | null = null;
   private dispatchedStuckTimer: ReturnType<typeof setInterval> | null = null;
   private dbQueuedScanTimer: ReturnType<typeof setInterval> | null = null;
+  private zombieCheckTimer: ReturnType<typeof setInterval> | null = null;
 
   async init() {
     if (this.initialized) return;
@@ -331,8 +332,9 @@ class CodeswarmDispatcher {
       existing.maxConcurrent = data.maxConcurrent;
       existing.lastHeartbeat = Date.now();
       // Worker semaphore 是实时真相源，用心跳上报值修正内存漂移
+      // 但不得超过 maxConcurrent（防止漂移导致永久满载）
       if (typeof data.currentTasks === 'number') {
-        existing.currentTasks = data.currentTasks;
+        existing.currentTasks = Math.min(data.currentTasks, existing.maxConcurrent);
       }
     } else {
       this.workers.set(data.nodeId, {
@@ -974,6 +976,152 @@ private lastNoWorkerLogTime = 0;
     this.cleanupTimer = setTimeout(runCleanup, initialDelay);
   }
 
+  // 僵尸任务一致性检查：检测 CodeswarmTask 与 TaskInstance 状态不一致
+  // 场景 A: CodeswarmTask=running/dispatched，但 TaskInstance 已经终态（completed/failed）
+  // 场景 B: CodeswarmTask=queued，且 platformTaskId 对应的 TaskInstance 不存在
+  private async checkZombieTasks() {
+    try {
+      // ── 场景 A：CodeswarmTask 还在 running/dispatched，但 TaskInstance 已终态（≥3分钟） ──
+      // 使用 LEFT JOIN 一次性查出两类僵尸：
+      //   A1: TaskInstance 已 completed/failed 且终态持续 ≥3 分钟（防 stop 路由瞬态误杀）
+      //   A2: TaskInstance 已被物理删除（ti.id IS NULL）
+      const zombieCandidates = await prisma.$queryRaw`
+        SELECT ct.id, ct."taskId", ct."workerId", ct."platformTaskId",
+               ti.status AS "tiStatus"
+        FROM "CodeswarmTask" ct
+        LEFT JOIN "TaskInstance" ti ON ct."platformTaskId" = ti.id
+        WHERE ct.state IN ('running', 'dispatched')
+          AND ct."platformTaskId" IS NOT NULL
+          AND (
+            (ti.status IN ('completed', 'failed') AND ti."completedAt" < NOW() - INTERVAL '3 minutes')
+            OR ti.id IS NULL
+          )
+        LIMIT 50
+      ` as { id: string; taskId: string; workerId: string | null; platformTaskId: string; tiStatus: string | null }[];
+
+      let zombieA = 0;
+      for (const zombie of zombieCandidates) {
+        const reason = !zombie.tiStatus
+          ? 'TaskInstance not found (deleted)'
+          : `TaskInstance is ${zombie.tiStatus} for >3min`;
+
+        try {
+          const txResult = await prisma.$transaction(async (tx) => {
+            // 条件更新：仅当仍为 running/dispatched 时才标记
+            const updateResult = await tx.codeswarmTask.updateMany({
+              where: { id: zombie.id, state: { in: ['running', 'dispatched'] } },
+              data: {
+                state: 'failed',
+                error: `Zombie task detected: ${reason}`,
+                completedAt: new Date(),
+                updatedAt: new Date(),
+              },
+            });
+
+            if (updateResult.count === 0) return { updated: false, workerId: null };
+
+            // 递减 Worker.currentTasks
+            if (zombie.workerId) {
+              await tx.codeswarmWorker.updateMany({
+                where: { id: zombie.workerId, currentTasks: { gt: 0 } },
+                data: { currentTasks: { decrement: 1 } },
+              });
+            }
+
+            return { updated: true, workerId: zombie.workerId };
+          });
+
+          if (txResult.updated) {
+            // 释放内存 Worker 槽位
+            if (txResult.workerId) {
+              const workerEntry = [...this.workers.values()].find(w => w.id === txResult.workerId);
+              if (workerEntry && workerEntry.currentTasks > 0) {
+                workerEntry.currentTasks--;
+              }
+            }
+
+            // 通知 Worker 取消进程
+            if (zombie.workerId) {
+              const worker = await prisma.codeswarmWorker.findUnique({
+                where: { id: zombie.workerId },
+                select: { address: true },
+              });
+              if (worker?.address) {
+                const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+                for (const addr of addresses) {
+                  try {
+                    await fetch(`http://${addr}/task/cancel`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ taskId: zombie.taskId }),
+                      signal: AbortSignal.timeout(3000),
+                    });
+                    break; // 第一个可达地址成功即可
+                  } catch { /* Worker 可能已离线，忽略 */ }
+                }
+              }
+            }
+
+            // 从 Redis 超时排序表移除
+            if (this.redis) {
+              await this.redis.zrem('codeswarm:task:timeouts', zombie.id);
+            }
+
+            zombieA++;
+            logger.warn(
+              LOG_MODULES.CODESWARM,
+              `僵尸任务[场景A] ${zombie.taskId} 已标记 failed（${reason}）`,
+            );
+          }
+        } catch (txErr) {
+          logger.error(LOG_MODULES.CODESWARM, `僵尸任务[场景A] 事务失败 ${zombie.taskId}`, {
+            details: { error: txErr instanceof Error ? txErr.message : String(txErr) },
+          });
+        }
+      }
+
+      // ── 场景 B：CodeswarmTask=queued，但 platformTaskId 对应的 TaskInstance 不存在 ──
+      const queuedOrphans = await prisma.$queryRaw`
+        SELECT ct.id, ct."taskId"
+        FROM "CodeswarmTask" ct
+        LEFT JOIN "TaskInstance" ti ON ct."platformTaskId" = ti.id
+        WHERE ct.state = 'queued' AND ti.id IS NULL AND ct."platformTaskId" IS NOT NULL
+        LIMIT 50
+      ` as { id: string; taskId: string }[];
+
+      let zombieB = 0;
+      for (const orphan of queuedOrphans) {
+        try {
+          const updated = await prisma.codeswarmTask.updateMany({
+            where: { id: orphan.id, state: 'queued' },
+            data: {
+              state: 'failed',
+              error: 'Zombie task detected: associated TaskInstance does not exist',
+              completedAt: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+          if (updated.count > 0) {
+            zombieB++;
+            logger.warn(LOG_MODULES.CODESWARM, `僵尸任务[场景B] ${orphan.taskId} 已标记 failed（TaskInstance 不存在）`);
+          }
+        } catch (txErr) {
+          logger.error(LOG_MODULES.CODESWARM, `僵尸任务[场景B] 更新失败 ${orphan.taskId}`, {
+            details: { error: txErr instanceof Error ? txErr.message : String(txErr) },
+          });
+        }
+      }
+
+      if (zombieA > 0 || zombieB > 0) {
+        logger.info(LOG_MODULES.CODESWARM, `僵尸任务扫描完成: 场景A=${zombieA}, 场景B=${zombieB}`);
+      }
+    } catch (e) {
+      logger.error(LOG_MODULES.CODESWARM, '僵尸任务扫描异常', {
+        details: { error: e instanceof Error ? e.message : String(e) },
+      });
+    }
+  }
+
   // 启动定时任务：掉线检测 + 超时扫描
   private startHealthChecks() {
     // 启动兜底轮询：每 5 分钟尝试分发队列中的任务（防止事件回调丢失）
@@ -992,6 +1140,8 @@ private lastNoWorkerLogTime = 0;
     this.dbQueuedScanTimer = setInterval(() => this.scanDbQueuedTasks().catch(e =>
       logger.warn(LOG_MODULES.CODESWARM, 'DB queued 扫描异常', { details: { error: e instanceof Error ? e.message : String(e) } })
     ), 30_000);
+    // 每 60 秒扫描僵尸任务（一致性检查：CodeswarmTask vs TaskInstance 状态不一致）
+    this.zombieCheckTimer = setInterval(() => this.checkZombieTasks(), 60_000);
     // 每日清理过期任务文件
     this.startCleanupScheduler();
   }
@@ -1278,6 +1428,7 @@ private lastNoWorkerLogTime = 0;
     if (this.streamCleanupTimer) clearInterval(this.streamCleanupTimer);
     if (this.dispatchedStuckTimer) clearInterval(this.dispatchedStuckTimer);
     if (this.dbQueuedScanTimer) clearInterval(this.dbQueuedScanTimer);
+    if (this.zombieCheckTimer) clearInterval(this.zombieCheckTimer);
     if (this.fallbackPollTimer) clearInterval(this.fallbackPollTimer);
     if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
     this.teardownRedis();
