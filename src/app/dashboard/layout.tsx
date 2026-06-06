@@ -1,46 +1,109 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
-  Home,
-  LayoutDashboard,
-  Users,
-  Settings,
-  MessageSquare,
-  LogOut,
-  Cog,
-  ClipboardCheck,
-  User,
-  Clock,
-  Award,
-  Bug,
-  TrendingUp,
-  Brain,
-  Zap,
-  Code,
   Activity,
-  Shield,
-  Search,
-  Terminal,
-  Puzzle,
-  Server,
-  Tags,
-  Layers,
+  Award,
+  Box,
+  Brain,
+  Bug,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
+  ClipboardList,
   Coins,
   GitBranch,
-  Megaphone,
-  ClipboardList,
-  Box,
+  Home,
   Key,
+  LayoutDashboard,
+  Layers,
+  LogOut,
   Network,
+  Server,
+  Terminal,
+  TrendingUp,
+  User,
+  Users,
+  Zap,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import type { CSSProperties } from 'react';
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  exact?: boolean;
+  roles?: Array<'admin' | 'developer' | 'user'>;
+  badge?: string;
+};
+
+type NavGroup = {
+  id: 'workspace' | 'developer' | 'evolution' | 'admin';
+  label: string;
+  shortLabel: string;
+  roles?: Array<'admin' | 'developer' | 'user'>;
+  items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'workspace',
+    label: '工作台',
+    shortLabel: '工作台',
+    roles: ['user', 'developer', 'admin'],
+    items: [
+      { href: '/dashboard', label: '首页', icon: <Home size={18} />, exact: true, roles: ['user', 'developer', 'admin'] },
+      { href: '/dashboard/overview', label: '仪表盘', icon: <LayoutDashboard size={18} />, roles: ['user', 'developer', 'admin'] },
+      { href: '/dashboard/task-builder', label: '我的任务', icon: <ClipboardList size={18} />, roles: ['user', 'developer', 'admin'] },
+    ],
+  },
+  {
+    id: 'developer',
+    label: '开发资产',
+    shortLabel: '开发',
+    roles: ['developer', 'admin'],
+    items: [
+      { href: '/dashboard/skills', label: 'Skill 市场', icon: <Award size={18} />, roles: ['developer', 'admin'] },
+      { href: '/dashboard/mcp-servers', label: 'MCP 市场', icon: <Server size={18} />, roles: ['developer', 'admin'] },
+      { href: '/dashboard/agent-apps', label: 'Agent 市场', icon: <Box size={18} />, roles: ['developer', 'admin'] },
+      { href: '/dashboard/agentflow-pipelines', label: '工作流编排', icon: <Layers size={18} />, roles: ['developer', 'admin'], badge: '建设中' },
+    ],
+  },
+  {
+    id: 'evolution',
+    label: '数据与进化',
+    shortLabel: '进化',
+    roles: ['developer', 'admin'],
+    items: [
+      { href: '/dashboard/evolution', label: '智能体进化', icon: <TrendingUp size={18} />, roles: ['developer', 'admin'], badge: '对接中' },
+      { href: '/dashboard/knowledge-graph', label: '知识图谱', icon: <Network size={18} />, roles: ['developer', 'admin'] },
+      { href: '/dashboard/data-feedback', label: '数据回流', icon: <GitBranch size={18} />, roles: ['developer', 'admin'] },
+      { href: '/dashboard/evaluation', label: '测评基准', icon: <ClipboardCheck size={18} />, roles: ['developer', 'admin'], badge: '对接中' },
+    ],
+  },
+  {
+    id: 'admin',
+    label: '系统管理',
+    shortLabel: '管理',
+    roles: ['admin'],
+    items: [
+      { href: '/dashboard/users', label: '用户管理', icon: <Users size={18} />, roles: ['admin'] },
+      { href: '/dashboard/models', label: '模型管理', icon: <Zap size={18} />, roles: ['admin'] },
+      { href: '/dashboard/admin/tenants', label: '租户管理', icon: <Layers size={18} />, roles: ['admin'] },
+      { href: '/dashboard/admin/api-keys', label: 'API Key 管理', icon: <Key size={18} />, roles: ['admin'] },
+      { href: '/dashboard/admin/sdk', label: '系统 SDK', icon: <Terminal size={18} />, roles: ['admin'] },
+      { href: '/dashboard/admin/monitoring', label: '系统监控', icon: <Activity size={18} />, roles: ['admin'] },
+      { href: '/dashboard/admin/vulnerabilities', label: '漏洞管理', icon: <Bug size={18} />, roles: ['admin'] },
+      { href: '/dashboard/codeswarm', label: '智能体集群', icon: <Server size={18} />, roles: ['admin'] },
+    ],
+  },
+];
 
 export default function DashboardLayout({
   children,
@@ -64,20 +127,21 @@ function DashboardLayoutContent({
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
   const [sidebarCollapsed, setSidebarCollapsed] = useState(searchParams.get('sidebar') === 'collapsed');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1024 && !sidebarCollapsed) {
+      if (window.innerWidth < 1024) {
         setSidebarCollapsed(true);
+        setMobileSidebarOpen(false);
       }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [sidebarCollapsed]);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -89,19 +153,18 @@ function DashboardLayoutContent({
     }
 
     try {
-      const parsedUser = JSON.parse(userData);
-      setUser(parsedUser);
-    } catch (e) {
+      setUser(JSON.parse(userData));
+    } catch {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       document.cookie = 'auth-token=; path=/; max-age=0';
       router.push('/login');
       return;
     }
+
     setLoading(false);
   }, [router]);
 
-  // 强制改密模态框状态
   const [forceChangePassword, setForceChangePassword] = useState(false);
   const [fcNewPassword, setFcNewPassword] = useState('');
   const [fcConfirmPassword, setFcConfirmPassword] = useState('');
@@ -146,7 +209,6 @@ function DashboardLayoutContent({
         return;
       }
 
-      // 强制注销
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       document.cookie = 'auth-token=; path=/; max-age=0';
@@ -165,10 +227,49 @@ function DashboardLayoutContent({
   }, [router]);
 
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed(prev => !prev);
+    setSidebarCollapsed((prev) => !prev);
   }, []);
 
-  const sidebarWidth = sidebarCollapsed ? 64 : 240;
+  const roleSet = useMemo(() => new Set<string>(user?.roles || []), [user]);
+
+  const canAccess = useCallback(
+    (roles?: Array<'admin' | 'developer' | 'user'>) => {
+      if (!roles || roles.length === 0) {
+        return true;
+      }
+      if (roleSet.has('admin') && roles.includes('admin')) {
+        return true;
+      }
+      if (roleSet.has('developer') && roles.includes('developer')) {
+        return true;
+      }
+      return roles.includes('user');
+    },
+    [roleSet],
+  );
+
+  const visibleGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => canAccess(item.roles)),
+      })).filter((group) => canAccess(group.roles) && group.items.length > 0),
+    [canAccess],
+  );
+
+  const activeGroup = useMemo(() => {
+    for (const group of visibleGroups) {
+      if (group.items.some((item) => isPathActive(pathname, item.href, item.exact))) {
+        return group;
+      }
+    }
+    return visibleGroups[0] ?? null;
+  }, [pathname, visibleGroups]);
+
+  const sidebarWidth = sidebarCollapsed ? 88 : 272;
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
 
   if (loading) {
     return (
@@ -179,261 +280,214 @@ function DashboardLayoutContent({
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-zinc-950">
-      <div className="flex h-full">
-        <aside
-          className={`fixed left-0 top-0 h-screen bg-zinc-900 border-r border-zinc-800 flex flex-col transition-all duration-300 ease-in-out z-30`}
-          style={{ width: sidebarWidth }}
-        >
+    <div className="h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100">
+      <div className="fixed inset-x-0 top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+        <div className="flex h-16 items-center gap-3 px-4 md:px-6">
           <button
-            onClick={toggleSidebar}
-            className="absolute -right-3 top-6 z-40 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 hover:bg-cyan-600 hover:text-white transition-colors shadow-lg border border-zinc-700"
-            title={sidebarCollapsed ? '展开菜单' : '收起菜单'}
+            onClick={() => setMobileSidebarOpen((prev) => !prev)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 lg:hidden"
+            title="切换侧栏"
           >
-            {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            <Layers size={18} />
           </button>
 
-          <div className={`border-b border-zinc-800/60 overflow-hidden ${sidebarCollapsed ? 'p-3 flex justify-center' : 'px-5 py-5'}`}>
-            {sidebarCollapsed ? (
-              <Brain size={22} className="text-cyan-400" />
-            ) : (
-              <>
-                <p className="text-xs text-zinc-500 mt-1 truncate">
-                  {user?.name || user?.username}
-                </p>
-              </>
-            )}
+          <div className="min-w-0 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/15 text-cyan-400 ring-1 ring-cyan-500/20">
+                <Brain size={18} />
+              </div>
+              <div className="hidden min-w-0 sm:block">
+                <p className="text-sm font-semibold text-zinc-100">SecHPS</p>
+                <p className="text-xs text-zinc-500">{user?.name || user?.username}</p>
+              </div>
+            </div>
           </div>
 
-          <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5 custom-scrollbar sidebar-scrollbar">
-            {!sidebarCollapsed && (
-              <div className="pt-3 pb-1 px-4">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">使用者视图</p>
-              </div>
-            )}
-            {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
-            
-            <NavLink href="/dashboard" icon={<Home size={18} />} collapsed={sidebarCollapsed} exact pathname={pathname}>
-              首页
-            </NavLink>
-            <NavLink href="/dashboard/overview" icon={<LayoutDashboard size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-              仪表盘
-            </NavLink>
-            <NavLink href="/dashboard/task-builder" icon={<ClipboardList size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-              我的任务
-            </NavLink>
-
-            {(user?.roles?.includes('developer') || user?.roles?.includes('admin')) && (
-              <>
-                {!sidebarCollapsed && (
-                  <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">开发者视图</p>
-                  </div>
-                )}
-                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
-
-                <NavLink href="/dashboard/skills" icon={<Award size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  Skill市场
-                </NavLink>
-                <NavLink href="/dashboard/mcp-servers" icon={<Server size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  MCP市场
-                </NavLink>
-                <NavLink href="/dashboard/agent-apps" icon={<Box size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  Agent市场
-                </NavLink>
-                <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  工作流编排<span className="text-[10px] text-blue-400 ml-1">(建设中)</span>
-                </NavLink>
-              </>
-            )}
-
-            {(user?.roles?.includes('developer') || user?.roles?.includes('admin')) && (
-              <>
-                {!sidebarCollapsed && (
-                  <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">数据与进化</p>
-                  </div>
-                )}
-                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
-
-                <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  智能体进化<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
-                </NavLink>
-                <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  知识图谱
-                </NavLink>
-                <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  数据回流
-                </NavLink>
-                <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  测评基准<span className="text-[10px] text-blue-400 ml-1">(对接中)</span>
-                </NavLink>
-              </>
-            )}
-
-            {user?.roles?.includes('admin') && (
-              <>
-                {!sidebarCollapsed && (
-                  <div className="pt-5 pb-1 px-4">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">管理员视图</p>
-                  </div>
-                )}
-                {sidebarCollapsed && <div className="pt-3 mx-3 border-t border-zinc-800/60" />}
-                
-                <NavLink href="/dashboard/users" icon={<Users size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  用户管理
-                </NavLink>
-                <NavLink href="/dashboard/models" icon={<Zap size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  模型管理
-                </NavLink>
-                <NavLink href="/dashboard/admin/tenants" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  租户管理
-                </NavLink>
-                <NavLink href="/dashboard/admin/api-keys" icon={<Key size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  API Key 管理
-                </NavLink>
-                <NavLink href="/dashboard/admin/sdk" icon={<Terminal size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  系统SDK
-                </NavLink>
-                <NavLink href="/dashboard/admin/monitoring" icon={<Activity size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  系统监控
-                </NavLink>
-                <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  漏洞管理
-                </NavLink>
-                <NavLink href="/dashboard/codeswarm" icon={<Server size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
-                  智能体集群
-                </NavLink>
-              </>
-            )}
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto lg:flex">
+            {visibleGroups.map((group) => {
+              const active = group.id === activeGroup?.id;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => router.push(group.items[0].href)}
+                  className={`whitespace-nowrap rounded-2xl px-4 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30'
+                      : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                  }`}
+                >
+                  {group.label}
+                </button>
+              );
+            })}
           </nav>
 
-          <div className={`border-t border-zinc-800/60 flex-shrink-0 ${sidebarCollapsed ? 'p-2' : 'p-3'}`}>
+          <div className="flex items-center gap-2">
+            <div className="hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-right md:block">
+              <p className="max-w-[200px] truncate text-sm font-medium text-zinc-100">{user?.name || user?.username}</p>
+              <p className="max-w-[200px] truncate text-xs text-zinc-500">{user?.email}</p>
+            </div>
+
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu((prev) => !prev)}
+                className="flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-600 text-sm font-semibold text-white">
+                  {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                </div>
+                <ChevronDown size={14} className={`transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showUserMenu && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute right-0 top-full z-30 mt-2 w-52 rounded-2xl border border-zinc-800 bg-zinc-900 p-1 shadow-xl">
+                    <Link
+                      href="/dashboard/profile"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                    >
+                      <User size={15} />
+                      个人中心
+                    </Link>
+                    <Link
+                      href="/dashboard/models"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                    >
+                      <Brain size={15} />
+                      我的模型
+                    </Link>
+                    <Link
+                      href="/dashboard/token-stats"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                    >
+                      <Coins size={15} />
+                      Token 统计
+                    </Link>
+                    <div className="my-1 border-t border-zinc-800" />
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        handleLogout();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <LogOut size={15} />
+                      退出登录
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-zinc-900 px-4 py-2 lg:hidden">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {visibleGroups.map((group) => {
+              const active = group.id === activeGroup?.id;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => router.push(group.items[0].href)}
+                  className={`whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
+                    active ? 'bg-cyan-500/15 text-cyan-300' : 'bg-zinc-900 text-zinc-400'
+                  }`}
+                >
+                  {group.shortLabel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {mobileSidebarOpen && <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setMobileSidebarOpen(false)} />}
+
+      <aside
+        className={`fixed top-16 z-30 h-[calc(100vh-4rem)] border-r border-zinc-800 bg-zinc-900/95 backdrop-blur transition-all duration-300 ease-in-out ${
+          mobileSidebarOpen ? 'left-0' : '-left-full'
+        } lg:left-0`}
+        style={{ width: sidebarWidth }}
+      >
+        <div className={`flex h-full flex-col ${sidebarCollapsed ? 'px-2 py-3' : 'px-3 py-4'}`}>
+          <div className={`mb-3 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between px-2'}`}>
+            {!sidebarCollapsed && (
+              <div className="min-w-0">
+                <p className="truncate text-xs uppercase tracking-[0.24em] text-zinc-500">{activeGroup?.label || '导航'}</p>
+                <p className="mt-1 text-sm font-medium text-zinc-200">当前模块菜单</p>
+              </div>
+            )}
+
+            <button
+              onClick={toggleSidebar}
+              className="hidden h-8 w-8 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-zinc-400 transition-colors hover:bg-cyan-600 hover:text-white lg:flex"
+              title={sidebarCollapsed ? '展开菜单' : '收起菜单'}
+            >
+              {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            </button>
+          </div>
+
+          <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar sidebar-scrollbar">
+            {(activeGroup?.items || []).map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                icon={item.icon}
+                collapsed={sidebarCollapsed}
+                exact={item.exact}
+                pathname={pathname}
+                badge={item.badge}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className={`border-t border-zinc-800/70 pt-3 ${sidebarCollapsed ? 'px-1' : 'px-2'}`}>
             <button
               onClick={handleLogout}
-              className={`flex items-center text-zinc-500 hover:text-zinc-200 transition-colors w-full rounded-lg px-2 py-2 hover:bg-zinc-800 ${sidebarCollapsed ? 'justify-center' : 'gap-2'}`}
+              className={`flex w-full items-center rounded-xl px-3 py-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}
               title={sidebarCollapsed ? '退出登录' : undefined}
             >
               <LogOut size={18} className="flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm truncate">退出登录</span>}
+              {!sidebarCollapsed && <span className="truncate text-sm">退出登录</span>}
             </button>
           </div>
-        </aside>
-
-        <div 
-          className="fixed right-0 top-0 h-screen flex flex-col transition-all duration-300 ease-in-out"
-          style={{ left: sidebarWidth }}
-        >
-          <header className="h-14 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 flex-shrink-0 relative z-50">
-            <div className="h-full flex items-center justify-between px-4 md:px-6 lg:px-8 gap-4">
-              <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
-              </div>
-
-              <div className="flex items-center flex-shrink-0">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center gap-2 bg-zinc-950/50 rounded-lg px-3 py-2 border border-zinc-700/30 hover:border-zinc-600/50 transition-colors max-w-xs md:max-w-sm lg:max-w-md"
-                  >
-                    {user?.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name || user.username}
-                        className="h-8 w-8 rounded-full ring-2 ring-cyan-500/30 flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-cyan-600 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm">
-                        {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-0.5 text-left overflow-hidden min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-zinc-100 text-sm truncate">{user?.name || user?.username}</span>
-                        {user?.roles?.includes('admin') && !user?.tenantId && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20 whitespace-nowrap">
-                            平台管理员
-                          </span>
-                        )}
-                        {user?.isIcsTenant && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20 whitespace-nowrap">
-                            ICSL
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
-                    </div>
-
-                    {user?.tenantId && (
-                      <>
-                        <div className="w-px h-6 bg-zinc-700/50 flex-shrink-0 hidden md:block" />
-                        <div className="flex flex-col gap-0.5 flex-shrink-0 hidden md:flex">
-                          <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded bg-blue-500/20 flex items-center justify-center">
-                              <span className="text-blue-400 text-[10px]">🏢</span>
-                            </div>
-                            <span className="text-zinc-400 text-[10px]">租户</span>
-                          </div>
-                          <span className="font-medium text-blue-400 text-xs truncate max-w-[80px]">{user?.tenantName || user?.tenantId}</span>
-                        </div>
-                      </>
-                    )}
-                  </button>
-
-                  {showUserMenu && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-30 py-1">
-                        <Link
-                          href="/dashboard/profile"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                        >
-                          <User size={15} />
-                          个人中心
-                        </Link>
-                        <Link
-                          href="/dashboard/models"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                        >
-                          <Brain size={15} />
-                          我的模型
-                        </Link>
-                        <Link
-                          href="/dashboard/token-stats"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-                        >
-                          <Coins size={15} />
-                          Token 统计
-                        </Link>
-                        <div className="my-1 border-t border-zinc-800" />
-                        <button
-                          onClick={() => { setShowUserMenu(false); handleLogout(); }}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-400 hover:bg-red-500/10 hover:text-red-400 transition-colors w-full"
-                        >
-                          <LogOut size={15} />
-                          退出登录
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-zinc-950 custom-scrollbar content-scrollbar">
-            <div className="w-full min-h-full p-4 md:p-6 lg:p-6">
-              <div className="w-full max-w-screen-2xl mx-auto">
-                <ErrorBoundary>
-                  {children}
-                </ErrorBoundary>
-              </div>
-            </div>
-          </main>
         </div>
+      </aside>
+
+      <div
+        className="fixed right-0 top-16 bottom-0 flex flex-col transition-all duration-300 ease-in-out lg:left-[var(--dashboard-sidebar-width)]"
+        style={{ '--dashboard-sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+      >
+        <main
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-950 custom-scrollbar content-scrollbar"
+        >
+          <div
+            className="w-full min-h-full p-4 md:p-6 lg:p-6 transition-all duration-300 ease-in-out"
+            style={{ paddingLeft: 16 }}
+          >
+            <div
+              className="mx-auto w-full max-w-screen-2xl transition-all duration-300 ease-in-out"
+              style={{ marginLeft: 0 }}
+            >
+              <ErrorBoundary>
+                <div
+                  className="transition-all duration-300 ease-in-out"
+                  style={{ paddingLeft: 0 }}
+                >
+                  {children}
+                </div>
+              </ErrorBoundary>
+            </div>
+          </div>
+        </main>
       </div>
 
       <Toaster
@@ -460,27 +514,50 @@ function DashboardLayoutContent({
         }}
       />
 
-      {/* 强制改密遮罩 */}
       {forceChangePassword && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100]">
-          <div className="bg-dark-surface rounded-xl shadow-2xl border border-gray-700/50 w-full max-w-md mx-4">
-            <div className="px-6 py-4 border-b border-gray-700/50">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-gray-700/50 bg-dark-surface shadow-2xl">
+            <div className="border-b border-gray-700/50 px-6 py-4">
               <h3 className="text-lg font-semibold text-white">首次登录 — 修改初始密码</h3>
-              <p className="text-sm text-gray-400 mt-1">请修改初始密码后方可使用系统</p>
+              <p className="mt-1 text-sm text-gray-400">请修改初始密码后方可使用系统</p>
             </div>
-            <form className="p-6 space-y-4" onSubmit={handleForceChangePassword}>
+            <form className="space-y-4 p-6" onSubmit={handleForceChangePassword}>
               {fcError && (
-                <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">{fcError}</div>
+                <div className="rounded-lg border border-red-500/30 bg-red-900/20 px-4 py-3 text-sm text-red-400">{fcError}</div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-300">新密码 <span className="text-red-400">*</span></label>
-                <input type="password" required value={fcNewPassword} onChange={(e) => setFcNewPassword(e.target.value)} minLength={6} className="mt-1 block w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100" placeholder="至少 6 位" />
+                <label className="block text-sm font-medium text-gray-300">
+                  新密码 <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={fcNewPassword}
+                  onChange={(e) => setFcNewPassword(e.target.value)}
+                  minLength={6}
+                  className="mt-1 block w-full rounded-md border border-gray-600 bg-dark-bg px-3 py-2 text-gray-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="至少 6 位"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300">确认新密码 <span className="text-red-400">*</span></label>
-                <input type="password" required value={fcConfirmPassword} onChange={(e) => setFcConfirmPassword(e.target.value)} minLength={6} className="mt-1 block w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100" placeholder="再次输入新密码" />
+                <label className="block text-sm font-medium text-gray-300">
+                  确认新密码 <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={fcConfirmPassword}
+                  onChange={(e) => setFcConfirmPassword(e.target.value)}
+                  minLength={6}
+                  className="mt-1 block w-full rounded-md border border-gray-600 bg-dark-bg px-3 py-2 text-gray-100 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="再次输入新密码"
+                />
               </div>
-              <button type="submit" disabled={fcLoading} className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-md hover:bg-primary-400 font-medium disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={fcLoading}
+                className="w-full rounded-md bg-primary-500 px-4 py-2.5 font-medium text-white disabled:opacity-50 hover:bg-primary-400"
+              >
                 {fcLoading ? '提交中...' : '确认修改并重新登录'}
               </button>
             </form>
@@ -491,6 +568,10 @@ function DashboardLayoutContent({
   );
 }
 
+function isPathActive(pathname: string, href: string, exact?: boolean) {
+  return exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+}
+
 function NavLink({
   href,
   icon,
@@ -498,6 +579,7 @@ function NavLink({
   collapsed,
   exact,
   pathname,
+  badge,
 }: {
   href: string;
   icon: React.ReactNode;
@@ -505,21 +587,31 @@ function NavLink({
   collapsed?: boolean;
   exact?: boolean;
   pathname: string;
+  badge?: string;
 }) {
-  const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
+  const isActive = isPathActive(pathname, href, exact);
 
   return (
     <Link
       href={href}
-      className={`flex items-center px-3 py-2 mx-2 rounded-lg transition-colors text-sm ${
+      className={`group flex items-center rounded-2xl transition-colors ${
         isActive
-          ? 'bg-cyan-500/15 text-cyan-400 border-l-2 border-cyan-500'
+          ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-inset ring-cyan-500/20'
           : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-      } ${collapsed ? 'justify-center' : 'gap-3'}`}
+      } ${collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2.5'}`}
       title={collapsed ? String(children) : undefined}
     >
-      <span className="flex-shrink-0 w-[18px] h-[18px]">{icon}</span>
-      {!collapsed && <span className="truncate min-w-0">{children}</span>}
+      <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center">{icon}</span>
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 truncate text-sm">{children}</span>
+          {badge && (
+            <span className={`rounded-full px-2 py-0.5 text-[10px] ${isActive ? 'bg-cyan-400/15 text-cyan-200' : 'bg-zinc-800 text-zinc-500'}`}>
+              {badge}
+            </span>
+          )}
+        </>
+      )}
     </Link>
   );
 }
