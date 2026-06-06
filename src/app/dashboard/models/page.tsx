@@ -98,6 +98,7 @@ export default function ModelsPage() {
   const [testResults, setTestResults] = useState<Record<string, {
     success: boolean;
     message: string;
+    error?: string;         // 详细错误信息（如 fetch failed 的完整描述）
     response?: string;      // 模型返回的内容
     usage?: {               // Token 使用量
       inputTokens: number;
@@ -377,6 +378,7 @@ export default function ModelsPage() {
         [model.id]: {
           success: data.success,
           message: data.message || (data.success ? '连接成功' : '连接失败'),
+          error: data.error,            // 保存详细错误信息
           response: data.response,      // 保存模型返回的内容
           usage: data.usage,            // 保存 Token 使用量
           duration: data.duration,      // 保存响应时间
@@ -386,15 +388,16 @@ export default function ModelsPage() {
 
       if (data.success) {
         setSuccess(`模型 "${model.name}" 连接测试成功${data.response ? `: ${data.response.substring(0, 100)}${data.response.length > 100 ? '...' : ''}` : ''}`);
-        scheduleCleanup(() => setSuccess(null), 10000);  // 延长到10秒
+        scheduleCleanup(() => setSuccess(null), 10000);
       } else {
-        setError(data.message || '连接失败');
+        const failMsg = data.error || data.message || '连接失败';
+        setError(failMsg);
         scheduleCleanup(() => setError(null), 10000);
       }
     } catch (err: any) {
       const errorMsg = err.message || '模型连接测试失败';
       setError(errorMsg);
-      scheduleCleanup(() => setError(null), 5000);
+      scheduleCleanup(() => setError(null), 10000);
       setTestResults({
         ...testResults,
         [model.id]: {
@@ -709,7 +712,7 @@ export default function ModelsPage() {
                                 <span className="ml-1 text-gray-500">({testResults[model.id].duration}ms)</span>
                               )}
                             </span>
-                            {testResults[model.id].response && (
+                            {testResults[model.id].success && testResults[model.id].response && (
                               <div className="mt-1 p-2 bg-[#0F172A] rounded text-xs text-gray-300 max-w-xs overflow-hidden">
                                 <div className="font-medium text-gray-500 mb-1">模型响应:</div>
                                 <div className="break-words">{testResults[model.id].response}</div>
@@ -718,6 +721,12 @@ export default function ModelsPage() {
                                     Token: {testResults[model.id].usage!.inputTokens} + {testResults[model.id].usage!.outputTokens}
                                   </div>
                                 )}
+                              </div>
+                            )}
+                            {!testResults[model.id].success && (testResults[model.id].error || testResults[model.id].message) && (
+                              <div className="mt-1 p-2 bg-[#0F172A] rounded text-xs text-red-300 max-w-xs overflow-hidden">
+                                <div className="font-medium text-gray-500 mb-1">错误详情:</div>
+                                <div className="break-words">{testResults[model.id].error || testResults[model.id].message}</div>
                               </div>
                             )}
                           </div>

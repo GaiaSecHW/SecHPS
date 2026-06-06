@@ -1183,16 +1183,34 @@ export async function testModelConnection(modelConfig: {
     const duration = Date.now() - startTime;
     
     let errorMessage = '请求失败';
+    let errorDetail = String(error);
     if (error instanceof Error && error.name === 'AbortError') {
       errorMessage = `连接超时 (${TEST_TIMEOUT_MS}ms)`;
+      errorDetail = `请求在 ${TEST_TIMEOUT_MS}ms 内未收到响应，可能是目标服务器响应过慢或网络不稳定`;
     } else if (error instanceof Error) {
       errorMessage = error.message;
+      if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
+        errorMessage = '网络连接失败';
+        errorDetail = `${error.message} — 目标服务器不可达，请检查: 1) API 地址是否正确 2) 服务器能否访问该地址 3) 是否有防火墙拦截`;
+      } else if (error.message.includes('ECONNRESET')) {
+        errorMessage = '连接被重置';
+        errorDetail = `${error.message} — 目标服务器主动断开了连接，可能是请求格式不被支持或服务器过载`;
+      } else if (error.message.includes('ETIMEDOUT')) {
+        errorMessage = '连接超时';
+        errorDetail = `${error.message} — TCP 连接建立超时，目标服务器可能不存在或网络不可达`;
+      } else if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
+        errorMessage = 'DNS 解析失败';
+        errorDetail = `${error.message} — API 地址域名无法解析，请检查 apiBaseUrl 是否正确`;
+      } else if (error.message.includes('CERT') || error.message.includes('TLS') || error.message.includes('ssl')) {
+        errorMessage = 'TLS/SSL 错误';
+        errorDetail = `${error.message} — HTTPS 证书验证失败，可能是自签证书或不受信任的证书`;
+      }
     }
     
     return { 
       success: false, 
       message: errorMessage, 
-      error: String(error),
+      error: errorDetail,
       duration
     };
   }
