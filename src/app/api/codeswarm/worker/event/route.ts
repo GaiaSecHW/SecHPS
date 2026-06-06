@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     });
 
     // Fallback: 通过 CodeswarmTask.platformTaskId 关联（处理绑定竞态）
+    // 必须验证 TaskInstance 真正存在，否则创建日志会触发 FK 约束错误
     if (!taskInstance) {
       try {
         const csTask = await prisma.codeswarmTask.findFirst({
@@ -25,7 +26,13 @@ export async function POST(request: Request) {
           select: { platformTaskId: true },
         });
         if (csTask?.platformTaskId) {
-          taskInstance = { id: csTask.platformTaskId };
+          const existingTaskInstance = await prisma.taskInstance.findUnique({
+            where: { id: csTask.platformTaskId },
+            select: { id: true },
+          });
+          if (existingTaskInstance) {
+            taskInstance = existingTaskInstance;
+          }
         }
       } catch {
         // Non-critical fallback
