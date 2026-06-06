@@ -27,6 +27,9 @@ import {
   FileSearch,
   User,
   RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Filter,
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/markdown';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -159,6 +162,7 @@ function SessionDetailContent({
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [isNodeMessagesExpanded, setIsNodeMessagesExpanded] = useState(true); // 节点消息区域默认展开（方便用户查看）
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
+  const [nodeMsgFilter, setNodeMsgFilter] = useState<string>('all'); // 节点消息类型过滤
   const [isRalphLoopExpanded, setIsRalphLoopExpanded] = useState(false);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
@@ -205,6 +209,9 @@ function SessionDetailContent({
   
   // 已加载完成的节点ID集合（不再重复加载）
   const loadedCompletedNodesRef = useRef<Set<string>>(new Set());
+  
+  const nodeMsgScrollRef = useRef<HTMLDivElement>(null);
+  const nodeMsgBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!evaluationId) return;
@@ -1808,78 +1815,148 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                        )}
                      </div>
                     
-                    {/* 节点消息 */}
-                    <div className="border border-gray-700/50 rounded-lg p-3">
-                      <button
-                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-300"
-                        onClick={() => setIsNodeMessagesExpanded(!isNodeMessagesExpanded)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <MessageSquare size={16} className="text-green-400" />
-                          <span>节点消息</span>
-                          <span className="text-xs text-gray-500 bg-dark-surface-hover px-2 py-0.5 rounded">
-                            {nodeMessages.length} 条
-                          </span>
-                        </div>
-                        {isNodeMessagesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </button>
-                      {isNodeMessagesExpanded && (
-                        <div className="mt-3 space-y-3 max-h-80 overflow-y-auto">
-                          {nodeMessages.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-2">该节点暂无消息</p>
-                          ) : (
-                            nodeMessages.map((message: any, index: number) => (
-                              <MessageBubble
-                                key={`${message.id}-${index}`}
-                                message={message}
-                                onCopy={() => {
-                                  navigator.clipboard.writeText(
-                                    typeof message.content === 'string' 
-                                      ? message.content 
-                                      : JSON.stringify(message.content, null, 2)
-                                  );
-                                }}
-                                onClick={() => {
-                                  setSelectedMessage(message);
-                                  let parts: any[] = [];
-                                  const content = message.content;
-                                  if (typeof content === 'string') {
-                                    try {
-                                      const parsed = JSON.parse(content);
-                                      if (Array.isArray(parsed)) {
-                                        parts = parsed;
-                                      } else {
-                                        parts = [{ type: 'text', text: content }];
-                                      }
-                                    } catch {
-                                      parts = [{ type: 'text', text: content }];
-                                    }
-                                  } else if (Array.isArray(content)) {
-                                    parts = content;
-                                  } else if (content) {
-                                    parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
-                                  }
-                                  setMessageDetail({
-                                    id: message.id,
-                                    role: message.role,
-                                    content: message.content,
-                                    createdAt: message.createdAt,
-                                    workflowNodeId: message.workflowNodeId,
-                                    parts: parts,
-                                    info: {
-                                      id: message.id,
-                                      role: message.role,
-                                      time: { created: message.createdAt },
-                                    },
-                                  });
-                                }}
-                                isSelected={selectedMessage?.id === message.id}
-                              />
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
+{/* 节点消息 */}
+                     <div className="border border-gray-700/50 rounded-lg p-3">
+                       <button
+                         className="w-full flex items-center justify-between text-sm font-semibold text-gray-300"
+                         onClick={() => setIsNodeMessagesExpanded(!isNodeMessagesExpanded)}
+                       >
+                         <div className="flex items-center gap-2">
+                           <MessageSquare size={16} className="text-green-400" />
+                           <span>节点消息</span>
+                           <span className="text-xs text-gray-500 bg-dark-surface-hover px-2 py-0.5 rounded">
+                             {nodeMessages.length} 条
+                           </span>
+                         </div>
+                         {isNodeMessagesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                       </button>
+                       {isNodeMessagesExpanded && (
+                         <>
+                           {/* 消息类型过滤 */}
+                           {nodeMessages.length > 0 && (
+                             <div className="mt-2 flex items-center gap-1">
+                               <Filter size={12} className="text-gray-500" />
+                               {[
+                                 { key: 'all', label: '全部' },
+                                 { key: 'user', label: '用户' },
+                                 { key: 'assistant', label: '助手' },
+                                 { key: 'tool', label: '工具' },
+                                 { key: 'error', label: '错误' },
+                               ].map(f => {
+                                 const count = f.key === 'all'
+                                   ? nodeMessages.length
+                                   : nodeMessages.filter((m: any) => {
+                                       if (f.key === 'user') return m.role === 'user' || m.event === 'user';
+                                       if (f.key === 'assistant') return m.role === 'assistant' || m.event === 'text' || m.event === 'thinking';
+                                       if (f.key === 'tool') return m.role === 'tool_call' || m.role === 'tool_result' || m.event === 'tool_use' || m.event === 'tool_result';
+                                       if (f.key === 'error') return m.role === 'error' || m.event === 'error';
+                                       return true;
+                                     }).length;
+                                 return (
+                                   <button
+                                     key={f.key}
+                                     onClick={() => setNodeMsgFilter(f.key)}
+                                     className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                                       nodeMsgFilter === f.key
+                                         ? 'bg-blue-600 text-white'
+                                         : 'bg-dark-surface-hover text-gray-400 hover:text-gray-200'
+                                     }`}
+                                   >
+                                     {f.label} ({count})
+                                   </button>
+                                 );
+                               })}
+                             </div>
+                           )}
+                           {/* 消息列表 */}
+                           <div ref={nodeMsgScrollRef} className="mt-2 space-y-3 max-h-[600px] overflow-y-auto scroll-smooth">
+                             {(() => {
+                               const filtered = nodeMsgFilter === 'all'
+                                 ? nodeMessages
+                                 : nodeMessages.filter((m: any) => {
+                                     if (nodeMsgFilter === 'user') return m.role === 'user' || m.event === 'user';
+                                     if (nodeMsgFilter === 'assistant') return m.role === 'assistant' || m.event === 'text' || m.event === 'thinking';
+                                     if (nodeMsgFilter === 'tool') return m.role === 'tool_call' || m.role === 'tool_result' || m.event === 'tool_use' || m.event === 'tool_result';
+                                     if (nodeMsgFilter === 'error') return m.role === 'error' || m.event === 'error';
+                                     return true;
+                                   });
+                               return filtered.length === 0 ? (
+                                 <p className="text-sm text-gray-500 text-center py-2">
+                                   {nodeMessages.length === 0 ? '该节点暂无消息' : '该类型暂无消息'}
+                                 </p>
+                               ) : (
+                                 filtered.map((message: any, index: number) => (
+                                   <MessageBubble
+                                     key={`${message.id}-${index}`}
+                                     message={message}
+                                     onCopy={() => {
+                                       navigator.clipboard.writeText(
+                                         typeof message.content === 'string' 
+                                           ? message.content 
+                                           : JSON.stringify(message.content, null, 2)
+                                       );
+                                     }}
+                                     onClick={() => {
+                                       setSelectedMessage(message);
+                                       let parts: any[] = [];
+                                       const content = message.content;
+                                       if (typeof content === 'string') {
+                                         try {
+                                           const parsed = JSON.parse(content);
+                                           if (Array.isArray(parsed)) {
+                                             parts = parsed;
+                                           } else {
+                                             parts = [{ type: 'text', text: content }];
+                                           }
+                                         } catch {
+                                           parts = [{ type: 'text', text: content }];
+                                         }
+                                       } else if (Array.isArray(content)) {
+                                         parts = content;
+                                       } else if (content) {
+                                         parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
+                                       }
+                                       setMessageDetail({
+                                         id: message.id,
+                                         role: message.role,
+                                         content: message.content,
+                                         createdAt: message.createdAt,
+                                         workflowNodeId: message.workflowNodeId,
+                                         parts: parts,
+                                         info: {
+                                           id: message.id,
+                                           role: message.role,
+                                           time: { created: message.createdAt },
+                                         },
+                                       });
+                                     }}
+                                     isSelected={selectedMessage?.id === message.id}
+                                   />
+                                 ))
+                               );
+                             })()}
+                             <div ref={nodeMsgBottomRef} />
+                           </div>
+                           {/* 跳转按钮 */}
+                           {nodeMessages.length > 10 && (
+                             <div className="mt-2 flex justify-center gap-2">
+                               <button
+                                 onClick={() => nodeMsgScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                                 className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+                               >
+                                 <ArrowUp size={12} /> 顶部
+                               </button>
+                               <button
+                                 onClick={() => nodeMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                                 className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+                               >
+                                 <ArrowDown size={12} /> 底部
+                               </button>
+                             </div>
+                           )}
+                         </>
+                       )}
+                     </div>
                     
 {/* 节点子Agent - 使用API返回的children列表（而非从nodeMessages提取） */}
                       <div className="border border-gray-700/50 rounded-lg p-3">
