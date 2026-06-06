@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
-import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check, Server } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check, Server, ArrowUp, ArrowDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Task {
@@ -91,9 +91,12 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
   const { data, loading, error, refetch } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState<string>('all');
+  const [eventFilter, setEventFilter] = useState<string>('all');
   const [deletingTask, setDeletingTask] = useState<string | null>(null);
   const [taskEvents, setTaskEvents] = useState<Record<string, any[]>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eventScrollRef = useRef<HTMLDivElement>(null);
+  const eventBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (selectedTaskId) {
@@ -464,7 +467,6 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         return t.length > max ? t.slice(0, max) + '...' : t;
                       };
 
-                      // Merge consecutive chunk events into one
                       const CHUNK_TYPES = new Set(['agent_message_chunk', 'log_chunk', 'agent_log_chunk']);
                       const events: any[] = [];
                       for (const ev of rawEvents) {
@@ -482,35 +484,94 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
                       const getEventDisplay = (event: any) => {
                         const t = event.type;
-                        if (t === 'skill_start') return { badge: 'Skill', detail: event.skill || '', color: 'bg-purple-900/50 text-purple-400' };
-                        if (t === 'skill_complete') return { badge: 'Skill Done', detail: event.skill || '', color: 'bg-purple-900/40 text-purple-300' };
-                        if (t === 'tool_call') return { badge: 'Tool', detail: event.tool || '', color: 'bg-yellow-900/50 text-yellow-400' };
-                        if (t === 'tool_call_update') return { badge: 'Result', detail: cleanText(event.output || '', 100), color: 'bg-blue-900/50 text-blue-300' };
-                        if (t === 'error') return { badge: 'Error', detail: event.message || '', color: 'bg-red-900/50 text-red-400' };
-                        if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', detail: event.phase || event.message || '', color: 'bg-cyan-900/50 text-cyan-400' };
-                        if (CHUNK_TYPES.has(t)) return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-gray-700 text-gray-400' };
-                        return { badge: t, detail: event.content || event.message || '', color: 'bg-gray-700 text-gray-300' };
+                        if (t === 'skill_start') return { badge: 'Skill', detail: event.skill || '', color: 'bg-purple-900/50 text-purple-400', category: 'skill' };
+                        if (t === 'skill_complete') return { badge: 'Skill Done', detail: event.skill || '', color: 'bg-purple-900/40 text-purple-300', category: 'skill' };
+                        if (t === 'tool_call') return { badge: 'Tool', detail: event.tool || '', color: 'bg-yellow-900/50 text-yellow-400', category: 'tool' };
+                        if (t === 'tool_call_update') return { badge: 'Result', detail: cleanText(event.output || '', 100), color: 'bg-blue-900/50 text-blue-300', category: 'tool' };
+                        if (t === 'error') return { badge: 'Error', detail: event.message || '', color: 'bg-red-900/50 text-red-400', category: 'error' };
+                        if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', detail: event.phase || event.message || '', color: 'bg-cyan-900/50 text-cyan-400', category: 'phase' };
+                        if (CHUNK_TYPES.has(t)) return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-gray-700 text-gray-400', category: 'log' };
+                        return { badge: t, detail: event.content || event.message || '', color: 'bg-gray-700 text-gray-300', category: 'other' };
                       };
+
+                      const EVENT_FILTERS = [
+                        { key: 'all', label: '全部' },
+                        { key: 'tool', label: '工具' },
+                        { key: 'log', label: '日志' },
+                        { key: 'error', label: '错误' },
+                        { key: 'phase', label: '阶段' },
+                        { key: 'skill', label: 'Skill' },
+                      ];
+
+                      const filteredEvents = eventFilter === 'all'
+                        ? events
+                        : events.filter(ev => getEventDisplay(ev).category === eventFilter);
 
                       return (
                         <div>
-                          <h4 className="text-sm font-medium text-gray-400 mb-2">
-                            执行日志 ({events.length} 条)
-                          </h4>
-                          <div className="bg-gray-900 rounded-lg p-3 max-h-72 overflow-y-auto">
-                            <div className="space-y-0.5 font-mono text-xs">
-                              {events.map((event: any, i: number) => {
-                                const { badge, detail, color } = getEventDisplay(event);
-                                return (
-                                  <div key={i} className="flex items-start space-x-1.5">
-                                    <span className="text-gray-600 shrink-0">{new Date(event.timestamp || event._createdAt).toLocaleTimeString()}</span>
-                                    <span className={`px-1 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
-                                    {detail && <span className="text-gray-400 truncate">{detail}</span>}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-medium text-gray-400">
+                              执行日志 ({filteredEvents.length}/{events.length} 条)
+                            </h4>
                           </div>
+                          {/* 事件类型过滤 */}
+                          <div className="flex items-center gap-1 mb-2">
+                            <Filter size={12} className="text-gray-500" />
+                            {EVENT_FILTERS.map(f => {
+                              const count = f.key === 'all'
+                                ? events.length
+                                : events.filter(ev => getEventDisplay(ev).category === f.key).length;
+                              return (
+                                <button
+                                  key={f.key}
+                                  onClick={() => setEventFilter(f.key)}
+                                  className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                                    eventFilter === f.key
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-dark-surface-hover text-gray-400 hover:text-gray-200'
+                                  }`}
+                                >
+                                  {f.label} ({count})
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div ref={eventScrollRef} className="bg-gray-900 rounded-lg p-3 max-h-[500px] overflow-y-auto scroll-smooth">
+                            {filteredEvents.length === 0 ? (
+                              <p className="text-xs text-gray-500 text-center py-2">该类型暂无事件</p>
+                            ) : (
+                              <div className="space-y-0.5 font-mono text-xs">
+                                {filteredEvents.map((event: any, i: number) => {
+                                  const { badge, detail, color } = getEventDisplay(event);
+                                  return (
+                                    <div key={i} className="flex items-start space-x-1.5">
+                                      <span className="text-gray-600 shrink-0">{new Date(event.timestamp || event._createdAt).toLocaleTimeString()}</span>
+                                      <span className={`px-1 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
+                                      {detail && <span className="text-gray-400 truncate">{detail}</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div ref={eventBottomRef} />
+                          </div>
+                          {/* 跳转按钮 */}
+                          {filteredEvents.length > 20 && (
+                            <div className="mt-2 flex justify-center gap-2">
+                              <button
+                                onClick={() => eventScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                                className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+                              >
+                                <ArrowUp size={12} /> 顶部
+                              </button>
+                              <button
+                                onClick={() => eventBottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                                className="flex items-center gap-1 px-3 py-1 text-xs text-gray-400 hover:text-gray-200 bg-dark-surface-hover hover:bg-gray-700 rounded transition-colors"
+                              >
+                                <ArrowDown size={12} /> 底部
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
