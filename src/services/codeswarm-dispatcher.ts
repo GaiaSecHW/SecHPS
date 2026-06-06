@@ -689,17 +689,19 @@ const dispatched = await this.dispatchOne(dbTaskId);
     }
   }
 
-  // 快速健康检查：向 Worker /health 端点发送 GET 请求
+  // 快速健康检查：向 Worker /health 端点发送 GET 请求（支持逗号分隔多地址）
   private async pingWorker(address: string): Promise<boolean> {
-    try {
-      const resp = await fetch(`http://${address}/health`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000),
-      });
-      return resp.ok;
-    } catch {
-      return false;
+    const addresses = address.split(',').map(a => a.trim()).filter(Boolean);
+    for (const addr of addresses) {
+      try {
+        const resp = await fetch(`http://${addr}/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000),
+        });
+        if (resp.ok) return true;
+      } catch { /* 尝试下一个地址 */ }
     }
+    return false;
   }
 
   private sleep(ms: number) {
