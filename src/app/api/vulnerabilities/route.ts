@@ -9,6 +9,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { buildDateRangeFilter, buildStatusFilter } from '@/lib/query-optimizer';
 import { generateId } from '@/lib/id-generator';
+import { normalizeFindingKind, serializeVulnerability } from '@/lib/vulnerability/serializer';
 
 // GET /api/vulnerabilities - 获取漏洞列表
 // 数据隔离：基于租户上下文过滤，普通租户用户只能看到同租户项目的漏洞
@@ -99,11 +100,19 @@ export async function GET(request: Request) {
           id: true,
           taskId: true,
           projectId: true,
+          evaluationId: true,
+          skillExecutionId: true,
           title: true,
           description: true,
           type: true,
+          findingKind: true,
           cwe: true,
+          cve: true,
           severity: true,
+          confidence: true,
+          filePath: true,
+          lineStart: true,
+          fingerprint: true,
           location: true,
           POC: true,
           vulnerable: true,
@@ -126,7 +135,12 @@ export async function GET(request: Request) {
       prisma.vulnerability.count({ where }),
     ]);
 
-    return NextResponse.json(createPaginatedResponse(vulnerabilities, total, pageNum, pageLimit));
+    const data = vulnerabilities.map(vulnerability => ({
+      ...vulnerability,
+      findingKind: normalizeFindingKind(vulnerability.findingKind, vulnerability.vulnerable),
+    }));
+
+    return NextResponse.json(createPaginatedResponse(data, total, pageNum, pageLimit));
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞列表错误', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
@@ -146,16 +160,48 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       projectId,
+      taskId,
+      evaluationId,
       skillExecutionId,
+      categoryId,
+      patternId,
       title,
       description,
       type,
+      findingKind,
       cwe,
+      cve,
+      owasp,
       severity,
+      confidence,
+      engineName,
+      source,
+      fingerprint,
+      impact,
+      attackVector,
+      triggerCondition,
+      verificationConclusion,
+      filePath,
+      lineStart,
+      lineEnd,
+      functionName,
       location,
+      language,
+      codeSnippet,
       POC,
       vulnerable,
+      evidence,
+      trace,
+      references,
+      reportSummary,
+      standards,
       fixSuggestion,
+      rawReport,
+      repoUrl,
+      branch,
+      commitSha,
+      buildId,
+      scanAt,
     } = body;
 
     if (!projectId || !title || !description || !type || !severity) {
@@ -175,16 +221,48 @@ export async function POST(request: Request) {
       data: {
         id: generateId('vuln'),
         projectId,
+        taskId: taskId || null,
+        evaluationId: evaluationId || null,
         skillExecutionId,
+        categoryId: categoryId || null,
+        patternId: patternId || null,
         title,
         description,
         type,
+        findingKind: findingKind || normalizeFindingKind(undefined, vulnerable),
         cwe,
+        cve: cve || null,
+        owasp: owasp || null,
         severity,
+        confidence: typeof confidence === 'number' ? confidence : 80,
+        engineName: engineName || null,
+        source: source || 'manual',
+        fingerprint: fingerprint || null,
+        impact: impact || null,
+        attackVector: attackVector || null,
+        triggerCondition: triggerCondition || null,
+        verificationConclusion: verificationConclusion || null,
+        filePath: filePath || null,
+        lineStart: typeof lineStart === 'number' ? lineStart : null,
+        lineEnd: typeof lineEnd === 'number' ? lineEnd : null,
+        functionName: functionName || null,
         location,
+        language: language || null,
+        codeSnippet: codeSnippet || null,
         POC,
         vulnerable: vulnerable ?? true,
+        evidenceJson: evidence ? JSON.stringify(evidence) : null,
+        traceJson: trace ? JSON.stringify(trace) : null,
+        referencesJson: references ? JSON.stringify(references) : null,
+        reportSummaryJson: reportSummary ? JSON.stringify(reportSummary) : null,
+        standardsJson: standards ? JSON.stringify(standards) : null,
         fixSuggestion,
+        rawReport: rawReport || null,
+        repoUrl: repoUrl || null,
+        branch: branch || null,
+        commitSha: commitSha || null,
+        buildId: buildId || null,
+        scanAt: scanAt ? new Date(scanAt) : null,
         status: 'new',
         updatedAt: new Date(),
       },
@@ -203,7 +281,7 @@ export async function POST(request: Request) {
 
     logger.create(LOG_MODULES.VULNERABILITY, payload, vulnerability.id, { title: vulnerability.title, type, severity, projectId });
 
-    return NextResponse.json({ vulnerability }, { status: 201 });
+    return NextResponse.json({ vulnerability: serializeVulnerability(vulnerability) }, { status: 201 });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '创建漏洞错误', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

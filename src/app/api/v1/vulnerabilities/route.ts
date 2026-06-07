@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { badRequest, notFound, internalError } from '@/lib/api-errors';
 import { prisma } from '@/lib/prisma';
 import { normalizeSeverity, generateVulnerabilityId } from '@/lib/vulnerability/parser';
+import { normalizeFindingKind } from '@/lib/vulnerability/serializer';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 const MAX_VULNERABILITIES_PER_REQUEST = 100;
@@ -76,12 +77,40 @@ export async function POST(request: NextRequest) {
       type: string;
       cwe: string | null;
       severity: string;
+      findingKind: string;
+      confidence: number;
+      cve: string | null;
+      owasp: string | null;
       skill: string | null;
+      engineName: string | null;
+      source: string | null;
+      fingerprint: string | null;
+      impact: string | null;
+      attackVector: string | null;
+      triggerCondition: string | null;
+      verificationConclusion: string | null;
       location: string | null;
+      lineStart: number | null;
+      lineEnd: number | null;
+      functionName: string | null;
+      language: string | null;
       POC: string | null;
+      codeSnippet: string | null;
       vulnerable: boolean;
       fixSuggestion: string | null;
       rawReport: string | null;
+      repoUrl: string | null;
+      branch: string | null;
+      commitSha: string | null;
+      buildId: string | null;
+      scanAt: Date | null;
+      evidenceJson: string | null;
+      traceJson: string | null;
+      referencesJson: string | null;
+      reportSummaryJson: string | null;
+      standardsJson: string | null;
+      categoryId: string | null;
+      patternId: string | null;
       filePath: string | null;
       status: string;
       updatedAt: Date;
@@ -102,23 +131,54 @@ export async function POST(request: NextRequest) {
 
       const id = generateVulnerabilityId();
       const severity = normalizeSeverity(vuln.severity as string | undefined);
+      const vulnerable = (vuln.vulnerable as boolean) ?? true;
+      const findingKind = normalizeFindingKind(vuln.findingKind as string | undefined, vulnerable);
+      const confidence = typeof vuln.confidence === 'number' ? vuln.confidence : 80;
       batchData.push({
         id,
         taskId: taskId as string,
         projectId: (body as Record<string, unknown>).projectId as string || null,
         evaluationId: (evaluationId as string) || null,
         skillExecutionId: (skillExecutionId as string) || null,
+        categoryId: (vuln.categoryId as string) || null,
+        patternId: (vuln.patternId as string) || null,
         title,
         description: (vuln.description as string) || '',
         type,
+        findingKind,
         cwe: (vuln.cwe as string) || null,
+        cve: (vuln.cve as string) || null,
+        owasp: (vuln.owasp as string) || null,
         severity,
+        confidence,
         skill: (vuln.skill as string) || null,
+        engineName: (vuln.engineName as string) || null,
+        source: (vuln.source as string) || 'imported',
+        fingerprint: (vuln.fingerprint as string) || null,
+        impact: (vuln.impact as string) || null,
+        attackVector: (vuln.attackVector as string) || null,
+        triggerCondition: (vuln.triggerCondition as string) || null,
+        verificationConclusion: (vuln.verificationConclusion as string) || null,
         location: (vuln.location as string) || null,
+        lineStart: typeof vuln.lineStart === 'number' ? vuln.lineStart : null,
+        lineEnd: typeof vuln.lineEnd === 'number' ? vuln.lineEnd : null,
+        functionName: (vuln.functionName as string) || null,
+        language: (vuln.language as string) || null,
         POC: (vuln.POC as string) || null,
-        vulnerable: (vuln.vulnerable as boolean) ?? true,
+        codeSnippet: (vuln.codeSnippet as string) || null,
+        vulnerable,
         fixSuggestion: (vuln.fixSuggestion as string) || null,
         rawReport: (vuln.rawReport as string) || null,
+        repoUrl: (vuln.repoUrl as string) || null,
+        branch: (vuln.branch as string) || null,
+        commitSha: (vuln.commitSha as string) || null,
+        buildId: (vuln.buildId as string) || null,
+        scanAt: typeof vuln.scanAt === 'string' ? new Date(vuln.scanAt) : null,
+        evidenceJson: vuln.evidence ? JSON.stringify(vuln.evidence) : null,
+        traceJson: vuln.trace ? JSON.stringify(vuln.trace) : null,
+        referencesJson: vuln.references ? JSON.stringify(vuln.references) : null,
+        reportSummaryJson: vuln.reportSummary ? JSON.stringify(vuln.reportSummary) : null,
+        standardsJson: vuln.standards ? JSON.stringify(vuln.standards) : null,
         filePath: (filePath as string) || null,
         status: 'new',
         updatedAt: new Date(),

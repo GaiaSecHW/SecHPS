@@ -4,6 +4,7 @@ import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { serializeVulnerability } from '@/lib/vulnerability/serializer';
 
 // GET /api/vulnerabilities/:id - 获取单个漏洞详情
 // 数据隔离：通过项目归属验证租户访问权限
@@ -29,6 +30,12 @@ export async function GET(
         TaskInstance: {
           select: { id: true, name: true, userId: true, tenantId: true },
         },
+        VulnerabilityCategory: {
+          select: { id: true, label: true, value: true },
+        },
+        VulnerabilityPattern: {
+          select: { id: true, displayName: true, name: true },
+        },
       },
     });
 
@@ -49,17 +56,7 @@ export async function GET(
       }
     }
 
-    const result = {
-      ...vulnerability,
-      rawReport: vulnerability.rawReport
-        ? (() => {
-            const urls = vulnerability.rawReport.split(';').map(p => p.trim()).filter(p => p.startsWith('http://') || p.startsWith('https://'));
-            return { hasRawReport: urls.length > 0, files: urls.map(u => ({ name: u.split('/').pop()?.split('?')[0] || 'raw-report' })) };
-          })()
-        : { hasRawReport: false, files: [] },
-      Project: vulnerability.Project ? { id: vulnerability.Project.id, name: vulnerability.Project.name } : null,
-      TaskInstance: vulnerability.TaskInstance ? { id: vulnerability.TaskInstance.id, name: vulnerability.TaskInstance.name } : null,
-    };
+    const result = serializeVulnerability(vulnerability);
 
     return NextResponse.json({ vulnerability: result });
   } catch (error) {

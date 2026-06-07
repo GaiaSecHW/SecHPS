@@ -277,14 +277,16 @@ async function ensureIndependentGitRepo(localPath: string): Promise<void> {
 }
 
 async function writeFilesToLocalDir(repoName: string, files: Map<string, Buffer>): Promise<string> {
-  const localPath = join(process.cwd(), AGENT_HARNESS_LOCAL_PATH, repoName);
+  const workspaceRoot = process.cwd();
+  const harnessRoot = join(workspaceRoot, AGENT_HARNESS_LOCAL_PATH);
+  const localPath = join(harnessRoot, repoName);
   
   await ensureIndependentGitRepo(localPath);
   
   const cleanedFiles = removeCommonPrefix(files);
   
   for (const [relativePath, content] of cleanedFiles) {
-    const filePath = join(localPath, relativePath);
+    const filePath = join(/*turbopackIgnore: true*/ localPath, relativePath);
     const dirPath = dirname(filePath);
     
     await mkdir(dirPath, { recursive: true });

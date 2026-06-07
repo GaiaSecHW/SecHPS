@@ -293,8 +293,8 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
 
         for (const entry of zipEntries) {
           if (!entry.isDirectory) {
-            const entryPath = join(inputDir, entry.entryName);
-            const entryDir = join(inputDir, entry.entryName.split('/').slice(0, -1).join('/'));
+            const entryPath = join(/*turbopackIgnore: true*/ inputDir, entry.entryName);
+            const entryDir = join(/*turbopackIgnore: true*/ inputDir, entry.entryName.split('/').slice(0, -1).join('/'));
             if (entry.entryName.includes('/')) {
               await mkdir(entryDir, { recursive: true });
             }
@@ -304,7 +304,7 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
         }
         serverLog.info(`[TaskCreation] 解压完成，已解压 ${zipEntries.filter(e => !e.isDirectory).length} 个文件到 ${TASK_INPUT_DIR}/`);
       } else {
-        const destPath = join(inputDir, file.name);
+        const destPath = join(/*turbopackIgnore: true*/ inputDir, file.name);
         await writeFile(destPath, file.buffer);
         filePath = destPath;
         serverLog.info(`[TaskCreation] 写入上传文件: ${destPath}`);

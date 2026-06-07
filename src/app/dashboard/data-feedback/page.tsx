@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown } from 'lucide-react';
+import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown, FileText, Copy, AlertTriangle } from 'lucide-react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { apiGet } from '@/lib/api-client';
+import { MarkdownContent } from '@/components/markdown/MarkdownContent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ interface TraceData {
   resultTruncated: boolean;
 }
 
-type Tab = 'events' | 'skills' | 'tools' | 'reasoning' | 'result';
+type Tab = 'report' | 'events' | 'skills' | 'tools' | 'reasoning' | 'result';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -317,6 +318,93 @@ function ReasoningTab({ reasoning }: { reasoning: any[] }) {
   );
 }
 
+// ─── Report Tab ───────────────────────────────────────────────────────────────
+
+function ReportTab({ csTask, instance, resultTruncated }: {
+  csTask: any;
+  instance: any;
+  resultTruncated: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const reportContent = csTask?.reportContent || csTask?.result || csTask?.error || instance?.errorMessage || '';
+  const reportSource = csTask?.reportContent ? '安全报告'
+    : csTask?.result ? '执行结果'
+    : (csTask?.error || instance?.errorMessage) ? '错误信息'
+    : '暂无报告';
+  const isErrorReport = Boolean(!csTask?.reportContent && !csTask?.result && (csTask?.error || instance?.errorMessage));
+
+  const handleCopy = useCallback(async () => {
+    if (!reportContent) return;
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(reportContent);
+    } else {
+      const textArea = document.createElement('textarea');
+      textArea.value = reportContent;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }, [reportContent]);
+
+  if (!reportContent) {
+    return (
+      <div className="flex flex-col items-center justify-center h-72 text-gray-500 border border-dashed border-gray-700/70 rounded-xl bg-gray-900/20">
+        <FileText className="w-12 h-12 opacity-30 mb-3" />
+        <p className="text-sm">当前疑点暂无报告内容</p>
+        <p className="text-xs mt-1">可切换到事件流或执行诊断查看任务过程</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-blue-300">
+              <FileText className="w-4 h-4" />
+              <h3 className="text-sm font-semibold">疑点报告</h3>
+              {resultTruncated && <span className="text-[11px] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-300">内容已截断</span>}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">优先展示任务产出的正式报告；没有报告时回退展示执行结果或错误信息。</p>
+          </div>
+          <button
+            onClick={handleCopy}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-surface-hover hover:bg-gray-700 text-xs text-gray-200 transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copied ? '已复制' : '复制报告'}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-700/60 bg-gray-950/50 overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-700/60 bg-dark-surface-hover/50">
+          <div className="flex items-center gap-2">
+            {isErrorReport && <AlertTriangle className="w-4 h-4 text-red-400" />}
+            <span className={`text-sm font-medium ${isErrorReport ? 'text-red-300' : 'text-gray-100'}`}>{reportSource}</span>
+          </div>
+          <span className="text-xs text-gray-500">{reportContent.length.toLocaleString('zh-CN')} 字符</span>
+        </div>
+        <div className="max-h-[calc(100vh-390px)] min-h-96 overflow-y-auto p-5">
+          {isErrorReport ? (
+            <pre className="text-sm text-red-300 whitespace-pre-wrap break-words leading-6">{reportContent}</pre>
+          ) : (
+            <MarkdownContent className="!px-0 !mx-0" maxWidth="full" variant="docs">
+              {reportContent}
+            </MarkdownContent>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Result Tab ───────────────────────────────────────────────────────────────
 
 function ResultTab({ csTask, instance, execLogs, logHasMore, loadingLogs, onLoadMoreLogs, resultTruncated }: {
@@ -395,7 +483,7 @@ function Empty({ text }: { text: string }) {
 function TracePanel({ taskId }: { taskId: string }) {
   const [trace, setTrace] = useState<TraceData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<Tab>('result');
+  const [tab, setTab] = useState<Tab>('report');
 
   // Events pagination
   const [events, setEvents] = useState<any[]>([]);
@@ -487,19 +575,6 @@ function TracePanel({ taskId }: { taskId: string }) {
       .finally(() => setLoading(false));
   }, [taskId]);
 
-  // Auto-load first page of exec logs when trace loads (default tab is 'result')
-  useEffect(() => {
-    if (!trace?.instance) return;
-    if (!logsLoadedRef.current) {
-      logsLoadedRef.current = true;
-      if (logCountRef.current > 0) {
-        logHasMoreRef.current = true;
-        setLogHasMore(true);
-        loadMoreLogs();
-      }
-    }
-  }, [trace, loadMoreLogs]);
-
   const handleTabChange = useCallback((newTab: Tab) => {
     setTab(newTab);
     const needsEvents = newTab === 'events' || newTab === 'skills' || newTab === 'tools';
@@ -533,26 +608,38 @@ function TracePanel({ taskId }: { taskId: string }) {
   const displayEvents = events ?? [];
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
+    { key: 'report', label: '报告' },
     { key: 'events', label: '事件流', count: eventCount },
     { key: 'skills', label: 'Skill', count: skillCount },
     { key: 'tools', label: '工具', count: toolCount },
     { key: 'reasoning', label: '思考', count: sessionExtract?.reasoning?.length },
-    { key: 'result', label: '结果', count: execLogCount || undefined },
+    { key: 'result', label: '执行诊断', count: execLogCount || undefined },
   ];
 
   return (
     <div className="flex flex-col h-full">
       {/* Meta */}
-      <div className="shrink-0 grid grid-cols-2 gap-x-6 gap-y-1 text-xs pb-3">
-        <div><span className="text-gray-500">任务名称：</span><span className="text-gray-200">{instance.name}</span></div>
-        <div><span className="text-gray-500">Agent：</span><span className="text-gray-200">{instance.agentName}</span></div>
-        <div><span className="text-gray-500">模型：</span><span className="text-gray-200">{instance.modelName || csTask?.model || '-'}</span></div>
-        <div><span className="text-gray-500">引擎：</span><span className="text-gray-200">{csTask?.engine || '-'}</span></div>
-        <div><span className="text-gray-500">目标产品：</span><span className="text-gray-200">{instance.targetProduct || '-'}</span></div>
-        <div><span className="text-gray-500">耗时：</span><span className="text-gray-200">{fmtDuration(instance.startedAt, instance.completedAt)}</span></div>
-        {csTask?.workspacePath && (
-          <div className="col-span-2"><span className="text-gray-500">工作目录：</span><code className="text-gray-300">{csTask.workspacePath}</code></div>
-        )}
+      <div className="shrink-0 rounded-xl border border-gray-700/50 bg-gray-900/30 p-4 mb-3">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {statusBadge(instance.status, csTask?.state || null)}
+              <h2 className="text-base font-semibold text-white truncate">{instance.name}</h2>
+            </div>
+            <p className="text-xs text-gray-500">疑点详情以报告为主，执行事件、Skill、工具调用作为辅助溯源。</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-xs">
+          <div><span className="text-gray-500">Agent：</span><span className="text-gray-200">{instance.agentName}</span></div>
+          <div><span className="text-gray-500">模型：</span><span className="text-gray-200">{instance.modelName || csTask?.model || '-'}</span></div>
+          <div><span className="text-gray-500">引擎：</span><span className="text-gray-200">{csTask?.engine || '-'}</span></div>
+          <div><span className="text-gray-500">目标产品：</span><span className="text-gray-200">{instance.targetProduct || '-'}</span></div>
+          <div><span className="text-gray-500">耗时：</span><span className="text-gray-200">{fmtDuration(instance.startedAt, instance.completedAt)}</span></div>
+          <div><span className="text-gray-500">创建时间：</span><span className="text-gray-200">{fmtTime(instance.createdAt)}</span></div>
+          {csTask?.workspacePath && (
+            <div className="col-span-2 lg:col-span-3"><span className="text-gray-500">工作目录：</span><code className="text-gray-300 break-all">{csTask.workspacePath}</code></div>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -572,6 +659,7 @@ function TracePanel({ taskId }: { taskId: string }) {
 
       {/* Tab Content */}
       <div className="flex-1 min-h-0 overflow-y-auto mt-3">
+        {tab === 'report' && <ReportTab csTask={csTask} instance={instance} resultTruncated={resultTruncated} />}
         {tab === 'events' && (loadingEvents && events.length === 0 ? (
           <div className="flex items-center justify-center h-32"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
         ) : (
@@ -618,8 +706,8 @@ export default function DataFeedbackPage() {
             <GitBranch size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">数据回流</h1>
-            <p className="text-sm text-gray-400 mt-0.5">任务执行 Trace 记录</p>
+            <h1 className="text-xl font-semibold text-white">疑点上报中心</h1>
+            <p className="text-sm text-gray-400 mt-0.5">聚焦疑点报告，保留执行 Trace 溯源</p>
           </div>
         </div>
         <button
@@ -688,7 +776,7 @@ export default function DataFeedbackPage() {
           ) : (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500">
               <GitBranch className="w-12 h-12 opacity-30 mb-3" />
-              <p className="text-sm">选择左侧任务查看执行 Trace</p>
+              <p className="text-sm">选择左侧任务查看疑点报告</p>
             </div>
           )}
         </div>

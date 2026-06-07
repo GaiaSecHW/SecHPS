@@ -9,16 +9,23 @@ export interface ParsedVulnerability {
   title: string;
   description: string;
   type: string;
+  findingKind?: 'vulnerability' | 'suspicion';
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
   location?: string;          // 问题代码位置
   POC?: string;               // POC 验证代码
   filePath?: string;          // 兼容旧格式
   lineStart?: number;         // 兼容旧格式
   lineEnd?: number;           // 兼容旧格式
+  functionName?: string;
+  language?: string;
   codeSnippet?: string;       // 兼容旧格式
   recommendation?: string;
   cwe?: string;
   cve?: string;
+  impact?: string;
+  attackVector?: string;
+  triggerCondition?: string;
+  source?: string;
   confidence: number; // 0-100
 }
 
@@ -146,17 +153,25 @@ function parseVulnerability(block: string): ParsedVulnerability | null {
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       return {
+        vulnerable: parsed.vulnerable,
         title: parsed.title || '未命名漏洞',
         description: parsed.description || '',
         type: parsed.type || 'unknown',
+        findingKind: parsed.findingKind || (parsed.vulnerable === false ? 'suspicion' : 'vulnerability'),
         severity: parseSeverity(parsed.severity),
         filePath: parsed.filePath || parsed.file,
         lineStart: parsed.lineStart || parsed.line,
         lineEnd: parsed.lineEnd || parsed.line,
+        functionName: parsed.functionName,
+        language: parsed.language,
         codeSnippet: parsed.codeSnippet || parsed.code,
         recommendation: parsed.recommendation || parsed.fix,
         cwe: parsed.cwe,
         cve: parsed.cve,
+        impact: parsed.impact,
+        attackVector: parsed.attackVector,
+        triggerCondition: parsed.triggerCondition,
+        source: parsed.source || 'ai-parser',
         confidence: parsed.confidence || 80,
       };
     }
@@ -187,11 +202,13 @@ function parseVulnerability(block: string): ParsedVulnerability | null {
       title: titleMatch[1],
       description: descriptionMatch?.[1] || '',
       type: 'unknown',
+      findingKind: 'vulnerability',
       severity: severityMatch ? parseSeverity(severityMatch[1]) : 'medium',
       filePath: filePathMatch?.[1],
       lineStart,
       lineEnd,
       cwe: cweMatch?.[1],
+      source: 'ai-parser',
       confidence: confidenceMatch ? parseInt(confidenceMatch[1], 10) : 80,
     };
   } catch (error) {

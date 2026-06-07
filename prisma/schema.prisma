@@ -1866,17 +1866,45 @@ model Vulnerability {
   projectId                 String?
   evaluationId              String?
   skillExecutionId          String?
+  categoryId                String?
+  patternId                 String?
   title                     String
   description               String
   type                      String
+  findingKind               String?                     @default("vulnerability")
   cwe                       String?
+  cve                       String?
+  owasp                     String?
   severity                  String
+  confidence                Float?                      @default(80)
   skill                     String?
+  engineName                String?
+  source                    String?
+  fingerprint               String?
+  impact                    String?
+  attackVector              String?
+  triggerCondition          String?
+  verificationConclusion    String?
   location                  String?
+  lineStart                 Int?
+  lineEnd                   Int?
+  functionName              String?
+  language                  String?
   POC                       String?
+  codeSnippet               String?
   vulnerable                Boolean?                    @default(true)
   fixSuggestion             String?
   rawReport                 String?
+  repoUrl                   String?
+  branch                    String?
+  commitSha                 String?
+  buildId                   String?
+  scanAt                    DateTime? @db.Timestamptz
+  evidenceJson              String?
+  traceJson                 String?
+  referencesJson            String?
+  reportSummaryJson         String?
+  standardsJson             String?
   filePath                  String?
   status                    String                      @default("new")
   falsePositiveReason       String?
@@ -1894,13 +1922,19 @@ model Vulnerability {
   Project                   Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   EvaluationSession         EvaluationSession?          @relation(fields: [evaluationId], references: [id])
   SkillExecution            SkillExecution?             @relation(fields: [skillExecutionId], references: [id])
+  VulnerabilityCategory     VulnerabilityCategory?      @relation(fields: [categoryId], references: [id])
+  VulnerabilityPattern      VulnerabilityPattern?       @relation(fields: [patternId], references: [id])
 
   @@index([vulnerable])
   @@index([taskId])
   @@index([projectId])
   @@index([evaluationId])
+  @@index([categoryId])
+  @@index([patternId])
   @@index([status])
   @@index([severity])
+  @@index([findingKind])
+  @@index([fingerprint])
   @@index([type])
   @@index([createdAt])
   @@index([taskId, status])
@@ -1919,6 +1953,7 @@ model VulnerabilityCategory {
   createdAt            DateTime               @default(now()) @db.Timestamptz
   updatedAt            DateTime @db.Timestamptz
   VulnerabilityPattern VulnerabilityPattern[]
+  Vulnerability        Vulnerability[]
 
   @@index([isActive])
   @@index([value])
@@ -1942,6 +1977,7 @@ model VulnerabilityPattern {
   createdAt             DateTime              @default(now()) @db.Timestamptz
   updatedAt             DateTime @db.Timestamptz
   VulnerabilityCategory VulnerabilityCategory @relation(fields: [categoryId], references: [id])
+  Vulnerability         Vulnerability[]
 
   @@index([isActive])
   @@index([categoryId])
