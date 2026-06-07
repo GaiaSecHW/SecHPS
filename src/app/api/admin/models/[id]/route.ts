@@ -5,6 +5,14 @@ import { isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
+function isValidIntegerRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isValidNumberRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
 // 获取单个模型配置
 export async function GET(
   request: Request,
@@ -56,6 +64,9 @@ export async function GET(
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
       routeType: model.routeType,
+      maxTokens: model.maxTokens ?? 65536,
+      contextWindow: model.contextWindow ?? 130000,
+      temperature: model.temperature ?? 0.3,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,
@@ -90,7 +101,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isDefault } = body;
 
     // 检查模型是否存在
     const existingModel = await prisma.modelConfig.findUnique({
@@ -127,6 +138,26 @@ export async function PUT(
       }
     }
 
+    // 验证 maxTokens、contextWindow 和 temperature 范围
+    if (maxTokens !== undefined && !isValidIntegerRange(maxTokens, 256, 192000)) {
+      return NextResponse.json(
+        { error: 'maxTokens 必须是 256-192000 之间的整数' },
+        { status: 400 }
+      );
+    }
+    if (contextWindow !== undefined && !isValidIntegerRange(contextWindow, 0, 1000000)) {
+      return NextResponse.json(
+        { error: 'contextWindow 必须是 0-1000000 之间的整数' },
+        { status: 400 }
+      );
+    }
+    if (temperature !== undefined && !isValidNumberRange(temperature, 0, 2)) {
+      return NextResponse.json(
+        { error: 'temperature 必须在 0-2 之间' },
+        { status: 400 }
+      );
+    }
+
     // 如果设置为默认模型，先将其他默认模型的模型 isDefault 设为 false
     if (isDefault === true && !existingModel.isDefault) {
       await prisma.modelConfig.updateMany({
@@ -156,6 +187,9 @@ export async function PUT(
         updateData.routeType = routeType;
       }
     }
+    if (maxTokens !== undefined) updateData.maxTokens = maxTokens;
+    if (contextWindow !== undefined) updateData.contextWindow = contextWindow;
+    if (temperature !== undefined) updateData.temperature = temperature;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isDefault !== undefined) updateData.isDefault = isDefault;
 
@@ -174,6 +208,9 @@ export async function PUT(
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
       routeType: model.routeType,
+      maxTokens: model.maxTokens ?? 65536,
+      contextWindow: model.contextWindow ?? 130000,
+      temperature: model.temperature ?? 0.3,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,

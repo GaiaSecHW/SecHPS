@@ -7,6 +7,14 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
 import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 
+function isValidIntegerRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isValidNumberRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
   return {
@@ -21,9 +29,9 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     hasApiKey: !!model.apiKey,  // 仅返回是否有 API Key 的标识
     models: JSON.parse(model.models),
     routeType: model.routeType,
-    maxTokens: model.maxTokens ?? 4096,
-    contextWindow: model.contextWindow ?? 0,
-    temperature: model.temperature ?? 0.7,
+    maxTokens: model.maxTokens ?? 65536,
+    contextWindow: model.contextWindow ?? 130000,
+    temperature: model.temperature ?? 0.3,
     isActive: model.isActive,
     isDefault: model.isDefault,
     isPublic: model.isPublic,
@@ -163,16 +171,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // 验证 maxTokens 和 temperature 范围
-    const finalMaxTokens = maxTokens ?? 32000;
+    // 验证 maxTokens、contextWindow 和 temperature 范围
+    const finalMaxTokens = maxTokens ?? 65536;
+    const finalContextWindow = contextWindow ?? 130000;
     const finalTemperature = temperature ?? 0.3;
-    if (finalMaxTokens < 256 || finalMaxTokens > 192000) {
+    if (!isValidIntegerRange(finalMaxTokens, 256, 192000)) {
       return NextResponse.json(
-        { error: 'maxTokens 必须在 256-192000 之间' },
+        { error: 'maxTokens 必须是 256-192000 之间的整数' },
         { status: 400 }
       );
     }
-    if (finalTemperature < 0 || finalTemperature > 2) {
+    if (!isValidIntegerRange(finalContextWindow, 0, 1000000)) {
+      return NextResponse.json(
+        { error: 'contextWindow 必须是 0-1000000 之间的整数' },
+        { status: 400 }
+      );
+    }
+    if (!isValidNumberRange(finalTemperature, 0, 2)) {
       return NextResponse.json(
         { error: 'temperature 必须在 0-2 之间' },
         { status: 400 }
@@ -218,7 +233,7 @@ export async function POST(request: Request) {
         models: JSON.stringify(models),
         routeType: providerType === 'openai' ? routeType || 'default' : null,
         maxTokens: finalMaxTokens,
-        contextWindow: contextWindow ?? 0,
+        contextWindow: finalContextWindow,
         temperature: finalTemperature,
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isSystemModel && isDefault ? isDefault : false,  // 只有系统模型可设默认

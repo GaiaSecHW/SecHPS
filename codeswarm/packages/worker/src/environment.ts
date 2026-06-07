@@ -47,6 +47,22 @@ function extractModelId(model: string): string {
   return model;
 }
 
+interface ModelLimits {
+  contextWindow?: number;
+  maxTokens?: number;
+}
+
+function buildModelLimit(limits?: ModelLimits): Record<string, number> | undefined {
+  const limit: Record<string, number> = {};
+  if (typeof limits?.contextWindow === 'number' && Number.isFinite(limits.contextWindow)) {
+    limit.context = limits.contextWindow;
+  }
+  if (typeof limits?.maxTokens === 'number' && Number.isFinite(limits.maxTokens)) {
+    limit.output = limits.maxTokens;
+  }
+  return Object.keys(limit).length > 0 ? limit : undefined;
+}
+
 /**
  * Build the opencode.json model/provider config for a given model, apiKey, and apiBaseUrl.
  * Returns a partial config object to merge into the opencode.json.
@@ -57,7 +73,7 @@ function extractModelId(model: string): string {
  *
  * Without apiBaseUrl, we just set the model and inject apiKey into the existing provider.
  */
-function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): Record<string, any> {
+export function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string, limits?: ModelLimits): Record<string, any> {
   const config: Record<string, any> = {};
   if (!model) return config;
 
@@ -69,23 +85,24 @@ function buildModelConfig(model: string, apiKey?: string, apiBaseUrl?: string): 
     // opencode resolves this as: provider "custom-MiniMax", model key "MiniMax/MiniMax-M2.5"
     // This matches examples like "alibaba-cn/MiniMax/MiniMax-M2.7" from opencode models list.
     config.model = `${customProviderId}/${model}`;
-    if (apiKey) {
-      config.provider = {
-        ...(config.provider || {}),
-        [customProviderId]: {
-          npm: '@ai-sdk/openai-compatible',
-          name: deriveProviderId(model),
-          models: {
-            // Key = raw model name for opencode model lookup; name = display name (modelId only)
-            [model]: { name: modelId },
-          },
-          options: {
-            apiKey,
-            baseURL: apiBaseUrl,
+    const modelLimit = buildModelLimit(limits);
+    config.provider = {
+      ...(config.provider || {}),
+      [customProviderId]: {
+        npm: '@ai-sdk/openai-compatible',
+        name: deriveProviderId(model),
+        models: {
+          [model]: {
+            name: modelId,
+            ...(modelLimit ? { limit: modelLimit } : {}),
           },
         },
-      };
-    }
+        options: {
+          ...(apiKey ? { apiKey } : {}),
+          baseURL: apiBaseUrl,
+        },
+      },
+    };
   } else {
     const providerId = deriveProviderId(model);
     const modelId = extractModelId(model);
@@ -217,7 +234,10 @@ export class EnvironmentFactory {
 
             if (payload.model || payload.apiKey || payload.apiBaseUrl) {
               progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}, apiBaseUrl=${payload.apiBaseUrl || 'none'}`);
-              const modelConfig = buildModelConfig(payload.model || '', payload.apiKey, payload.apiBaseUrl);
+              const modelConfig = buildModelConfig(payload.model || '', payload.apiKey, payload.apiBaseUrl, {
+                contextWindow: payload.contextWindow,
+                maxTokens: payload.maxTokens,
+              });
               Object.assign(config, modelConfig);
               if (modelConfig.model) progress(`配置模型: ${modelConfig.model} (from ${payload.model})`);
               if (modelConfig.provider) {
@@ -256,7 +276,10 @@ export class EnvironmentFactory {
 
                 if (payload.model || payload.apiKey || payload.apiBaseUrl) {
                   progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}, apiBaseUrl=${payload.apiBaseUrl || 'none'}`);
-                  const modelConfig = buildModelConfig(payload.model || '', payload.apiKey, payload.apiBaseUrl);
+                  const modelConfig = buildModelConfig(payload.model || '', payload.apiKey, payload.apiBaseUrl, {
+                    contextWindow: payload.contextWindow,
+                    maxTokens: payload.maxTokens,
+                  });
                   Object.assign(config, modelConfig);
                   if (modelConfig.model) progress(`配置模型(subdir): ${modelConfig.model} (from ${payload.model})`);
                   fs.writeFileSync(subdirOpencodeJsonPath, JSON.stringify(config, null, 2));
@@ -275,7 +298,10 @@ export class EnvironmentFactory {
             const autoConfig: Record<string, any> = {
               "$schema": "https://opencode.ai/config.json",
             };
-            const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl);
+            const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl, {
+              contextWindow: payload.contextWindow,
+              maxTokens: payload.maxTokens,
+            });
             Object.assign(autoConfig, modelConfig);
             if (payload.agent) {
               autoConfig.default_agent = payload.agent;
@@ -343,7 +369,10 @@ export class EnvironmentFactory {
       if (engine !== 'claudecode') {
         const opencodeConfig: Record<string, any> = {};
         if (payload.model) {
-          const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl);
+          const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl, {
+            contextWindow: payload.contextWindow,
+            maxTokens: payload.maxTokens,
+          });
           Object.assign(opencodeConfig, modelConfig);
           if (modelConfig.model) progress(`配置模型: ${modelConfig.model} (from ${payload.model})`);
           if (modelConfig.provider) {

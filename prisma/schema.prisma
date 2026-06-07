@@ -334,6 +334,8 @@ model CodeswarmTask {
   preferredWorkerNodeId String?
   targetProduct     String?
   apiBaseUrl       String?
+  maxTokens        Int?
+  contextWindow    Int?
   platformTaskId    String?
   sessionId         String?
   events            String?
@@ -649,8 +651,8 @@ model ModelConfig {
   apiKey              String
   models              String
   routeType           String?
-  maxTokens           Int                   @default(32000)
-  contextWindow       Int                   @default(0)
+  maxTokens           Int                   @default(65536)
+  contextWindow       Int                   @default(130000)
   temperature         Float                 @default(0.3)
   isActive            Boolean               @default(true)
   isDefault           Boolean               @default(false)

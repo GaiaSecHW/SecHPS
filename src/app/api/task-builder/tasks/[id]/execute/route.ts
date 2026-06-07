@@ -74,6 +74,8 @@ export async function POST(
             name: true,
             models: true,
             apiBaseUrl: true,
+            maxTokens: true,
+            contextWindow: true,
           },
         },
       },
@@ -109,7 +111,7 @@ export async function POST(
     const mergedScripts = task.mergedScripts || task.scripts || undefined;
 
     // 模型验证：在修改任务状态之前验证，避免任务卡在 running
-    let modelConfigForExec: { apiKey?: string; apiBaseUrl?: string; models?: string } | null = null;
+    let modelConfigForExec: { apiKey?: string; apiBaseUrl?: string; models?: string; maxTokens?: number; contextWindow?: number } | null = null;
     const effectiveModelIdPre = overrideModelId || task.modelId || null;
     if (effectiveModelIdPre && effectiveModelIdPre !== task.modelId) {
       const newModelConfig = await prisma.modelConfig.findUnique({
@@ -121,7 +123,7 @@ export async function POST(
             { isPublic: true },
           ],
         },
-        select: { apiKey: true, apiBaseUrl: true, models: true },
+        select: { apiKey: true, apiBaseUrl: true, models: true, maxTokens: true, contextWindow: true },
       });
       if (!newModelConfig) {
         return NextResponse.json({ error: '指定的模型配置不存在或无权使用' }, { status: 403 });
@@ -199,7 +201,7 @@ export async function POST(
             { isPublic: true },
           ],
         },
-        select: { apiKey: true, apiBaseUrl: true, models: true },
+        select: { apiKey: true, apiBaseUrl: true, models: true, maxTokens: true, contextWindow: true },
       });
       if (!newModelConfig) {
         return NextResponse.json({ error: '指定的模型配置不存在或无权使用' }, { status: 403 });
@@ -223,6 +225,8 @@ export async function POST(
 
     const apiKey = modelConfigForExec?.apiKey || task.ModelConfig?.apiKey || undefined;
     const apiBaseUrl = modelConfigForExec?.apiBaseUrl || task.ModelConfig?.apiBaseUrl || undefined;
+    const maxTokens = modelConfigForExec?.maxTokens ?? task.ModelConfig?.maxTokens ?? undefined;
+    const contextWindow = modelConfigForExec?.contextWindow ?? task.ModelConfig?.contextWindow ?? undefined;
     const timeoutSec = TASK_TIMEOUT_SEC;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
@@ -246,7 +250,7 @@ export async function POST(
       INSERT INTO "CodeswarmTask" (
         id, "taskId", state, instruction, "projectPath", "workspacePath",
         skills, scripts, mcps, model, "apiKey", "timeoutSec",
-        engine, agent, "targetProduct", "apiBaseUrl",
+        engine, agent, "targetProduct", "apiBaseUrl", "maxTokens", "contextWindow",
         "platformTaskId", "createdAt", "updatedAt"
       ) VALUES (
         ${codeswarmDbId}, ${codeswarmTaskId}, 'queued',
@@ -255,7 +259,7 @@ export async function POST(
         ${scripts ? JSON.stringify(scripts) : null},
         NULL, ${model || null}, ${apiKey || null}, ${timeoutSec},
         ${engine}, ${agentName || null},
-        ${task.targetProduct || null}, ${apiBaseUrl || null},
+        ${task.targetProduct || null}, ${apiBaseUrl || null}, ${maxTokens ?? null}, ${contextWindow ?? null},
         ${id}, NOW(), NOW()
       )
     `);
@@ -306,6 +310,8 @@ export async function POST(
           preferredWorkerNodeId: null,
           targetProduct: task.targetProduct || null,
           apiBaseUrl: apiBaseUrl || null,
+          maxTokens: maxTokens ?? null,
+          contextWindow: contextWindow ?? null,
         };
         const success = await codeswarmDispatcher.sendTaskToWorker(taskRow, worker);
         if (success) {

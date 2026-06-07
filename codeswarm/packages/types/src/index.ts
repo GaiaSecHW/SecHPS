@@ -110,6 +110,9 @@ export const TaskPayloadSchema = z.object({
   apiKey: z.string().optional(),
   // API base URL for custom endpoints (e.g. private model router)
   apiBaseUrl: z.string().optional(),
+  // Model token limits for opencode provider model config
+  maxTokens: z.number().optional(),
+  contextWindow: z.number().optional(),
   // NFS passthrough: skip copying project files, use this path directly as workspace
   workspacePath: z.string().optional(),
   // Override callback URL (orchestrator backend address)

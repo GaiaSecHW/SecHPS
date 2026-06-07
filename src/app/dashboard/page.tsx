@@ -66,8 +66,8 @@ export default function DashboardPage() {
         <div className="relative px-6 md:px-10 py-8 md:py-14 flex flex-col items-center text-center">
           {/* 品牌名 */}
           <div className="flex items-center gap-3 mb-4 md:mb-6">
-            <div className="w-10 md:w-12 h-10 md:h-12 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <Shield size={24} className="text-white" />
+            <div className="w-20 md:w-24 h-20 md:h-24 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20 overflow-hidden">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight">
               <span className="text-zinc-100">SecICSL</span>

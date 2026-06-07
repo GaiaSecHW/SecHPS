@@ -41,7 +41,7 @@ interface ModelConfig {
   isActive: boolean;
   isDefault: boolean;
   isPublic: boolean;
-  contextWindow: number;  // 学习到的上下文窗口大小
+  contextWindow: number;  // 上下文窗口大小
   createdAt: string;
   updatedAt: string;
 }
@@ -60,6 +60,7 @@ interface ModelFormData {
   apiKey: string;
   models: string;
   maxTokens: number;      // 最大输出 token 数
+  contextWindow: number;  // 上下文窗口大小
   temperature: number;    // 温度参数
   isActive: boolean;
   isPublic: boolean;
@@ -67,6 +68,10 @@ interface ModelFormData {
   isDefault: boolean;      // 默认模型（仅系统模型可设置）
   changeApiKey: boolean;   // 确认修改 API Key
 }
+
+const DEFAULT_MAX_TOKENS = 65536;
+const DEFAULT_CONTEXT_WINDOW = 130000;
+const DEFAULT_TEMPERATURE = 0.3;
 
 export default function ModelsPage() {
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -118,8 +123,9 @@ export default function ModelsPage() {
     apiBaseUrl: '',
     apiKey: '',
     models: '',
-    maxTokens: 32000,
-    temperature: 0.3,  // 默认温度 0.3
+    maxTokens: DEFAULT_MAX_TOKENS,
+    contextWindow: DEFAULT_CONTEXT_WINDOW,
+    temperature: DEFAULT_TEMPERATURE,
     isActive: true,
     isPublic: false,
     isSystemModel: false,
@@ -183,8 +189,9 @@ export default function ModelsPage() {
       apiBaseUrl: '',
       apiKey: '',
       models: '',
-      maxTokens: 32000,
-      temperature: 0.3,
+      maxTokens: DEFAULT_MAX_TOKENS,
+      contextWindow: DEFAULT_CONTEXT_WINDOW,
+      temperature: DEFAULT_TEMPERATURE,
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -209,8 +216,9 @@ export default function ModelsPage() {
       apiBaseUrl: model.apiBaseUrl,
       apiKey: '',  // 编辑时不显示原有 API Key，需要确认才能修改
       models: Array.isArray(model.models) ? (model.models[0] || '') : model.models,
-      maxTokens: model.maxTokens || 4096,
-      temperature: model.temperature ?? 0.7,
+      maxTokens: model.maxTokens ?? DEFAULT_MAX_TOKENS,
+      contextWindow: model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+      temperature: model.temperature ?? DEFAULT_TEMPERATURE,
       isActive: model.isActive,
       isPublic: model.isPublic,
       isSystemModel: model.userId === null,  // userId为null表示系统模型
@@ -229,8 +237,9 @@ export default function ModelsPage() {
       apiBaseUrl: '',
       apiKey: '',
       models: '',
-      maxTokens: 32000,
-      temperature: 0.3,
+      maxTokens: DEFAULT_MAX_TOKENS,
+      contextWindow: DEFAULT_CONTEXT_WINDOW,
+      temperature: DEFAULT_TEMPERATURE,
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -279,6 +288,7 @@ export default function ModelsPage() {
         apiKey: !editingModel || formData.changeApiKey ? formData.apiKey : undefined,
         models: [formData.models],
         maxTokens: formData.maxTokens,
+        contextWindow: formData.contextWindow,
         temperature: formData.temperature,
         isActive: formData.isActive,
         isPublic: formData.isPublic,
@@ -305,8 +315,8 @@ export default function ModelsPage() {
       scheduleCleanup(() => setSuccess(null), 3000);
       handleCloseModal();
       fetchModels();
-    } catch (err) {
-      setError('保存模型失败');
+    } catch (err: any) {
+      setError(err.message || '保存模型失败');
       scheduleCleanup(() => setError(null), 3000);
     } finally {
       setSaving(false);
@@ -422,7 +432,10 @@ export default function ModelsPage() {
       });
       if (!response.ok) throw new Error('复位失败');
       setModels(models.map(m => m.id === modelId ? { ...m, contextWindow: 0 } : m));
-      if (editingModel?.id === modelId) setEditingModel({ ...editingModel, contextWindow: 0 });
+      if (editingModel?.id === modelId) {
+        setEditingModel({ ...editingModel, contextWindow: 0 });
+        setFormData({ ...formData, contextWindow: 0 });
+      }
       setSuccess('Context Window 已复位');
       scheduleCleanup(() => setSuccess(null), 3000);
     } catch (err: any) {
@@ -938,7 +951,7 @@ export default function ModelsPage() {
               </div>
 
               {/* 高级参数 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 最大输出 Token */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -947,14 +960,33 @@ export default function ModelsPage() {
                   <input
                     type="number"
                     value={formData.maxTokens}
-                    onChange={(e) => setFormData({ ...formData, maxTokens: parseInt(e.target.value) || 32000 })}
+                    onChange={(e) => setFormData({ ...formData, maxTokens: e.target.value === '' ? DEFAULT_MAX_TOKENS : Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     min={256}
                     max={192000}
                     step={256}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    默认 32000，建议 4096-32000
+                    默认 65536，建议 4096-65536
+                  </p>
+                </div>
+
+                {/* 上下文窗口大小 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    上下文窗口大小
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.contextWindow}
+                    onChange={(e) => setFormData({ ...formData, contextWindow: e.target.value === '' ? DEFAULT_CONTEXT_WINDOW : Number(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    min={0}
+                    max={1000000}
+                    step={1000}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    默认 130000，用于上下文窗口配置
                   </p>
                 </div>
 
@@ -966,7 +998,7 @@ export default function ModelsPage() {
                   <input
                     type="number"
                     value={formData.temperature}
-                    onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) || 0.7 })}
+                    onChange={(e) => setFormData({ ...formData, temperature: e.target.value === '' ? DEFAULT_TEMPERATURE : Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     min={0}
                     max={2}

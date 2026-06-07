@@ -68,7 +68,7 @@ export default function LoginPage() {
         <div className="text-center">
           <div className="flex justify-center mb-4">
             <div className="p-3 bg-primary-500/10 rounded-xl border border-primary-500/20">
-              <Brain size={32} className="text-primary-400" />
+              <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
             </div>
           </div>
           <h2 className="text-2xl font-bold text-gray-100">

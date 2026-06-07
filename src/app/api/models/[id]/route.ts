@@ -5,6 +5,14 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 
+function isValidIntegerRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isValidNumberRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
   return {
@@ -17,9 +25,9 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     hasApiKey: !!model.apiKey,
     models: JSON.parse(model.models),
     routeType: model.routeType,
-    maxTokens: model.maxTokens ?? 4096,
-    contextWindow: model.contextWindow ?? 0,
-    temperature: model.temperature ?? 0.7,
+    maxTokens: model.maxTokens ?? 65536,
+    contextWindow: model.contextWindow ?? 130000,
+    temperature: model.temperature ?? 0.3,
     isActive: model.isActive,
     isDefault: model.isDefault,
     isPublic: model.isPublic,
@@ -175,14 +183,20 @@ export async function PUT(
       );
     }
 
-    // 验证 maxTokens 和 temperature 范围
-    if (maxTokens !== undefined && (maxTokens < 256 || maxTokens > 128000)) {
+    // 验证 maxTokens、contextWindow 和 temperature 范围
+    if (maxTokens !== undefined && !isValidIntegerRange(maxTokens, 256, 192000)) {
       return NextResponse.json(
-        { error: 'maxTokens 必须在 256-128000 之间' },
+        { error: 'maxTokens 必须是 256-192000 之间的整数' },
         { status: 400 }
       );
     }
-    if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
+    if (contextWindow !== undefined && !isValidIntegerRange(contextWindow, 0, 1000000)) {
+      return NextResponse.json(
+        { error: 'contextWindow 必须是 0-1000000 之间的整数' },
+        { status: 400 }
+      );
+    }
+    if (temperature !== undefined && !isValidNumberRange(temperature, 0, 2)) {
       return NextResponse.json(
         { error: 'temperature 必须在 0-2 之间' },
         { status: 400 }

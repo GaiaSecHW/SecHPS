@@ -5,6 +5,14 @@ import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
 
+function isValidIntegerRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isValidNumberRange(value: unknown, min: number, max: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
 // 获取所有模型配置
 export async function GET(request: Request) {
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.MODEL_READ });
@@ -41,6 +49,9 @@ export async function GET(request: Request) {
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
       routeType: model.routeType,
+      maxTokens: model.maxTokens ?? 65536,
+      contextWindow: model.contextWindow ?? 130000,
+      temperature: model.temperature ?? 0.3,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,
@@ -65,7 +76,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isDefault } = body;
 
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
@@ -101,6 +112,29 @@ export async function POST(request: Request) {
       );
     }
 
+    // 验证 maxTokens、contextWindow 和 temperature 范围
+    const finalMaxTokens = maxTokens ?? 65536;
+    const finalContextWindow = contextWindow ?? 130000;
+    const finalTemperature = temperature ?? 0.3;
+    if (!isValidIntegerRange(finalMaxTokens, 256, 192000)) {
+      return NextResponse.json(
+        { details: { error: 'maxTokens 必须是 256-192000 之间的整数' } },
+        { status: 400 }
+      );
+    }
+    if (!isValidIntegerRange(finalContextWindow, 0, 1000000)) {
+      return NextResponse.json(
+        { details: { error: 'contextWindow 必须是 0-1000000 之间的整数' } },
+        { status: 400 }
+      );
+    }
+    if (!isValidNumberRange(finalTemperature, 0, 2)) {
+      return NextResponse.json(
+        { details: { error: 'temperature 必须在 0-2 之间' } },
+        { status: 400 }
+      );
+    }
+
     // 如果设置为默认模型，先将其他默认模型的 isDefault 设为 false
     if (isDefault === true) {
       await prisma.modelConfig.updateMany({
@@ -119,6 +153,9 @@ export async function POST(request: Request) {
         apiKey,
         models: JSON.stringify(models),
         routeType: providerType === 'openai' ? routeType || 'default' : null,
+        maxTokens: finalMaxTokens,
+        contextWindow: finalContextWindow,
+        temperature: finalTemperature,
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isDefault || false,
         updatedAt: new Date(),
@@ -134,6 +171,9 @@ export async function POST(request: Request) {
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
       routeType: model.routeType,
+      maxTokens: model.maxTokens ?? 65536,
+      contextWindow: model.contextWindow ?? 130000,
+      temperature: model.temperature ?? 0.3,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,

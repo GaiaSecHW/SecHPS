@@ -195,13 +195,14 @@ function DashboardLayoutContent({
 
           <div className={`border-b border-zinc-800/60 overflow-hidden ${sidebarCollapsed ? 'p-3 flex justify-center' : 'px-5 py-5'}`}>
             {sidebarCollapsed ? (
-              <Brain size={22} className="text-cyan-400" />
+              <img src="/logo.png" alt="Logo" className="w-6 h-6 object-contain" />
             ) : (
-              <>
-                <p className="text-xs text-zinc-500 mt-1 truncate">
-                  {user?.name || user?.username}
-                </p>
-              </>
+              <div className="flex items-center gap-2">
+                  <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain" />
+                  <p className="text-xs text-zinc-500 truncate">
+                    {user?.name || user?.username}
+                  </p>
+                </div>
             )}
           </div>
 

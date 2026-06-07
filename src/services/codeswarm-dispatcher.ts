@@ -236,6 +236,8 @@ class CodeswarmDispatcher {
       model: task.model || undefined,
       apiKey: task.apiKey || undefined,
       apiBaseUrl: task.apiBaseUrl || undefined,
+      maxTokens: task.maxTokens ?? undefined,
+      contextWindow: task.contextWindow ?? undefined,
       timeoutSec: task.timeoutSec || undefined,
       callbackUrl,
       engine: task.engine || undefined,
