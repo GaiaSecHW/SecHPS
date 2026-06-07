@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - dev_k8s
     paths:
       - 'src/**'
       - 'prisma/**'
@@ -23,6 +24,7 @@ on:
   pull_request:
     branches:
       - dev
+      - dev_k8s
     paths:
       - 'src/**'
       - 'prisma/**'
