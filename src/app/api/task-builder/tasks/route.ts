@@ -178,6 +178,7 @@ export async function GET(request: NextRequest) {
       modelId: true,
       modelName: true,
       notes: true,
+      targetProduct: true,
       errorMessage: true,
       createdAt: true,
       codeswarmTaskId: true,

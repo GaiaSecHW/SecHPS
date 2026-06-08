@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Settings, FileText, Clock, Play, CheckCircle, XCircle, Loader2, ChevronRight, Wrench, Activity, Cpu, ShieldAlert, Download, Shield, Eye, Ban } from 'lucide-react';
+import { ArrowLeft, Settings, FileText, Clock, Play, CheckCircle, XCircle, Loader2, ChevronRight, Wrench, Activity, Cpu, ShieldAlert, Download, Shield, Eye, Ban, MapPin } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,7 @@ interface TaskInstance {
   mergedSkills: string | null;
   mergedScripts: string | null;
   notes: string | null;
+  targetProduct: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   startedAt: string | null;
   completedAt: string | null;
@@ -587,7 +588,15 @@ function TaskDetailContent() {
               <Settings size={32} className="text-blue-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-100">{task.name}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-100">{task.name}</h1>
+                {task.targetProduct && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                    <MapPin size={12} />
+                    {task.targetProduct}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-400 mt-1">Agent: {task.agentName}</p>
             </div>
           </div>
@@ -701,6 +710,33 @@ function TaskDetailContent() {
               <span className="text-gray-500 mr-2">工作目录:</span>{task.projectPath}
             </p>
           )}
+        </div>
+      )}
+
+      {task.targetProduct && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin size={20} className="text-purple-400" />
+            <h2 className="text-lg font-semibold text-gray-100">产品与知识图谱</h2>
+          </div>
+          <div className="flex items-start gap-6">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">目标产品</p>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm font-medium bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                <MapPin size={14} />
+                {task.targetProduct}
+              </span>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">知识图谱状态</p>
+              <span className={`text-sm font-medium ${parallelPhases.codedmapColor}`}>
+                {parallelPhases.codedmapPhase}
+              </span>
+              {parallelPhases.codedmapDetail && (
+                <p className="text-xs text-gray-500 mt-0.5">{parallelPhases.codedmapDetail}</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

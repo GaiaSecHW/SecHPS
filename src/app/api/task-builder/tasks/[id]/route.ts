@@ -63,6 +63,7 @@ export async function GET(
         fileName: true,
         projectPath: true,
         codeswarmTaskId: true,
+        targetProduct: true,
         userId: true,
       },
     });

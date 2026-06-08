@@ -23,6 +23,7 @@ interface TaskInstance {
   skills: string | null;
   scripts: string | null;
   notes: string | null;
+  targetProduct: string | null;
   status: 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
   startedAt: string | null;
   completedAt: string | null;
@@ -529,6 +530,11 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
 
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     <span className="truncate font-medium text-gray-300">{task.agentName}</span>
+                    {task.targetProduct && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                        {task.targetProduct}
+                      </span>
+                    )}
                     {task.modelName && (
                       <>
                         <span className="text-gray-600">/</span>
