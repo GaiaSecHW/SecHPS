@@ -149,6 +149,8 @@ RUN uv venv /opt/codedmap-venv && \
     . /opt/codedmap-venv/bin/activate && \
     cd ./codedmap && \
     uv pip install --no-cache -i https://pypi.tuna.tsinghua.edu.cn/simple ".[api,ai,parsers]" && \
+    cp -r ./codedmap/infra/ai/prompts/templates \
+         /opt/codedmap-venv/lib/python3.12/site-packages/codedmap/infra/ai/prompts/templates && \
     echo "=== codedmap installed OK ===" && \
     python -c "import codedmap; print('codedmap import OK')"
 

@@ -48,3 +48,4 @@ cdm = "codedmap.cli.__main__:main"
 "codedmap.rules.common" = ["*.yaml"]
 "codedmap.rules.c" = ["*.yaml", "extensions/*.yaml"]
 "codedmap.rules.python" = ["*.yaml", "extensions/*.yaml"]
+"codedmap.infra.ai.prompts" = ["templates/*.j2"]

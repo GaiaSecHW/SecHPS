@@ -14,9 +14,12 @@ Neo4j CSV Header 格式示例:
 import csv
 import gzip
 import logging
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
+
+csv.field_size_limit(sys.maxsize)
 
 from .constants import NEO4J_TYPE_SUFFIXES
 
