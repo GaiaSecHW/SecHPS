@@ -17,19 +17,24 @@ export async function GET(
   const fileIndex = parseInt(url.searchParams.get('fileIndex') || '0', 10);
   const authSuccess = auth as AuthSuccessResult;
 
+  // Vulnerability 没有 tenantId/isPublic 字段，需通过 TaskInstance 间接验证权限
+  const taskInstance = await prisma.taskInstance.findFirst({
+    where: { id, ...authSuccess.tenantFilter },
+    select: { id: true, reportFilePath: true },
+  });
+  if (!taskInstance) {
+    return NextResponse.json({ error: '任务不存在或无权限访问' }, { status: 404 });
+  }
+
   const vuln = await prisma.vulnerability.findFirst({
-    where: { taskId: id, ...authSuccess.tenantFilter },
+    where: { taskId: id },
     select: { filePath: true },
   });
 
   let filePath = vuln?.filePath;
 
   if (!filePath) {
-    const taskInstance = await prisma.taskInstance.findUnique({
-      where: { id },
-      select: { reportFilePath: true },
-    });
-    filePath = taskInstance?.reportFilePath;
+    filePath = taskInstance.reportFilePath;
   }
 
   if (!filePath) {
