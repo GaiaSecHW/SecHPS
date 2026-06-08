@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Settings, FileText, Clock, Play, CheckCircle, XCircle, Loader2, ChevronRight, Wrench, Activity, Cpu, ShieldAlert, Download, Shield, Eye, Ban } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -79,6 +79,14 @@ const getDisplayStatus = (task: TaskInstance): 'pending' | 'queued' | 'dispatche
 };
 
 export default function TaskDetailPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <TaskDetailContent />
+    </Suspense>
+  );
+}
+
+function TaskDetailContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
