@@ -223,7 +223,13 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
   };
 
   const handleViewDetail = (taskId: string) => {
-    router.push(`/dashboard/task-builder/${taskId}`);
+    const params = new URLSearchParams();
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (searchQuery) params.set('search', searchQuery);
+    if (currentPage > 1) params.set('page', String(currentPage));
+    if (pageSize !== DEFAULT_PAGE_SIZE) params.set('limit', String(pageSize));
+    const qs = params.toString();
+    router.push(`/dashboard/task-builder/${taskId}${qs ? `?${qs}` : ''}`);
   };
 
   const handleRunTask = async (taskId: string, modelId?: string, modelName?: string) => {

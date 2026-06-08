@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Settings, FileText, Clock, Play, CheckCircle, XCircle, Loader2, ChevronRight, Wrench, Activity, Cpu, ShieldAlert, Download, Shield, Eye, Ban } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
@@ -81,7 +81,22 @@ const getDisplayStatus = (task: TaskInstance): 'pending' | 'queued' | 'dispatche
 export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const taskId = params.id as string;
+
+  const backParams = (() => {
+    const p = new URLSearchParams();
+    const status = searchParams.get('status');
+    const search = searchParams.get('search');
+    const page = searchParams.get('page');
+    const limit = searchParams.get('limit');
+    if (status) p.set('status', status);
+    if (search) p.set('search', search);
+    if (page) p.set('page', page);
+    if (limit) p.set('limit', limit);
+    return p.toString();
+  })();
+  const backUrl = `/dashboard/task-builder${backParams ? `?${backParams}` : ''}`;
 
   const [task, setTask] = useState<TaskInstance | null>(null);
   const [logs, setLogs] = useState<TaskExecutionLog[]>([]);
@@ -470,7 +485,7 @@ export default function TaskDetailPage() {
       <div className="text-center py-12">
         <p className="text-gray-500">任务不存在或已删除</p>
         <button
-          onClick={() => router.push('/dashboard/task-builder')}
+          onClick={() => router.push(backUrl)}
           className="mt-4 px-4 py-2 text-blue-400 hover:text-blue-800"
         >
           返回列表
@@ -551,7 +566,7 @@ export default function TaskDetailPage() {
     <div className="space-y-6">
       <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
         <button
-          onClick={() => router.push('/dashboard/task-builder')}
+          onClick={() => router.push(backUrl)}
           className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
