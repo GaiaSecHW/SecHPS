@@ -33,7 +33,7 @@ SERVER_IMAGE="sechps-server:latest"
 WORKER_IMAGE="sechps-worker:latest"
 
 # 环境变量文件
-SERVER_ENV_FILE="$PROJECT_DIR/.env"
+SERVER_ENV_FILE="$SCRIPT_DIR/.env.server"
 WORKER_ENV_FILE="$SCRIPT_DIR/.env.worker"
 
 # ---------------------------------------------------------------------------

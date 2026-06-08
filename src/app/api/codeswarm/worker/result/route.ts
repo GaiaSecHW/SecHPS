@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { prisma } from '@/lib/prisma';
+import { prisma, withDeadlockRetry } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import eventBus from '@/lib/event-bus';
 import { executeVulnerabilityParseAsync, vulnParseInProgress } from '@/lib/vulnerability-parse';
@@ -46,31 +46,40 @@ export async function POST(request: Request) {
     // Server 信任 Worker 上报的 status，不再用 reportContent 反推 completed，避免非最终报告导致假完成。
     const finalState = status === 'completed' ? 'completed' : 'failed';
 
-    // Atomically update CodeswarmTask + TaskInstance + Worker.currentTasks in one transaction
-    const txResult = await prisma.$transaction(async (tx) => {
-      // 先查询 CodeswarmTask 获取 workerId（用于递减 Worker.currentTasks）
-      const codeswarmTask = await tx.codeswarmTask.findUnique({
-        where: { taskId },
-        select: { id: true, workerId: true },
+    // 事务外预验证：校验上报 Worker 仍持有该任务，防止重调度后原始 Worker 滞后回调错误递减
+    // 移出事务避免 ShareLock→ExclusiveLock 锁升级导致死锁（40P01）
+    // 验证后的竞态窗口由事务内 WHERE state='running'|'dispatched' 乐观锁兜底
+    const codeswarmTaskPreRead = await prisma.codeswarmTask.findUnique({
+      where: { taskId },
+      select: { id: true, workerId: true },
+    });
+
+    if (!codeswarmTaskPreRead) {
+      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — task not found`);
+      return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_not_found' });
+    }
+
+    // workerId=null → 任务尚未分配 Worker； SQL "workerId"=NULL 三值逻辑永远为 false，此回调必须拒绝
+    if (!codeswarmTaskPreRead.workerId) {
+      logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} ignored — no worker assigned (workerId=null)`);
+      return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'no_worker_assigned' });
+    }
+
+    if (nodeId && codeswarmTaskPreRead.workerId) {
+      const assignedWorker = await prisma.codeswarmWorker.findUnique({
+        where: { id: codeswarmTaskPreRead.workerId },
+        select: { nodeId: true },
       });
-
-      if (!codeswarmTask) {
-        return { alreadyTerminal: true, taskInstance: null, workerId: null };
+      if (assignedWorker && assignedWorker.nodeId !== nodeId) {
+        logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} rejected — task reassigned to different Worker (reporting_nodeId=${nodeId}, assigned_nodeId=${assignedWorker.nodeId})`);
+        return NextResponse.json({ success: true, taskId, status: 'ignored', reason: 'task_reassigned' });
       }
+    }
 
-      // 校验上报 Worker 仍持有该任务：防止 checkStuckDispatchedTasks 重调度后，
-      // 原始 Worker 的滞后 result 回调覆盖新 Worker 的 dispatch 状态并错误递减其 currentTasks
-      if (nodeId && codeswarmTask.workerId) {
-        const reportingWorker = await tx.codeswarmWorker.findFirst({
-          where: { nodeId },
-          select: { id: true },
-        });
-        if (reportingWorker && reportingWorker.id !== codeswarmTask.workerId) {
-          logger.warn(LOG_MODULES.CODESWARM, `Result for task ${taskId} rejected — task reassigned to different Worker (reporting=${reportingWorker.id}, assigned=${codeswarmTask.workerId})`);
-          return { alreadyTerminal: true, taskInstance: null, workerId: codeswarmTask.workerId };
-        }
-      }
-
+    // 事务内只做写操作（无 Worker 行读取），用 withDeadlockRetry 处理瞬态死锁
+    const txResult = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
+      // WHERE 同时校验 state + workerId：若任务已被重调度给其他 Worker，
+      // workerId 不匹配则 UPDATE 返回 0，不会错误递减原 Worker 的 currentTasks
       const updateResult = await tx.$executeRaw`
         UPDATE "CodeswarmTask"
         SET state = ${finalState},
@@ -81,17 +90,17 @@ export async function POST(request: Request) {
             "updatedAt" = NOW()
         WHERE "taskId" = ${taskId}
           AND (state = 'running' OR state = 'dispatched')
+          AND "workerId" = ${codeswarmTaskPreRead.workerId}
       `;
 
       if (updateResult === 0) {
-        return { alreadyTerminal: true, taskInstance: null, workerId: codeswarmTask.workerId };
+        return { alreadyTerminal: true, taskInstance: null, workerId: codeswarmTaskPreRead.workerId };
       }
 
-      // 在同一事务内递减 Worker.currentTasks（条件更新防止负数）
-      if (codeswarmTask.workerId) {
+      if (codeswarmTaskPreRead.workerId) {
         await tx.codeswarmWorker.updateMany({
           where: {
-            id: codeswarmTask.workerId,
+            id: codeswarmTaskPreRead.workerId,
             currentTasks: { gt: 0 },
           },
           data: { currentTasks: { decrement: 1 } },
@@ -117,8 +126,8 @@ export async function POST(request: Request) {
         });
       }
 
-      return { alreadyTerminal: false, taskInstance, workerId: codeswarmTask.workerId };
-    });
+      return { alreadyTerminal: false, taskInstance, workerId: codeswarmTaskPreRead.workerId };
+    }));
 
     if (txResult.alreadyTerminal) {
       // 任务已处于终态（超时/取消/掉线重调度），result 回调被忽略

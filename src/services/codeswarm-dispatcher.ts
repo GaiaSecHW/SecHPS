@@ -1,5 +1,5 @@
 import Redis, { Command } from 'ioredis';
-import { prisma } from '@/lib/prisma';
+import { prisma, withDeadlockRetry } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 const STREAM_KEY = 'codeswarm:task:queue';
@@ -184,7 +184,7 @@ class CodeswarmDispatcher {
     // 阶段 1(P0-2 改造):事务性抢占 Worker 槽位 + 标记任务 dispatched
     // 用一条 SQL 完成条件 +1(currentTasks < maxConcurrent),DB 内部保证不超发
     // 再在同一事务内标记任务 dispatched,任一失败则回滚槽位
-    const txResult = await prisma.$transaction(async (tx) => {
+    const txResult = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
       // 1. 原子抢占:DB 内部校验 currentTasks < maxConcurrent,PostgreSQL 单语句原子
       const claim = await tx.$executeRaw`
         UPDATE "CodeswarmWorker"
@@ -211,7 +211,7 @@ class CodeswarmDispatcher {
         return { ok: false as const, reason: 'task_not_queued' };
       }
       return { ok: true as const };
-    });
+    }));
 
     if (!txResult.ok) {
       logger.info(LOG_MODULES.CODESWARM, `Task ${task.taskId} pre-dispatch skipped: ${txResult.reason}`);
@@ -271,7 +271,7 @@ class CodeswarmDispatcher {
         if (resp.status === 400) {
           // P0-2 改造:Worker 拒绝执行(payload 校验失败),需事务性回滚 currentTasks + 标记 failed
           logger.error(LOG_MODULES.CODESWARM, `Task ${task.taskId} payload validation failed (400), marking as failed`, { details: { body: respBody.substring(0, 200) } });
-          await prisma.$transaction(async (tx) => {
+          await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
             await tx.codeswarmTask.update({
               where: { id: task.id },
               data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
@@ -281,7 +281,7 @@ class CodeswarmDispatcher {
               SET "currentTasks" = "currentTasks" - 1
               WHERE id = ${worker.id} AND "currentTasks" > 0
             `;
-          }).catch(e => logger.error(LOG_MODULES.CODESWARM, '400 路径回滚失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
+          })).catch(e => logger.error(LOG_MODULES.CODESWARM, '400 路径回滚失败', { details: { error: e instanceof Error ? e.message : String(e) } }));
           worker.currentTasks = Math.max(worker.currentTasks - 1, 0);
           return true;
         }
@@ -294,13 +294,12 @@ class CodeswarmDispatcher {
 
 // 所有地址都失败，回滚 DB 状态（仅当任务仍为 dispatched 时回滚，避免覆盖 running/completed）
     logger.error(LOG_MODULES.CODESWARM, 'All addresses failed for worker', { details: { id: worker.id, addresses: sorted.join(', ') } });
-    const rollbackCount = await prisma.$transaction(async (tx) => {
+    const rollbackCount = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
       const taskRollback = await tx.codeswarmTask.updateMany({
         where: { id: task.id, state: 'dispatched' },
         data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
       });
       if (taskRollback.count > 0) {
-        // P0-2 改造:阶段 1 事务已 +1 currentTasks,这里需 -1 补偿
         await tx.$executeRaw`
           UPDATE "CodeswarmWorker"
           SET "currentTasks" = "currentTasks" - 1
@@ -308,7 +307,7 @@ class CodeswarmDispatcher {
         `;
       }
       return taskRollback.count;
-    }).catch(e => {
+    })).catch(e => {
       logger.error(LOG_MODULES.CODESWARM, '回滚事务失败', { details: { error: e instanceof Error ? e.message : String(e) } });
       return 0;
     });
@@ -915,7 +914,7 @@ private lastNoWorkerLogTime = 0;
 
       let resetCount = 0;
       for (const task of stuckTasks) {
-        const updated = await prisma.$transaction(async (tx) => {
+        const updated = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
           const result = await tx.codeswarmTask.updateMany({
             where: { id: task.id, state: 'dispatched' },
             data: { state: 'queued', workerId: null, updatedAt: new Date() },
@@ -928,7 +927,7 @@ private lastNoWorkerLogTime = 0;
             `;
           }
           return result.count;
-        });
+        }));
 
         if (updated > 0) {
           this.scheduleRetry(task.id, 3000);
@@ -1010,7 +1009,7 @@ private lastNoWorkerLogTime = 0;
           : `TaskInstance is ${zombie.tiStatus} for >3min`;
 
         try {
-          const txResult = await prisma.$transaction(async (tx) => {
+          const txResult = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
             // 条件更新：仅当仍为 running/dispatched 时才标记
             const updateResult = await tx.codeswarmTask.updateMany({
               where: { id: zombie.id, state: { in: ['running', 'dispatched'] } },
@@ -1033,7 +1032,7 @@ private lastNoWorkerLogTime = 0;
             }
 
             return { updated: true, workerId: zombie.workerId };
-          });
+          }));
 
           if (txResult.updated) {
             // 释放内存 Worker 槽位
@@ -1335,7 +1334,7 @@ private lastNoWorkerLogTime = 0;
         // 使用事务原子性更新：任务状态 + Worker.currentTasks decrement
         // 这避免了与正常完成路径的竞态条件和双重递减问题
         try {
-          const txResult = await prisma.$transaction(async (tx) => {
+          const txResult = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
             // 先查询任务获取 workerId
             const task = await tx.codeswarmTask.findUnique({
               where: { id: dbTaskId },
@@ -1376,7 +1375,7 @@ private lastNoWorkerLogTime = 0;
             }
 
             return { updated: true, workerId: task.workerId, taskId: task.taskId };
-          });
+          }));
 
           // 如果更新成功，释放内存槽位
           if (txResult.updated && txResult.workerId) {

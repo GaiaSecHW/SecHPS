@@ -20,6 +20,9 @@ const STANDALONE_DIR = path.join(ROOT_DIR, '.next/standalone');
 const KEEP_WINDOWS = process.env.KEEP_WINDOWS_FILES === 'true' || process.platform === 'win32';
 
 const DIR_COPY_RULES = {
+  'public': {
+    mode: 'all',
+  },
   'anthropic-sdk': {
     src: path.join(ROOT_DIR, 'node_modules', '@anthropic-ai'),
     dest: 'node_modules/@anthropic-ai',

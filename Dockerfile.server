@@ -100,6 +100,11 @@ COPY inner_skills/ ./inner_skills/
 # Copy postbuild script (called by npm run build)
 COPY scripts/postbuild.js ./scripts/postbuild.js
 
+# Copy public directory (static assets like logo.png)
+# Next.js standalone output does NOT include public/, so we must copy it
+# in both builder and runner stages
+COPY public/ ./public/
+
 # Build Next.js standalone output + run postbuild
 # postbuild handles: anthropic SDK copy, chunk sync, platform cleanup, static placement
 # NOTE: postbuild does NOT copy .prisma/client/ to standalone — we handle that in runner stage
@@ -314,6 +319,8 @@ ENV LC_ALL=en_US.UTF-8
 # This creates /app/server.js, /app/.next/, /app/node_modules/ (traced subset)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/ ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static/ ./.next/static/
+# public/ is NOT included in Next.js standalone output — must copy explicitly
+COPY --from=builder --chown=nextjs:nodejs /app/public/ ./public/
 
 # Step 2: Copy full node_modules (merges with traced subset)
 # Docker COPY merges: overwrites existing files, preserves files not in source.
