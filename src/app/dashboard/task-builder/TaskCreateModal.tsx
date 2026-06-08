@@ -71,6 +71,9 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
+  // 选中的 Agent 是否需要知识图谱（动态计算）
+  const needsCodedmap = agentApps.some(a => selectedAgentIds.has(a.id) && a.requireCodedmap);
+
   const MAX_UPLOAD_MB = parseInt(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB || '500', 10);
   const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
@@ -123,6 +126,13 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // 选中的 Agent 不再需要知识图谱时，清空已选的产品名称
+  useEffect(() => {
+    if (!needsCodedmap && targetProduct) {
+      setTargetProduct('');
+    }
+  }, [needsCodedmap]);
 
   useEffect(() => {
     const currentValid = filteredModelOptions.find(o => o.key === selectedModelKey);
@@ -272,7 +282,6 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
     setIsSubmitting(true);
     try {
-      const needsCodedmap = agentApps.some(a => selectedAgentIds.has(a.id) && a.requireCodedmap);
       const finalTargetProduct = needsCodedmap ? targetProduct : '';
       await onSubmit(
         { name: name.trim(), agents, modelId: option.modelId, modelName: option.modelName, description: description.trim(), targetProduct: finalTargetProduct },
@@ -307,16 +316,18 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
         </div>
 
         <div className="p-6 space-y-4">
-          {/* 产品名称 */}
+          {/* 产品名称 — 仅选中的 Agent 需要知识图谱时显示 */}
+          {needsCodedmap && (
           <div>
             <div className="flex items-center gap-2">
               <label className="block text-sm font-medium text-gray-300">产品名称</label>
-              <span className="text-xs text-red-400">选择产品可以匹配知识图谱，任务扫描更加精准</span>
+              <span className="text-xs text-gray-400">选择产品可以匹配知识图谱，任务扫描更加精准</span>
             </div>
             <div className="mt-1">
               <ProductTreeSelect value={targetProduct} onChange={setTargetProduct} />
             </div>
           </div>
+          )}
 
           {/* 任务名称 */}
           <div>
