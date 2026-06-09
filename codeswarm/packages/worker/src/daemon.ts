@@ -572,6 +572,27 @@ this.server.get('/health', async () => ({
         });
       };
 
+      // ========== PHASE 0.5: 动态获取虚拟 API Key（在构建环境之前，确保 secret 写入 opencode.json） ==========
+      if (apiKey) {
+        onEvent({
+          type: 'phase_start',
+          phase: 'workkey',
+          message: '正在获取虚拟 API Key...',
+          timestamp: new Date().toISOString(),
+        });
+        const effectiveApiKey = await resolveWorkKey(apiKey, taskId, agent || 'default');
+        // 覆盖 payload.apiKey，后续 envFactory.build 和 runAgent 都使用 secret
+        (payload as any).apiKey = effectiveApiKey;
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved, payload.apiKey replaced`);
+        onEvent({
+          type: 'phase_complete',
+          phase: 'workkey',
+          success: true,
+          message: '虚拟 API Key 获取成功',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       // ========== PHASE 1: 构建环境 ==========
       onEvent({
         type: 'phase_start',
@@ -641,26 +662,6 @@ this.server.get('/health', async () => ({
       // Use instruction directly - environment.ts already handled the short instruction case
       const instruction = resolvedInstruction || payload.instruction || '执行任务';
 
-      // ========== PHASE 1.8: 动态获取虚拟 API Key ==========
-      let effectiveApiKey = apiKey;
-      if (apiKey) {
-        onEvent({
-          type: 'phase_start',
-          phase: 'workkey',
-          message: '正在获取虚拟 API Key...',
-          timestamp: new Date().toISOString(),
-        });
-        effectiveApiKey = await resolveWorkKey(apiKey, taskId, agentName);
-        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved: ${!!effectiveApiKey}`);
-        onEvent({
-          type: 'phase_complete',
-          phase: 'workkey',
-          success: true,
-          message: '虚拟 API Key 获取成功',
-          timestamp: new Date().toISOString(),
-        });
-      }
-
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, 'Step 2: Preparing agent config...');
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `engine: ${engine}`);
       logger.taskInfo(taskId, LOG_MODULES.AGENT, `agentName: ${agentName}`);
@@ -694,7 +695,7 @@ this.server.get('/health', async () => ({
         workspacePath,
         engine,
         agentName,
-        effectiveApiKey,
+        apiKey,
         model,
         env,
         instruction,

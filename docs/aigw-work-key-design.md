@@ -123,13 +123,13 @@ async function resolveWorkKey(
 ### 5.3 executeTask() 中的调用时机
 
 ```
-PHASE 1:   构建环境 (envFactory.build)
+PHASE 0.5: 动态获取虚拟 API Key (resolveWorkKey)  ← 新增，在构建环境之前
+PHASE 1:   构建环境 (envFactory.build)             ← payload.apiKey 已替换为 secret，写入 opencode.json
 PHASE 1.5: Codedmap 知识图谱预处理 (并行)
-PHASE 1.8: 动态获取虚拟 API Key  ← 新增
-PHASE 2:   执行 Agent (processMgr.runAgent)
+PHASE 2:   执行 Agent (processMgr.runAgent)        ← apiKey 已是 secret
 ```
 
-在 `agentName` 和 `instruction` 解析完成后、`runAgent()` 调用前执行。替换后的 `effectiveApiKey` 传入 `runAgent()`。
+**关键设计**：work-key 解析必须在 `envFactory.build()` **之前**执行，因为 `environment.ts:buildModelConfig()` 会将 `payload.apiKey` 写入 `opencode.json` 的 provider 配置。通过直接覆盖 `payload.apiKey`，后续 `envFactory.build()` 和 `processMgr.runAgent()` 都自动使用 secret，无需额外传参。
 
 ### 5.4 错误处理
 
