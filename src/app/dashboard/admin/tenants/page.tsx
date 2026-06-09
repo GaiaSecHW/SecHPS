@@ -370,14 +370,14 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
               <LoadingSpinner />
             </div>
           ) : (
-            <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+            <div className="border border-gray-700/50 rounded-lg overflow-auto max-h-[400px]">
               <table className="min-w-full divide-y divide-gray-700/50">
-                <thead className="bg-dark-bg">
+                <thead className="bg-dark-bg sticky top-0 z-10">
                   <tr>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">用户</th>
                     <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">邮箱</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">状态</th>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-500">操作</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-500 w-[80px] min-w-[80px] max-w-[80px]">状态</th>
+                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-500 w-[80px] min-w-[80px] max-w-[80px]">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700/50">
@@ -399,12 +399,12 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
                           </div>
                         </td>
                         <td className="px-4 py-2 text-sm text-gray-500">{user.email}</td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2 w-[80px] min-w-[80px] max-w-[80px]">
                           <span className={`px-2 py-1 rounded text-xs ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             {user.isActive ? '活跃' : '禁用'}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 text-right w-[80px] min-w-[80px] max-w-[80px]">
                           <button
                             onClick={() => handleRemoveUser(user)}
                             className="text-red-400 hover:text-red-800 text-sm"

@@ -116,7 +116,7 @@ function InfoCard({
           <div className="flex-1 min-w-0">
             <div className="text-xs text-gray-500">{label}</div>
             <div className="text-sm text-blue-400 truncate mt-0.5 flex items-center gap-1.5">
-              <span className="truncate">{value}</span>
+              <span className="truncate" title={value}>{value}</span>
               <ExternalLink size={12} className="flex-shrink-0" />
             </div>
           </div>
@@ -132,7 +132,7 @@ function InfoCard({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-xs text-gray-500">{label}</div>
-        <div className="text-sm text-white truncate mt-0.5" style={color ? { color } : {}}>
+        <div className="text-sm text-white truncate mt-0.5" style={color ? { color } : {}} title={value}>
           {value}
         </div>
       </div>
@@ -401,7 +401,7 @@ function VulnerabilityDetailContent() {
           <button
             onClick={() => handleAction('confirm')}
             disabled={actionLoading === 'confirm'}
-            className="inline-flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500 transition-colors disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-500 transition-colors disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
           >
             {actionLoading === 'confirm' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />}
             <CheckCircle size={16} className="mr-2" />
@@ -410,7 +410,7 @@ function VulnerabilityDetailContent() {
           <button
             onClick={() => handleAction('false-positive')}
             disabled={actionLoading === 'false-positive'}
-            className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
           >
             <XCircle size={16} className="mr-2" />
             标记误报
@@ -424,7 +424,7 @@ function VulnerabilityDetailContent() {
           <button
             onClick={() => handleAction('fix')}
             disabled={actionLoading === 'fix'}
-            className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
           >
             {actionLoading === 'fix' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />}
             <CheckCircle size={16} className="mr-2" />
@@ -433,7 +433,7 @@ function VulnerabilityDetailContent() {
           <button
             onClick={() => handleAction('false-positive')}
             disabled={actionLoading === 'false-positive'}
-            className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
           >
             <XCircle size={16} className="mr-2" />
             标记误报
@@ -446,7 +446,7 @@ function VulnerabilityDetailContent() {
         <button
           onClick={() => handleAction('verify')}
           disabled={actionLoading === 'verify'}
-          className="inline-flex items-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-colors disabled:opacity-50"
+          className="inline-flex items-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-colors disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
         >
           {actionLoading === 'verify' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />}
           <CheckCircle size={16} className="mr-2" />
@@ -461,48 +461,46 @@ function VulnerabilityDetailContent() {
     <div className="space-y-6">
       {/* Header */}
       <header className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/dashboard/admin/vulnerabilities')}
-              className="p-2 hover:bg-dark-bg rounded-lg transition-colors"
-            >
-              <ArrowLeft size={18} className="text-gray-400" />
-            </button>
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: `${sevConfig.color}20` }}
+        <div className="flex items-center gap-4 min-w-0">
+          <button
+            onClick={() => router.push('/dashboard/admin/vulnerabilities')}
+            className="p-2 hover:bg-dark-bg rounded-lg transition-colors flex-shrink-0"
+          >
+            <ArrowLeft size={18} className="text-gray-400" />
+          </button>
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: `${sevConfig.color}20` }}
+          >
+            <Shield size={18} style={{ color: sevConfig.color }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-lg font-semibold text-white truncate hover:text-blue-300 transition-colors" title={vulnerability.title}>
+                {vulnerability.title}
+              </h1>
+              <span
+                className="px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0"
+                style={{ backgroundColor: `${sevConfig.color}20`, color: sevConfig.color }}
               >
-                <Shield size={18} style={{ color: sevConfig.color }} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-semibold text-white">{vulnerability.title}</h1>
-                  <span
-                    className="px-2 py-0.5 rounded text-xs font-semibold"
-                    style={{ backgroundColor: `${sevConfig.color}20`, color: sevConfig.color }}
-                  >
-                    {sevConfig.label}
-                  </span>
-                  <span
-                    className="px-2 py-0.5 rounded text-xs font-medium"
-                    style={{ backgroundColor: `${statConfig.color}15`, color: statConfig.color }}
-                  >
-                    {statConfig.label}
-                  </span>
-                  {vulnerability.cwe && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-gray-700/50 text-gray-400">
-                      {vulnerability.cwe}
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">{vulnerability.type}</p>
-              </div>
+                {sevConfig.label}
+              </span>
+              <span
+                className="px-2 py-0.5 rounded text-xs font-medium flex-shrink-0"
+                style={{ backgroundColor: `${statConfig.color}15`, color: statConfig.color }}
+              >
+                {statConfig.label}
+              </span>
+              {vulnerability.cwe && (
+                <span className="px-2 py-0.5 rounded text-xs bg-gray-700/50 text-gray-400 flex-shrink-0">
+                  {vulnerability.cwe}
+                </span>
+              )}
             </div>
+            <p className="text-sm text-gray-500 mt-1 truncate">{vulnerability.type}</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
             {vulnerability.rawReport?.hasRawReport && (
               <button
                 onClick={async () => {
@@ -533,7 +531,7 @@ function VulnerabilityDetailContent() {
                     toast.error(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`);
                   }
                 }}
-                className="inline-flex items-center px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
+                className="inline-flex items-center px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors flex-shrink-0 whitespace-nowrap"
               >
                 <Download size={16} className="mr-2" />
                 下载漏洞文件 ({vulnerability.rawReport.files.length})
