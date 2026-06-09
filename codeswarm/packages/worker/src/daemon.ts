@@ -239,27 +239,28 @@ this.server.get('/health', async () => ({
     this.server.post('/task/cancel', async (request, reply) => {
       const body = request.body as { taskId?: string };
       const taskId = body?.taskId;
-      
+
       if (!taskId) {
         return reply.status(400).send({ error: 'Missing taskId' });
       }
 
-      // Check if task is active
-      const payload = this.activeTasks.get(taskId);
-      if (!payload) {
-        this.server.log.warn({ taskId }, 'Task not active, cannot cancel');
-        return reply.status(404).send({ error: 'Task not active', taskId });
-      }
-
       this.server.log.info({ taskId }, 'Received cancel request');
 
+      // 始终标记为已取消，即使任务还未进入 activeTasks（排队中等 Worker 接受）
+      // executeTask 入口会检查此标记并提前退出
       this.cancelledTasks.add(taskId);
 
-      try {
-        await this.processMgr.terminate(taskId);
-        this.server.log.info({ taskId }, 'Process terminated successfully');
-      } catch (err) {
-        this.server.log.warn({ taskId, error: err }, 'Terminate failed, but will continue cleanup');
+      // 如果任务正在执行，终止其进程
+      const payload = this.activeTasks.get(taskId);
+      if (payload) {
+        try {
+          await this.processMgr.terminate(taskId);
+          this.server.log.info({ taskId }, 'Process terminated successfully');
+        } catch (err) {
+          this.server.log.warn({ taskId, error: err }, 'Terminate failed, but will continue cleanup');
+        }
+      } else {
+        this.server.log.info({ taskId }, 'Task not yet active — marked as cancelled, will be skipped on pickup');
       }
 
       this.server.log.info({ taskId }, 'Task marked as cancelled, executeTask will handle cleanup');
@@ -474,6 +475,20 @@ this.server.get('/health', async () => ({
 
     await setTaskLogFile(taskId);
     try {
+      // 早期取消检查：任务在排队/分发阶段已被 /task/cancel 标记
+      if (this.cancelledTasks.has(taskId)) {
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Task cancelled before execution started — reporting failure`);
+        this.postResult(payload, {
+          taskId,
+          nodeId: this.config.nodeId,
+          status: 'failed',
+          error: 'Task cancelled by user',
+        }).catch(err => {
+          this.server.log.warn({ taskId, error: err }, 'postResult (early cancel) failed (non-blocking)');
+        });
+        return; // finally 块会清理 cancelledTasks + semaphore
+      }
+
       const taskStartTime = Date.now();
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[${this.config.nodeId}] taskId: ${taskId}`);

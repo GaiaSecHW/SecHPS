@@ -6,6 +6,30 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
+type DisplayStatus = 'pending' | 'queued' | 'dispatched' | 'running' | 'completed' | 'failed';
+
+function mapDisplayStatus(
+  taskStatus: string,
+  codeswarmState: string | null | undefined,
+  hasCodeswarmTaskId: boolean,
+): DisplayStatus {
+  if (!hasCodeswarmTaskId || codeswarmState === null || codeswarmState === undefined) {
+    if (taskStatus === 'completed') return 'completed';
+    if (taskStatus === 'failed') return 'failed';
+    if (taskStatus === 'running') return 'running';
+    return 'pending';
+  }
+  switch (codeswarmState) {
+    case 'queued': return 'queued';
+    case 'dispatched': return 'dispatched';
+    case 'building': return 'running';
+    case 'running': return 'running';
+    case 'completed': return 'completed';
+    case 'failed': return 'failed';
+    default: return 'pending';
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,27 +53,33 @@ export async function POST(
       return NextResponse.json({ error: '无权停止此任务' }, { status: 403 });
     }
 
-    if (task.status !== 'running') {
-      return NextResponse.json({ error: '只有运行中的任务可以停止' }, { status: 400 });
+    // 合并查询 CodeswarmTask state（displayStatus 判断 + 后续 Worker 信息共用）
+    let csState: string | null = null;
+    let csWorkerId: string | null = null;
+    if (task.codeswarmTaskId) {
+      const csTask = await prisma.codeswarmTask.findFirst({
+        where: { taskId: task.codeswarmTaskId },
+        select: { state: true, workerId: true },
+      });
+      csState = csTask?.state ?? null;
+      csWorkerId = csTask?.workerId ?? null;
+    }
+    const displayStatus = mapDisplayStatus(task.status, csState, !!task.codeswarmTaskId);
+
+    if (!['running', 'queued', 'dispatched'].includes(displayStatus)) {
+      return NextResponse.json({ error: `只有运行中或排队中的任务可以停止（当前状态: ${displayStatus}）` }, { status: 400 });
     }
 
     if (task.codeswarmTaskId) {
-      // 先查询 Worker 信息用于释放负载
-      let workerNodeId: string | null = null;
-      try {
-        const csTask = await prisma.codeswarmTask.findFirst({
-          where: { taskId: task.codeswarmTaskId },
-          select: { workerId: true },
-        });
-        if (csTask?.workerId) {
+      // 仅做日志记录，DELETE 端点内部已负责 Worker 负载释放
+      if (csWorkerId) {
+        try {
           const csWorker = await prisma.codeswarmWorker.findUnique({
-            where: { id: csTask.workerId },
+            where: { id: csWorkerId },
             select: { nodeId: true },
           });
-          workerNodeId = csWorker?.nodeId ?? null;
-        }
-      } catch (e) {
-        logger.error(LOG_MODULES.AGENT, '[Stop] 查询 Worker 信息失败', { details: { error: e instanceof Error ? e.message : String(e) } });
+          logger.info(LOG_MODULES.AGENT, `[Stop] 任务关联 Worker: ${csWorker?.nodeId ?? 'unknown'}`);
+        } catch { /* non-critical */ }
       }
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
