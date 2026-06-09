@@ -133,9 +133,9 @@ async function resolveWorkKey(
     throw new Error(`AIGW work-key 响应解析失败: 非 JSON 格式`);
   }
 
-  const secret: string | undefined = data?.key?.secret;
+  const secret: string | undefined = data?.secret;
   if (!secret) {
-    throw new Error(`AIGW work-key 响应中缺少 key.secret: ${JSON.stringify(data).substring(0, 300)}`);
+    throw new Error(`AIGW work-key 响应中缺少 secret: ${JSON.stringify(data).substring(0, 300)}`);
   }
 
   logger.info(LOG_MODULES.DAEMON, `[WorkKey] Got work-key successfully for ${taskId}/${agentName}`);
