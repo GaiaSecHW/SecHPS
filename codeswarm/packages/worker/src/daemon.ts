@@ -79,6 +79,69 @@ interface WorkerDaemonConfig {
   taskTimeoutMs: number;
 }
 
+/**
+ * 向 AIGW 网关请求 work-key，返回 secret 作为虚拟 API Key。
+ * 环境变量 AIGW_WORK_KEYS_URL 控制开关（未设置则跳过，返回原始 apiKey）。
+ * 失败直接抛错，任务标记为 failed。
+ */
+async function resolveWorkKey(
+  apiKey: string,
+  taskId: string,
+  agentName: string,
+): Promise<string> {
+  const gatewayUrl = process.env.AIGW_WORK_KEYS_URL;
+  if (!gatewayUrl) {
+    return apiKey;
+  }
+
+  const endpoint = `${gatewayUrl}/api/aigw/work-keys`;
+  const body = JSON.stringify({
+    key_name: taskId,
+    sub_task_id: agentName,
+    max_concurrency: 0,
+    enabled: true,
+    description: `work key for ${taskId}/${agentName}`,
+  });
+
+  logger.info(LOG_MODULES.DAEMON, `[WorkKey] Requesting work-key from ${endpoint}, key_name=${taskId}, sub_task_id=${agentName}`);
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`AIGW work-key 请求失败: ${msg} (endpoint: ${endpoint})`);
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`AIGW work-key 请求失败: HTTP ${response.status} - ${text.substring(0, 300)} (endpoint: ${endpoint})`);
+  }
+
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`AIGW work-key 响应解析失败: 非 JSON 格式`);
+  }
+
+  const secret: string | undefined = data?.key?.secret;
+  if (!secret) {
+    throw new Error(`AIGW work-key 响应中缺少 key.secret: ${JSON.stringify(data).substring(0, 300)}`);
+  }
+
+  logger.info(LOG_MODULES.DAEMON, `[WorkKey] Got work-key successfully for ${taskId}/${agentName}`);
+  return secret;
+}
+
 export class WorkerDaemon {
   private readonly config: WorkerDaemonConfig;
   private readonly server: FastifyInstance;
@@ -578,6 +641,26 @@ this.server.get('/health', async () => ({
       // Use instruction directly - environment.ts already handled the short instruction case
       const instruction = resolvedInstruction || payload.instruction || '执行任务';
 
+      // ========== PHASE 1.8: 动态获取虚拟 API Key ==========
+      let effectiveApiKey = apiKey;
+      if (apiKey) {
+        onEvent({
+          type: 'phase_start',
+          phase: 'workkey',
+          message: '正在获取虚拟 API Key...',
+          timestamp: new Date().toISOString(),
+        });
+        effectiveApiKey = await resolveWorkKey(apiKey, taskId, agentName);
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved: ${!!effectiveApiKey}`);
+        onEvent({
+          type: 'phase_complete',
+          phase: 'workkey',
+          success: true,
+          message: '虚拟 API Key 获取成功',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, 'Step 2: Preparing agent config...');
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `engine: ${engine}`);
       logger.taskInfo(taskId, LOG_MODULES.AGENT, `agentName: ${agentName}`);
@@ -611,7 +694,7 @@ this.server.get('/health', async () => ({
         workspacePath,
         engine,
         agentName,
-        apiKey,
+        effectiveApiKey,
         model,
         env,
         instruction,
