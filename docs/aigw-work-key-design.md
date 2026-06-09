@@ -99,7 +99,7 @@ Content-Type: application/json
 
 | 文件 | 修改内容 |
 |------|---------|
-| `codeswarm/packages/worker/src/daemon.ts` | 新增 `resolveWorkKey()` + PHASE 1.8 调用 |
+| `codeswarm/packages/worker/src/daemon.ts` | 新增 `resolveWorkKey()` + PHASE 0.5 调用 |
 | `codeswarm/.env.example` | 新增 `AIGW_WORK_KEYS_URL` 配置项 |
 
 ### 5.2 resolveWorkKey() 函数
@@ -164,7 +164,60 @@ AIGW_WORK_KEYS_URL=http://secflow.ai.icsl.huawei.com
 | `AIGW_WORK_KEYS_URL` 已设置 + 网关不可用 | 任务 failed，错误信息包含网关详情 |
 | 任务无 apiKey（`apiKey` 为空） | 跳过 work-key 请求，直接执行 |
 
-## 8. 对上游透明
+## 8. 任务创建输入参数释义
+
+平台创建 CodeswarmTask 时（`src/app/api/task-builder/tasks/[id]/execute/route.ts`），组装以下参数写入 DB 并经 Dispatcher 发送给 Worker。
+
+### 8.1 完整参数表
+
+| 参数 | 类型 | 来源 | 必填 | 说明 |
+|------|------|------|------|------|
+| `taskId` | `string` | 自动生成 | ✅ | 格式 `task-{timestamp}-{random}`，全局唯一，作为 **work-key 的 `key_name`** |
+| `instruction` | `string` | `AgentApp.startCommand` ∥ `TaskInstance.notes` | ✅ | Agent 执行指令，写入工作区 `instruction.txt` |
+| `workspacePath` | `string` | `TaskInstance.projectPath` | 推荐 | NFS 模式下直接使用的共享路径，跳过文件拷贝 |
+| `projectPath` | `string` | 保留字段 | 否 | 本地拷贝模式的项目源路径（NFS 模式下为 `null`） |
+| `model` | `string` | `ModelConfig.models[0]` | 推荐 | 模型全名（如 `alibaba-cn/MiniMax/MiniMax-M2.7`），用于 opencode.json provider 配置 |
+| `apiKey` | `string` | `ModelConfig.apiKey` | ⚠️ 见下方 | 模型 API Key，**作为 work-key 请求的 Bearer token**，Worker 会用 secret 替换 |
+| `apiBaseUrl` | `string` | `ModelConfig.apiBaseUrl` | 否 | 自定义模型端点 URL，设置后 opencode.json 创建 `custom-*` provider |
+| `engine` | `'opencode'` \| `'claudecode'` | `AgentApp.engine` | ✅ | 执行引擎，默认 `opencode` |
+| `agent` | `string` | `AgentApp.defaultAgentName` | 推荐 | Agent 名称（如 `nazhua-audit`），**作为 work-key 的 `sub_task_id`** |
+| `skills` | `string[]` | `TaskInstance.mergedSkills` | 否 | Skill ID 列表，拷贝到工作区 `.opencode/skills/` |
+| `scripts` | `string[]` | `TaskInstance.mergedScripts` | 否 | 脚本列表 |
+| `mcps` | `MCPService[]` | 保留字段 | 否 | MCP 服务配置（local/remote） |
+| `timeoutSec` | `number` | 环境变量 `TASK_TIMEOUT_SEC` | 否 | 任务超时（秒），默认 604800（7天） |
+| `maxTokens` | `number` | `ModelConfig.maxTokens` | 否 | 模型最大输出 token 数 |
+| `contextWindow` | `number` | `ModelConfig.contextWindow` | 否 | 模型上下文窗口大小 |
+| `targetProduct` | `string` | `TaskInstance.targetProduct` | 否 | 目标产品名，用于 Codedmap 知识图谱预处理 |
+| `preferredWorkerNodeId` | `string` | 手动指定 | 否 | 指定 Worker 节点 ID，空则自动分配 |
+| `callbackUrl` | `string` | 平台配置 | 否 | Worker 回调地址覆盖，默认使用 `ORCHESTRATOR_URL` |
+| `env` | `Record<string,string>` | 保留字段 | 否 | 额外环境变量注入 Agent 进程 |
+
+### 8.2 work-key 相关参数要求
+
+启用 `AIGW_WORK_KEYS_URL` 后，以下参数**必须正确设置**，否则任务会失败：
+
+| 参数 | 要求 | 失败场景 |
+|------|------|---------|
+| `apiKey` | **必须非空**，且是 AIGW 网关认可的父级 API Key（`tsk_*` 格式） | 为空 → 跳过 work-key 请求，用原始 key；无效 → AIGW 返回 401，任务 failed |
+| `taskId` | 已自动生成，无需关注 | — |
+| `agent` | **建议非空**，作为 `sub_task_id` 传给网关；为空时默认 `'default'` | 不影响任务执行，但网关侧无法按 Agent 区分审计 |
+
+### 8.3 参数流转链路
+
+```
+用户创建任务（前端）
+  → TaskInstance 写入 DB（关联 ModelConfig + AgentApp）
+    → POST /api/task-builder/tasks/{id}/execute
+      → 解析 modelConfig.apiKey / agentApp.engine / agentApp.defaultAgentName
+      → INSERT CodeswarmTask（apiKey 存储）
+        → Dispatcher 读取 → TaskPayload JSON → HTTP POST Worker /task
+          → Worker daemon.executeTask(payload)
+            → PHASE 0.5: resolveWorkKey(payload.apiKey, taskId, agent)  ← apiKey 替换为 secret
+            → PHASE 1:   envFactory.build(payload)                      ← secret 写入 opencode.json
+            → PHASE 2:   processMgr.runAgent(apiKey=secret)             ← Agent 使用 secret
+```
+
+## 9. 对上游透明
 
 ```
 Platform (TaskInstance/ModelConfig) → 无修改
