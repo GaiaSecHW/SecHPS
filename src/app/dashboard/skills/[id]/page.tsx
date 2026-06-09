@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
-import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
+import { exportAsSkillFile, copySkillMdToClipboard, copyTextToClipboard } from '@/lib/skill-export';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
@@ -600,8 +600,15 @@ export default function SkillDetailPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await copyTextToClipboard(text);
+      toast.success('已复制到剪贴板');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '未知错误';
+      toast.error(errorMsg);
+      console.error('复制失败:', error);
+    }
   };
 
   const handleExport = async () => {
@@ -686,9 +693,11 @@ export default function SkillDetailPage() {
       });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success('已复制到剪贴板');
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : '未知错误';
+      toast.error(errorMsg);
       console.error('复制失败:', error);
-      alert('复制失败，请重试');
     }
   };
 
