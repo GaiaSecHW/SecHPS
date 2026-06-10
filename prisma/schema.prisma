@@ -39,6 +39,12 @@ model CodeswarmTask {
   platformTaskId        String?   // 外部平台的 TaskInstance ID
   platformCallbackUrl   String?   // 任务完成时回调平台
 
+  // Tool 调度字段
+  toolId                String?   // Tool 标识符
+  toolTaskId            String?   // 组合 ID: toolId + uuid + timestamp
+  toolPath              String?   // Tool 可执行路径
+  toolWorkDir           String?   // TOOL_WORK_DIR 根目录
+
   sessionId             String?
   events                String?   @db.Text // legacy JSON
   result                String?   @db.Text

@@ -96,7 +96,7 @@ bash scripts/dev.sh         # 开发环境初始化
 | 路由组 | 前缀 | 说明 |
 |--------|------|------|
 | Worker | `/api/worker/*` | 心跳、事件上报、结果回调 |
-| Task | `/api/task/*` | 任务创建、查询、取消、重试 |
+| Task | `/api/task/*` | 任务创建、查询、取消、重试（支持 Tool 调度模式） |
 | Nodes | `/api/nodes/*` | Worker 节点管理 |
 | Stream | `/api/stream/*` | SSE 事件流推送 |
 | Platform | `/api/platform/*` | 平台状态查询（预留） |

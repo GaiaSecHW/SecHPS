@@ -10,7 +10,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma, withDeadlockRetry } from '../prisma.js';
-import { allocateWorkspacePath, ensureWorkspaceDir } from '../services/workspace.js';
+import { allocateWorkspacePath, allocateToolWorkspacePath, ensureWorkspaceDir } from '../services/workspace.js';
 import { metrics } from '../services/metrics.js';
 import { logger } from '../logger.js';
 
@@ -37,6 +37,10 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
       targetProduct?: string;
       maxTokens?: number;
       contextWindow?: number;
+      // Tool 调度字段
+      toolId?: string;
+      toolPath?: string;
+      toolWorkDir?: string;
     };
 
     if (!body.instruction) {
@@ -46,9 +50,29 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     // Generate taskId
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    // Tool 调度模式：生成 toolTaskId 并创建 tool 工作目录
+    let toolTaskId: string | undefined;
+    let toolWorkspacePath: string | undefined;
+    let toolEnv: Record<string, string> | undefined;
+
+    if (body.toolId) {
+      const uuidPart = crypto.randomUUID().split('-')[0]; // 8 chars
+      toolTaskId = `${body.toolId}-${uuidPart}-${Date.now()}`;
+      const toolWorkDir = body.toolWorkDir || process.env.TOOL_WORK_DIR || '/mnt/tool-workspace';
+      toolWorkspacePath = allocateToolWorkspacePath(toolWorkDir, toolTaskId);
+      ensureWorkspaceDir(toolWorkspacePath);
+      // 构建环境变量
+      toolEnv = {
+        ...(body.env || {}),
+        PROJECT_DIR: body.projectPath || '',
+        TOOL_WORK_DIR: toolWorkDir,
+      };
+      logger.info(`[Task] Tool mode: toolTaskId=${toolTaskId}, workspace=${toolWorkspacePath}`);
+    }
+
     // Allocate workspace path
-    const workspacePath = allocateWorkspacePath(taskId, body.workspacePath);
-    if (!body.workspacePath) {
+    const workspacePath = toolWorkspacePath || allocateWorkspacePath(taskId, body.workspacePath);
+    if (!body.workspacePath && !toolWorkspacePath) {
       ensureWorkspaceDir(workspacePath);
     }
 
@@ -69,13 +93,18 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             timeoutSec: body.timeoutSec || null,
             skills: body.skills ? JSON.stringify(body.skills) : null,
             mcps: body.mcps ? JSON.stringify(body.mcps) : null,
-            env: body.env ? JSON.stringify(body.env) : null,
+            env: toolEnv ? JSON.stringify(toolEnv) : (body.env ? JSON.stringify(body.env) : null),
             preferredWorkerNodeId: body.preferredWorkerNodeId || null,
             targetProduct: body.targetProduct || null,
             maxTokens: body.maxTokens || null,
             contextWindow: body.contextWindow || null,
             platformTaskId: body.platformTaskId || null,
             platformCallbackUrl: body.callbackUrl || null,
+            // Tool 调度字段
+            toolId: body.toolId || null,
+            toolTaskId: toolTaskId || null,
+            toolPath: body.toolPath || null,
+            toolWorkDir: body.toolWorkDir || null,
           },
         })
       );
@@ -85,11 +114,12 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
         await dispatcher.submitTask(task);
       }
 
-      logger.info(`[Task] Submitted: ${taskId} (workspace: ${workspacePath})`);
+      logger.info(`[Task] Submitted: ${taskId} (workspace: ${workspacePath}${toolTaskId ? `, toolTaskId: ${toolTaskId}` : ''})`);
       return reply.status(201).send({
         taskId: task.taskId,
         dbTaskId: task.id,
         workspacePath,
+        ...(toolTaskId ? { toolTaskId } : {}),
         queued: true,
       });
     } catch (error: any) {

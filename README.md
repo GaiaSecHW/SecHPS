@@ -92,7 +92,7 @@ scripts/             # 构建/开发脚本
 |------|------|
 | `GET /health` | 健康检查 |
 | `GET /metrics` | Prometheus 指标 |
-| `POST /api/task/create` | 创建任务 |
+| `POST /api/task/create` | 创建任务（支持 Tool 调度：toolId, toolPath, toolWorkDir） |
 | `GET /api/task/list` | 任务列表 |
 | `POST /api/worker/heartbeat` | Worker 心跳 |
 | `POST /api/worker/event` | Worker 事件上报 |

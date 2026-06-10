@@ -30,6 +30,14 @@ export function ensureWorkspaceDir(dirPath: string): void {
 }
 
 /**
+ * 为 tool 任务分配工作区路径
+ * 格式: TOOL_WORK_DIR/toolTaskId/run
+ */
+export function allocateToolWorkspacePath(toolWorkDir: string, toolTaskId: string): string {
+  return `${toolWorkDir}/${toolTaskId}/run`;
+}
+
+/**
  * 清理单个工作区（只清理 PVC 路径）
  */
 export function cleanupWorkspace(workspacePath: string): void {

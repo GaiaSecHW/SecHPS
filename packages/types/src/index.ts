@@ -127,6 +127,11 @@ export const TaskPayloadSchema = z.object({
   preferredWorkerNodeId: z.string().optional(),
   // Target product name, used as codedmap db filename ({targetProduct}.db)
   targetProduct: z.string().optional(),
+  // Tool dispatch fields — when toolId is present, enables tool-level scheduling
+  toolId: z.string().optional(),            // Tool identifier
+  toolPath: z.string().optional(),          // Tool executable path
+  toolTaskId: z.string().optional(),        // Composite ID: toolId + uuid + timestamp
+  toolWorkDir: z.string().optional(),       // Tool root work directory (TOOL_WORK_DIR)
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

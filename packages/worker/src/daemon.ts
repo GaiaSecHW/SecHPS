@@ -554,7 +554,7 @@ this.server.get('/health', async () => ({
           message: '正在获取虚拟 API Key...',
           timestamp: new Date().toISOString(),
         });
-        const effectiveApiKey = await resolveWorkKey(apiKey, taskId, agent || 'default');
+        const effectiveApiKey = await resolveWorkKey(apiKey, taskId, payload.toolId || agent || 'default');
         // 覆盖 payload.apiKey，后续 envFactory.build 和 runAgent 都使用 secret
         (payload as any).apiKey = effectiveApiKey;
         logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved, payload.apiKey replaced`);

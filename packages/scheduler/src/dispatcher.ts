@@ -185,6 +185,11 @@ export class CodeswarmDispatcher {
     env?: string;
     platformTaskId?: string;
     platformCallbackUrl?: string;
+    // Tool dispatch fields
+    toolId?: string;
+    toolTaskId?: string;
+    toolPath?: string;
+    toolWorkDir?: string;
   }): Promise<{ id: string } | null> {
     try {
       const task = await prisma.codeswarmTask.create({
@@ -211,6 +216,11 @@ export class CodeswarmDispatcher {
           env: payload.env,
           platformTaskId: payload.platformTaskId,
           platformCallbackUrl: payload.platformCallbackUrl,
+          // Tool dispatch fields
+          toolId: payload.toolId,
+          toolTaskId: payload.toolTaskId,
+          toolPath: payload.toolPath,
+          toolWorkDir: payload.toolWorkDir,
           state: 'queued',
         },
       });
@@ -548,6 +558,12 @@ export class CodeswarmDispatcher {
       agent: task.agent || undefined,
       preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
       targetProduct: task.targetProduct || undefined,
+      env: task.env ? safeJsonParse(task.env) : undefined,
+      // Tool dispatch fields
+      toolId: task.toolId || undefined,
+      toolTaskId: task.toolTaskId || undefined,
+      toolPath: task.toolPath || undefined,
+      toolWorkDir: task.toolWorkDir || undefined,
     });
 
     for (const addr of sorted) {
