@@ -54,18 +54,19 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     let toolTaskId: string | undefined;
     let toolWorkspacePath: string | undefined;
     let toolEnv: Record<string, string> | undefined;
+    let resolvedToolWorkDir: string | undefined;
 
     if (body.toolId) {
       const uuidPart = crypto.randomUUID().split('-')[0]; // 8 chars
       toolTaskId = `${body.toolId}-${uuidPart}-${Date.now()}`;
-      const toolWorkDir = body.toolWorkDir || process.env.TOOL_WORK_DIR || '/mnt/tool-workspace';
-      toolWorkspacePath = allocateToolWorkspacePath(toolWorkDir, toolTaskId);
+      resolvedToolWorkDir = body.toolWorkDir || process.env.TOOL_WORK_DIR || '/mnt/tool-workspace';
+      toolWorkspacePath = allocateToolWorkspacePath(resolvedToolWorkDir, toolTaskId);
       ensureWorkspaceDir(toolWorkspacePath);
       // 构建环境变量
       toolEnv = {
         ...(body.env || {}),
         PROJECT_DIR: body.projectPath || '',
-        TOOL_WORK_DIR: toolWorkDir,
+        TOOL_WORK_DIR: resolvedToolWorkDir,
       };
       logger.info(`[Task] Tool mode: toolTaskId=${toolTaskId}, workspace=${toolWorkspacePath}`);
     }
@@ -104,7 +105,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             toolId: body.toolId || null,
             toolTaskId: toolTaskId || null,
             toolPath: body.toolPath || null,
-            toolWorkDir: body.toolWorkDir || null,
+            toolWorkDir: resolvedToolWorkDir || null,
           },
         })
       );
