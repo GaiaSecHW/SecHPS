@@ -6,6 +6,58 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { logger, LOG_MODULES } from './logger.js';
 
+
+interface AuditReportCandidate {
+  filePath: string;
+  size: number;
+  mtimeMs: number;
+}
+
+const AUDIT_REPORT_BASENAME = 'AUDIT_REPORT';
+const AUDIT_REPORT_ACCEPTED_EXTS = new Set(['.json', '.md']);
+const DEFAULT_REPORT_POLL_INTERVAL_SEC = 300;
+
+function findAuditReportCandidate(workspace: string): AuditReportCandidate | null {
+  const reportDir = path.join(workspace, 'Report');
+
+  try {
+    if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) {
+      return null;
+    }
+
+    const entries = fs.readdirSync(reportDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+
+      const parsed = path.parse(entry.name);
+      if (!parsed.name.startsWith(AUDIT_REPORT_BASENAME)) continue;
+      if (!AUDIT_REPORT_ACCEPTED_EXTS.has(parsed.ext.toLowerCase())) continue;
+
+      const filePath = path.join(reportDir, entry.name);
+      const stat = fs.statSync(filePath);
+      if (stat.size <= 0) continue;
+
+      return { filePath, size: stat.size, mtimeMs: stat.mtimeMs };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isSameAuditReportCandidate(previous: AuditReportCandidate | null, current: AuditReportCandidate | null): boolean {
+  return !!previous && !!current
+    && previous.filePath === current.filePath
+    && previous.size === current.size
+    && previous.mtimeMs === current.mtimeMs;
+}
+
+function getReportPollIntervalMs(): number {
+  const configured = parseInt(process.env.REPORT_POLL_INTERVAL_SEC || String(DEFAULT_REPORT_POLL_INTERVAL_SEC), 10);
+  return (Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REPORT_POLL_INTERVAL_SEC) * 1000;
+}
+
 interface ProcessEntry {
   client?: ACPClient;
   process?: ChildProcess;
@@ -373,26 +425,52 @@ export class ProcessManager {
         resolveExit(code);
       });
 
-      const result = await Promise.race([
-        exitPromise.then(code => ({
-          exitCode: code ?? 1,
-          stdout: state.stdout,
-          stderr: state.stderr,
-        })),
-        new Promise<RunAgentResult>((resolve) => {
-          setTimeout(() => {
-            resolve({
-              exitCode: 124,
-              stdout: state.stdout,
-              stderr: state.stderr + '\nTimeout exceeded',
-            });
-          }, timeoutMs);
+      let stopReportMonitor = false;
+      let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+      const raceResult = await Promise.race([
+        exitPromise.then(code => ({ kind: 'exit' as const, code })),
+        this.waitForAuditReportDuringRun(taskId, workspace, timeoutMs, onEvent, () => stopReportMonitor)
+          .then(found => ({ kind: found ? 'report_ready' as const : 'report_timeout' as const })),
+        new Promise<{ kind: 'timeout' }>((resolve) => {
+          timeoutHandle = setTimeout(() => resolve({ kind: 'timeout' }), timeoutMs);
         }),
       ]);
 
-      if (result.exitCode === 124 && childProcess && childProcess.exitCode === null) {
+      stopReportMonitor = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+
+      let result: RunAgentResult;
+      if (raceResult.kind === 'report_ready') {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'AUDIT_REPORT stable, terminating opencode main process');
+        if (childProcess && childProcess.exitCode === null) {
+          childProcess.kill('SIGTERM');
+          await Promise.race([
+            exitPromise,
+            new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+          ]);
+        }
+        result = { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
+      } else if (raceResult.kind === 'timeout' || raceResult.kind === 'report_timeout') {
         logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Timeout, killing opencode process');
-        childProcess.kill('SIGTERM');
+        if (childProcess && childProcess.exitCode === null) childProcess.kill('SIGTERM');
+        result = {
+          exitCode: 124,
+          stdout: state.stdout,
+          stderr: state.stderr + '\nTimeout exceeded',
+        };
+      } else if (raceResult.kind === 'exit') {
+        result = {
+          exitCode: raceResult.code ?? 1,
+          stdout: state.stdout,
+          stderr: state.stderr,
+        };
+      } else {
+        result = {
+          exitCode: 124,
+          stdout: state.stdout,
+          stderr: state.stderr + '\nTimeout exceeded',
+        };
       }
 
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN END (exitCode=${result.exitCode}) ==========`);
@@ -406,6 +484,48 @@ export class ProcessManager {
     } finally {
       this.processes.delete(taskId);
     }
+  }
+
+  private async waitForAuditReportDuringRun(
+    taskId: string,
+    workspace: string,
+    timeoutMs: number,
+    onEvent?: AgentEventCallback,
+    shouldStop?: () => boolean,
+  ): Promise<boolean> {
+    const pollIntervalMs = getReportPollIntervalMs();
+    const deadline = Date.now() + timeoutMs;
+    let previous = findAuditReportCandidate(workspace);
+
+    if (previous) {
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Detected AUDIT_REPORT, waiting for stable write: ${path.basename(previous.filePath)}`);
+    }
+
+    while (Date.now() < deadline && !shouldStop?.()) {
+      const nextCheckAt = Date.now() + Math.min(pollIntervalMs, Math.max(0, deadline - Date.now()));
+      while (Date.now() < nextCheckAt && !shouldStop?.()) {
+        await new Promise<void>((resolve) => setTimeout(resolve, Math.min(1000, nextCheckAt - Date.now())));
+      }
+      if (shouldStop?.()) return false;
+
+      const current = findAuditReportCandidate(workspace);
+      if (isSameAuditReportCandidate(previous, current) && current) {
+        onEvent?.({
+          type: 'log_chunk',
+          content: `[Worker] opencode 运行期间检测到稳定的 AUDIT_REPORT: ${path.basename(current.filePath)}`,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
+        return true;
+      }
+
+      previous = current;
+      if (current) {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `AUDIT_REPORT still changing, checking again in ${Math.round(pollIntervalMs / 1000)}s`);
+      }
+    }
+
+    return false;
   }
 
   async runOpencodeCommand(

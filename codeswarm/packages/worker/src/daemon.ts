@@ -23,7 +23,7 @@ interface AuditReportCandidate {
 
 const AUDIT_REPORT_BASENAME = 'AUDIT_REPORT';
 const AUDIT_REPORT_ACCEPTED_EXTS = new Set(['.json', '.md']);
-const DEFAULT_REPORT_POLL_INTERVAL_SEC = 600;
+const DEFAULT_REPORT_POLL_INTERVAL_SEC = 300;
 const REPORT_NOT_GENERATED_ERROR = '任务执行失败，报告未生成。';
 
 export function findAuditReportCandidate(workspace: string): AuditReportCandidate | null {
