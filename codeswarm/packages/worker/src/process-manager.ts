@@ -306,33 +306,27 @@ export class ProcessManager {
     const state: RunState = { stdout: '', stderr: '', currentSkill: null };
     let childProcess: ChildProcess | null = null;
     const logFilePath = path.join(workspace, 'opencode_stdout.logs');
-    let logStreamClosed = false;
 
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN START ==========`);
 
     try {
-      // Build args: opencode run --agent <agent> --dir <workspace> "prompt"
-      const args = ['run'];
+      // Build opencode args
+      const args = ['run', '--print-logs'];
       if (agentName) args.push('--agent', agentName);
       args.push('--dir', workspace);
 
       const prompt = instruction?.trim() || agentName || '执行任务';
-      args.push(prompt);
 
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `opencode ${args.slice(0, -1).join(' ')} "prompt(len=${prompt.length})"`);
+      // Shell command with pipefail + tee: file write by tee, stdout capture by Node.js
+      // pipefail ensures exit code reflects opencode (not tee)
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      const shellCmd = `set -o pipefail; opencode ${args.join(' ')} '${escapedPrompt}' 2>&1 | tee "${logFilePath}"`;
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `shell: ${shellCmd.substring(0, 200)}`);
 
       const env: Record<string, string> = mergedEnv || process.env as Record<string, string>;
 
-      // Create log file stream for dual-write
-      const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
-      const safeCloseLog = () => {
-        if (!logStreamClosed) {
-          logStreamClosed = true;
-          try { logStream.close(); } catch {}
-        }
-      };
-
-      childProcess = spawn('opencode', args, {
+      childProcess = spawn('bash', ['-c', shellCmd], {
         cwd: workspace,
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -341,11 +335,16 @@ export class ProcessManager {
       // Store in processes map for terminate() support
       this.processes.set(taskId, { process: childProcess, workspace, createdAt: Date.now() });
 
-      // stdout: dual-write to log file + send events
+      // Resolve function for exit — hoisted so spawn error handler can use it
+      let resolveExit!: (code: number | null) => void;
+      const exitPromise = new Promise<number | null>((resolve) => {
+        resolveExit = resolve;
+      });
+
+      // stdout: tee writes to file, we capture for real-time events
       childProcess.stdout?.on('data', (data: Buffer) => {
         const content = data.toString();
         state.stdout += content;
-        try { logStream.write(content); } catch {}
         if (onEvent) {
           onEvent({
             type: 'agent_message_chunk',
@@ -355,43 +354,21 @@ export class ProcessManager {
         }
       });
 
-      // stderr: classify + send events
+      // stderr of shell process (usually empty since 2>&1 merged into tee pipe)
       childProcess.stderr?.on('data', (data: Buffer) => {
         const content = data.toString();
-        for (const line of content.split('\n').filter(Boolean)) {
-          state.stderr += line + '\n';
-          const classified = classifyAcpError(line);
-          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `[opencode stderr] ${line} (category=${classified.category})`);
-          if (onEvent) {
-            onEvent({
-              type: classified.isCritical ? 'error' : 'phase_error',
-              message: line,
-              phase: classified.category,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        }
-      });
-
-      // Resolve function for exit — hoisted so spawn error handler can use it
-      let resolveExit!: (code: number | null) => void;
-      const exitPromise = new Promise<number | null>((resolve) => {
-        resolveExit = resolve;
+        state.stderr += content;
       });
 
       // Handle spawn error (ENOENT/EACCES etc — process never started, close may not fire)
-      let spawnErrored = false;
       childProcess.on('error', (err) => {
-        spawnErrored = true;
         logger.taskError(taskId, LOG_MODULES.PROCESS, `opencode run spawn error: ${err.message}`);
         state.stderr += err.message;
-        safeCloseLog();
         resolveExit(1);
       });
 
       // Normal exit
       childProcess.on('close', (code) => {
-        safeCloseLog();
         resolveExit(code);
       });
 
@@ -403,7 +380,6 @@ export class ProcessManager {
         })),
         new Promise<RunAgentResult>((resolve) => {
           setTimeout(() => {
-            safeCloseLog();
             resolve({
               exitCode: 124,
               stdout: state.stdout,
