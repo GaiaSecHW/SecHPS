@@ -1,33 +1,31 @@
-name: Build Worker Image
+name: Build Scheduler Image
 
 on:
   push:
     branches:
       - dev
     paths:
-      - 'packages/worker/**'
+      - 'packages/scheduler/**'
       - 'packages/types/**'
-      - 'packages/acp/**'
-      - 'packages/sdk-adapter/**'
-      - 'docker/Dockerfile.worker'
+      - 'prisma/**'
+      - 'docker/Dockerfile.scheduler'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/worker-image.yml'
+      - '.github/workflows/scheduler-image.yml'
   pull_request:
     branches:
       - dev
     paths:
-      - 'packages/worker/**'
+      - 'packages/scheduler/**'
       - 'packages/types/**'
-      - 'packages/acp/**'
-      - 'packages/sdk-adapter/**'
+      - 'prisma/**'
   release:
     types: [published]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/codeswarm-worker
+  IMAGE_NAME: ${{ github.repository_owner }}/codeswarm-scheduler
 
 jobs:
   build:
@@ -65,7 +63,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile.worker
+          file: ./docker/Dockerfile.scheduler
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

@@ -1,156 +1,128 @@
-# SecHPS
+# CodeSwarm Service
 
-AI 驱动的编码辅助测试平台，支持多租户、RBAC 权限、工作流编排、AI 模型路由、分布式任务调度、代码安全分析等功能。
+分布式 AI Agent 任务调度微服务。Scheduler + Worker 架构，Redis 驱动的任务队列，支持多 Worker 节点并行执行。
 
 ## 技术栈
 
-- **前端**: Next.js 16 (App Router) + React 19 + TypeScript 6 + Tailwind CSS 3
-- **数据库**: Prisma 6 + PostgreSQL（Drizzle ORM 辅助）
-- **认证**: JWT + bcryptjs（RBAC，5 种默认角色）
-- **工作流**: @xyflow/react 可视化编辑器 + FSM 状态机引擎
-- **AI 路由**: 多模型统一路由（OpenAI、Anthropic、Gemini、DeepSeek 等）
-- **任务调度**: CodeSwarm（Redis 队列 + Worker 分布式执行）
-- **代码分析**: CodeMap（Python，污点分析、Joern、Neo4j）
-- **文件存储**: Gitea（AgentApp/Skill）+ NFS + MinIO
-- **测试**: Vitest
+- **运行时**: Node.js 20 + TypeScript 5.8（ESM）
+- **HTTP 框架**: Fastify 5
+- **数据库**: Prisma 6 + PostgreSQL（3 模型）
+- **消息队列**: Redis Stream（ioredis）
+- **对象存储**: MinIO
+- **AI 引擎**: OpenCode CLI + Claude Code CLI（ACP 协议）
+- **包管理**: pnpm workspace monorepo
 
-## 功能模块
+## 子包
 
-- **多租户管理** — 平台管理员、ICSL 租户、普通租户三类用户，应用层数据隔离
-- **RBAC 权限** — 动态角色权限分配，模块级粒度控制
-- **Agent 管理** — AgentApp、AgentDefinition、AgentTeam（多智能体编排）
-- **AgentFlow** — 可视化管道编辑器，DAG 编排 Agent 执行流程
-- **工作流引擎** — 可视化拖拽编辑，DAG 拓扑排序 + FSM 状态机双引擎
-- **Skill 系统** — 技能构建、分类、去重、进化、治理、Gitea 同步
-- **评估系统** — 代码扫描评估、漏洞管理、Skill 进化
-- **CodeSwarm** — 分布式任务调度、Worker 管理、实时状态追踪
-- **CodeMap** — Python 代码安全分析引擎（污点分析、数据流、Neo4j 图存储）
-- **漏洞管理** — 全生命周期漏洞追踪（发现、确认、误报标记、修复验证）
-- **MCP Server** — 模型上下文协议管理
-- **插件系统** — 可扩展插件架构
-- **实时终端** — WebSocket + node-pty 终端模拟
+| 包名 | 说明 |
+|------|------|
+| `@codeswarm/types` | 共享 Zod 类型定义 |
+| `@codeswarm/acp` | Agent Client Protocol 适配 |
+| `@codeswarm/sdk-adapter` | Claude Agent SDK 适配 |
+| `@codeswarm/scheduler` | 调度器微服务（HTTP API + Redis Dispatcher） |
+| `@codeswarm/worker` | Worker 守护进程（Agent 执行引擎） |
+| `@codeswarm/debug-ui` | 调试面板（Vite + React） |
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2. 配置环境变量
 
 ```bash
 cp .env.example .env
-# 编辑 .env，配置 DATABASE_URL、JWT_SECRET 等
+# 编辑 .env，配置 DATABASE_URL、REDIS_URL 等
 ```
 
 ### 3. 初始化数据库
 
 ```bash
-npm run db:push              # 推送 schema
-npm run db:seed              # 种子数据（用户 + 角色 + 权限）
-npm run db:seed-techstack    # 技术栈种子数据
-npm run db:seed-agents       # Agent 定义种子数据
-npm run db:seed-fsm          # FSM 模板种子数据
+pnpm run db:push        # 推送 schema
+pnpm run db:generate    # 生成 Prisma Client
 ```
 
-### 4. 启动开发服务器
+### 4. 启动服务
 
 ```bash
-npm run dev
-```
+# 开发模式
+pnpm run dev:scheduler   # 调度器（端口 8080）
+pnpm run dev:worker      # Worker（端口 8090）
 
-访问 http://localhost:3000，使用 `admin` / `admin123` 登录。
+# 或使用 Docker Compose（含 PostgreSQL + Redis + MinIO）
+cd docker && docker compose up --build
+```
 
 ## 项目结构
 
 ```
-src/
-├── app/
-│   ├── api/                    # 40+ REST API 端点
-│   │   ├── admin/              # 管理后台 API
-│   │   ├── agent-apps/         # Agent 应用管理
-│   │   ├── agentflow-pipelines/ # AgentFlow 管道
-│   │   ├── codeswarm/          # CodeSwarm 调度
-│   │   ├── skills/             # 技能管理
-│   │   ├── vulnerabilities/    # 漏洞管理
-│   │   ├── workflows/          # 工作流
-│   │   └── ...（auth、users、roles、sessions、projects、models、evaluations 等）
-│   ├── dashboard/              # 受保护的管理页面（20+ 模块）
-│   ├── login/                  # 登录页
-│   └── skills/[id]/            # Skill 详情页
-├── components/                 # UI 组件
-│   ├── agent-apps/             # Agent 应用管理
-│   ├── agentflow-editor/       # AgentFlow 可视化编辑器
-│   ├── agentflow-pipeline/     # AgentFlow 管道
-│   ├── chat/                   # 聊天组件
-│   ├── codeswarm/              # CodeSwarm 管理界面
-│   ├── evaluation/             # 评估组件
-│   ├── skills/                 # 技能管理
-│   ├── terminal/               # 终端组件
-│   ├── workflow/               # 工作流编辑器
-│   └── ui/                     # 基础 UI 组件
-├── hooks/                      # React Hooks（useAuth、useApiFetch 等）
-├── lib/                        # 核心库（60+ 文件）
-│   ├── auth.ts                 # JWT 认证
-│   ├── api-auth.ts             # API 认证中间件
-│   ├── tenant.ts               # 多租户上下文
-│   ├── tenant-filter.ts        # 租户隔离过滤
-│   ├── prisma.ts               # Prisma 单例
-│   ├── claude-router/          # AI 模型路由
-│   ├── workflow/               # 工作流引擎
-│   ├── fsm/                    # 有限状态机
-│   └── ...（agent、mcp、vulnerability 等）
-├── services/                   # 业务服务层
-│   ├── evaluation/             # 评估服务
-│   ├── skill-evolution/        # Skill 进化
-│   ├── autonomous-evolution/   # 自主进化
-│   ├── providers/              # AI 提供商适配
-│   └── ...
-├── types/                      # 类型定义
-└── middleware.ts               # Next.js 中间件
-
-codeswarm-service/              # 分布式调度微服务（Scheduler + Worker + ACP + Types）
-plugins/codedmap/               # Python 代码安全分析引擎（污点分析、Joern、Neo4j）
-prisma/schema.prisma            # 数据库 Schema（60+ 模型）
-scripts/                        # 构建/迁移脚本
-plugins/                        # 插件目录
-docs/                           # 设计文档与架构图
+packages/
+├── types/           # 共享类型
+├── acp/             # ACP 协议适配
+├── sdk-adapter/     # Claude Agent SDK 适配
+├── scheduler/       # 调度器（Fastify + Redis Dispatcher）
+│   └── src/
+│       ├── index.ts         # 入口
+│       ├── server.ts        # HTTP 服务
+│       ├── dispatcher.ts    # 调度核心
+│       ├── auth.ts          # JWT 认证
+│       ├── routes/          # API 路由
+│       └── services/        # 指标、工作区管理
+├── worker/          # Worker 执行引擎
+│   └── src/
+│       ├── daemon.ts        # Worker 主循环
+│       ├── agent-runner.ts  # Agent 执行
+│       ├── environment.ts   # 运行环境
+│       ├── process-manager.ts # 子进程管理
+│       └── minio-client.ts  # 对象存储
+└── debug-ui/        # 调试面板
+prisma/
+└── schema.prisma    # 3 模型（Task, Worker, Event）
+docker/              # Docker 部署配置
+k8s/                 # Kubernetes 部署配置
+scripts/             # 构建/开发脚本
 ```
 
-## 常用命令
+## API
 
-```bash
-npm run dev              # 开发服务器
-npm run build            # 生产构建
-npm start                # 生产运行
-npm run lint             # 代码检查
-npm run test             # 运行测试（Vitest）
-npm run db:generate      # 生成 Prisma Client
-npm run db:push          # 推送 Schema 变更
-npm run db:seed          # 初始化数据
-```
+| 路径 | 说明 |
+|------|------|
+| `GET /health` | 健康检查 |
+| `GET /metrics` | Prometheus 指标 |
+| `POST /api/task/create` | 创建任务 |
+| `GET /api/task/list` | 任务列表 |
+| `POST /api/worker/heartbeat` | Worker 心跳 |
+| `POST /api/worker/event` | Worker 事件上报 |
+| `POST /api/worker/result` | Worker 结果回调 |
+| `GET /api/stream/events/:taskId` | SSE 事件流 |
+| `GET /debug/*` | Debug UI |
 
 ## 环境变量
 
-详见 `.env.example`。核心配置：
+详见 `.env.example`。
 
 | 变量 | 说明 |
 |------|------|
 | `DATABASE_URL` | PostgreSQL 连接字符串 |
+| `REDIS_URL` | Redis 连接 |
 | `JWT_SECRET` | JWT 签名密钥 |
-| `REDIS_URL` | Redis 连接（CodeSwarm 调度） |
-| `NEXT_PUBLIC_BASE_URL` | Worker 回调地址 |
-| `GITEA_*` | Gitea 文件同步配置 |
-| `NFS_*` | NFS 文件存储配置 |
+| `PORT` | Scheduler 端口（默认 8080） |
 | `MINIO_*` | MinIO 对象存储配置 |
 
 ## 部署
 
-详见 [README-DEPLOY.md](./README-DEPLOY.md)。
+### Docker Compose（本地开发）
 
-关键注意：`@anthropic-ai/claude-agent-sdk` 含平台原生二进制，生产安装不能用 `--omit=optional` 或 `--production`。
+```bash
+cd docker && docker compose up --build
+```
+
+### Kubernetes（生产）
+
+配置文件在 `k8s/` 目录，包含 Scheduler Deployment、Worker Deployment（含 HPA）、Service、ConfigMap、Secret 等。
 
 ## 许可证
 

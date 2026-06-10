@@ -1,68 +1,37 @@
-# .dockerignore for SecHPS Server
-# Build context: project root (docker build -f Dockerfile.server .)
-#
-# Note: CodeSwarm Worker uses deploy/worker.dockerignore (separate context)
+# .dockerignore for CodeSwarm Service
+# Build context: project root
+#   docker build -f docker/Dockerfile.scheduler .
+#   docker build -f docker/Dockerfile.worker .
 
 # === Rebuilt in Docker (not needed in build context) ===
-.next
 node_modules
-
-# === Separate Docker image (worker has its own build) ===
-codeswarm-service/
+**/dist
 
 # === Version control ===
 .git
 .gitignore
+.gitattributes
+.gitmodules
 
-# === IDE ===
+# === IDE / Claude tools ===
 .idea
 .vscode
 *.swp
 .claude/
 .omc/
+.codegraph/
+.opencode/
 
 # === Secrets (must never be in image) ===
 .env
 .env.local
 .env.example
 
-# === Runtime data (mounted as volumes at deploy time) ===
-data/
-uploads/
-skill_management/
-AgentHarness/
-skills.clone/
-test-skills-output/
-
 # === Logs ===
 *.log
-app.log
-worker.log
-
-# === Scripts (only postbuild.js needed for build, rest excluded) ===
-scripts/*
-!scripts/postbuild.js
 
 # === Dev/test artifacts ===
-docs/
-!docs/agent-harness-developer-guide.md
-test-*.js
-test-*.ts
-test-*.py
-test-*.cjs
-test-*.mjs
-test-project/
-test-results/
-test-outputs/
-
-# === Misc ===
-/*.md
-*.zip
-*.tar.gz
-*.7z
-*.db
-dev.db
-prod_dev.db
+.github/
+k8s/
+*.md
 tsconfig.tsbuildinfo
-temp-*
-session-ses_*.md

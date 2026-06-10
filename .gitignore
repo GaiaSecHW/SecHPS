@@ -2,37 +2,17 @@
 node_modules/
 .pnp
 .pnp.js
-package-lock.json
 
-# Database dumps
-copy_dump.sql
-
-# Testing
-coverage/
-
-# Next.js
-.next/
-out/
-build/
+# Build output
 dist/
+*.tsbuildinfo
 
-# Production
+# Database
+prisma/migrations/
+
+# Logs
 *.log
 /logs/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-
-# Misc
-.DS_Store
-*.pem
-AgentHarness/
-AgentHarness_management/
-
-# Debug
-debug/
-npm-debug.log*
 
 # Local env files
 .env
@@ -41,11 +21,7 @@ npm-debug.log*
 .env.test.local
 .env.production.local
 
-# Vercel
-.vercel
-
 # TypeScript
-*.tsbuildinfo
 next-env.d.ts
 
 # IDE
@@ -56,37 +32,27 @@ next-env.d.ts
 *~
 
 # OS
+.DS_Store
 Thumbs.db
 
-# Data files (skills are managed via database)
+# Data
 data/
-
-# Session messages (JSONL storage)
-data/sessions/
-
-# User uploads
 uploads/
 
-# Development database
+# Worker runtime state
+packages/worker/.acpx-state/
+
+# Dev databases
 dev.db
 
-# Worktrees
-.worktrees/
-
-# OMC tool state files
-.omc/
-/.sisyphus
-/.playwright-mcp
-/.sisyphus
-/.omo/
-/tmp
-/prisma/migrations
-/scripts
+# Misc
 *.bak
-*.tsbuildinfo
+*.pem
+/tmp
 
-# Python cache
-__pycache__/
-
-# Worker 运行时状态目录
-codeswarm-service/packages/worker/.acpx-state/
+# OMC / Claude tools
+.omc/
+.claude/
+.codegraph/
+.opencode/
+.sisyphus/
