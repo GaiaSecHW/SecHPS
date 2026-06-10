@@ -131,11 +131,7 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 - **任务输入子目录**: 用户上传文件统一放入 `TASK_INPUT_DIR` 子目录（默认 `vlu_scan_code`），不在工作区根目录散布
 - Worker 环境构建时自动排除输入子目录，防止误判为项目子目录
 
-### CodeMap（代码分析引擎）
-
-- `plugins/codedmap/` — 独立 Python 项目（污点分析、Joern 集成）
-- 污点分析、数据流分析、Joern 集成
-- Neo4j / SQLite 存储驱动
+### ~~CodeMap（已移除）~~
 - C/C++ 和 Python 规则集
 
 ### AgentFlow（可视化编排）

@@ -79,7 +79,6 @@ export async function PUT(
     let defaultAgentName: string | undefined;
     let startCommand: string | null;
     let inputRequirements: string | null;
-    let requireCodedmap: boolean = false;
     let isPublic: boolean = false;
     let updateFiles = false;
     let fileType: string | null = null;
@@ -96,7 +95,6 @@ export async function PUT(
       defaultAgentName = body.defaultAgentName || undefined;
       startCommand = body.startCommand || null;
       inputRequirements = body.inputRequirements || null;
-      requireCodedmap = body.requireCodedmap || false;
       isPublic = body.isPublic || false;
     } else if (contentType.includes('multipart/form-data')) {
       formData = await request.formData();
@@ -105,7 +103,6 @@ export async function PUT(
       defaultAgentName = (formData.get('defaultAgentName') as string) || undefined;
       startCommand = formData.get('startCommand') as string | null;
       inputRequirements = formData.get('inputRequirements') as string | null;
-      requireCodedmap = formData.get('requireCodedmap') === 'true';
       isPublic = formData.get('isPublic') === 'true';
       fileType = formData.get('agentHarnessFileType') as string | null;
       agentHarnessFile = formData.get('agentHarnessFile') as File | null;
@@ -190,7 +187,6 @@ export async function PUT(
         defaultAgentName: defaultAgentName || undefined,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
-        requireCodedmap,
         isPublic,
         agentHarnessPath,
         updatedAt: new Date(),

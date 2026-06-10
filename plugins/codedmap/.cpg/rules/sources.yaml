@@ -1,5 +1,0 @@
-version: 1
-sources:
-- id: source_util_read_text_file
-  name: util_read_text_file
-  category: FILE_DATA

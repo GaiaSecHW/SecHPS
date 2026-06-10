@@ -23,7 +23,7 @@ WORKER_IMAGE="sechps-worker"
 # .dockerignore management
 # Server and Worker need different .dockerignore files:
 #   - Server: excludes codeswarm-service/ (has its own Dockerfile)
-#   - Worker: includes codeswarm-service/ + plugins/codedmap/
+#   - Worker: includes codeswarm-service/
 # ---------------------------------------------------------------------------
 SERVER_DOCKERIGNORE="$PROJECT_DIR/.dockerignore"
 WORKER_DOCKERIGNORE="$SCRIPT_DIR/worker.dockerignore"

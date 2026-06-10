@@ -12,7 +12,6 @@ import {
 import { EnvironmentFactory } from './environment.js';
 import { ProcessManager, type AgentEvent } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
-import { CodedmapManager } from './codedmap-manager.js';
 import { ensureBucket } from './minio-client.js';
 
 interface AuditReportCandidate {
@@ -150,7 +149,6 @@ export class WorkerDaemon {
   private readonly envFactory: EnvironmentFactory;
   private readonly processMgr: ProcessManager;
   private readonly semaphore: Semaphore;
-  private readonly codedmapMgr: CodedmapManager;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatFailCount = 0;
@@ -172,7 +170,7 @@ export class WorkerDaemon {
     this.envFactory = new EnvironmentFactory();
     this.processMgr = new ProcessManager();
     this.semaphore = new Semaphore(config.maxConcurrent);
-    this.codedmapMgr = new CodedmapManager();
+
   }
 
   /**
@@ -563,7 +561,6 @@ this.server.get('/health', async () => ({
     const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
     const taskTimeoutMs = timeoutSec ? timeoutSec * 1000 : this.config.taskTimeoutMs;
     let buildResult = null;
-    let codedmapPromise: Promise<void> | null = null;
 
     await setTaskLogFile(taskId);
     try {
@@ -654,36 +651,6 @@ this.server.get('/health', async () => ({
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
       this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
-
-      // ========== PHASE 1.5: Codedmap 知识图谱预处理（与 Agent 并行） ==========
-      if (payload.targetProduct) {
-        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1.5: Codedmap preprocessing (parallel) for targetProduct=${payload.targetProduct}`);
-        onEvent({
-          type: 'phase_start',
-          phase: 'codedmap',
-          message: `知识图谱预处理启动（后台并行）: ${payload.targetProduct}`,
-          timestamp: new Date().toISOString(),
-          level: 'worker',
-        });
-        codedmapPromise = this.codedmapMgr.ensureDbFile(workspacePath, payload.targetProduct, (event) => {
-          onEvent({
-            ...event,
-          });
-        }).then(() => {
-          logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Codedmap preprocessing completed for ${payload.targetProduct}`);
-        }).catch((codedmapErr: unknown) => {
-          const errMsg = codedmapErr instanceof Error ? codedmapErr.message : String(codedmapErr);
-          logger.taskError(taskId, LOG_MODULES.DAEMON, `Codedmap preprocessing failed: ${errMsg}`);
-          onEvent({
-            type: 'phase_complete',
-            phase: 'codedmap',
-            success: false,
-            message: `知识图谱预处理失败（Agent 可继续执行）: ${errMsg}`,
-            timestamp: new Date().toISOString(),
-            level: 'worker',
-          });
-        });
-      }
 
       // agentName: resolved from opencode.json > payload.agent > fallback 'build'
       const agentName = resolvedAgent || agent || 'build';
@@ -888,10 +855,6 @@ this.server.get('/health', async () => ({
     } finally {
       clearTaskLogFile(taskId);
       this.cancelledTasks.delete(taskId);
-      // Codedmap is fully async — do NOT await it here.
-      // Errors are handled inside the promise chain (lines 232-243).
-      // NFS passthrough mode skips cleanup anyway, so no risk of
-      // deleting files while codedmap is still writing.
       if (buildResult) {
         await this.envFactory.cleanup(buildResult.workspacePath);
       }

@@ -19,8 +19,6 @@ import {
   Copy,
   Wrench,
   ChevronRight,
-  Database,
-  Brain,
   Layers,
   Search,
   PanelLeftClose,
@@ -84,7 +82,6 @@ const PRE_PHASES: ExecutionPhase[] = [
 ];
 
 const PARALLEL_PHASES: ExecutionPhase[] = [
-  { id: 'codedmap', name: '知识图谱', status: 'pending', icon: <Database className="w-4 h-4" /> },
   { id: 'executing', name: '执行命令', status: 'pending', icon: <Play className="w-4 h-4" /> },
 ];
 
@@ -272,9 +269,6 @@ export function WorkerLogsPage() {
     ];
 
     const state = taskDetail.state;
-    const hasCodedmapStart = logs.some(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_start' || d.type === 'phase_start') && d.phase === 'codedmap'; } catch { return false; } });
-    const codedmapCompleteEvent = logs.find(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_complete' || d.type === 'phase_complete') && d.phase === 'codedmap'; } catch { return false; } });
-    const codedmapSuccess = codedmapCompleteEvent ? (() => { try { return JSON.parse(codedmapCompleteEvent.data).success !== false; } catch { return true; } })() : false;
     const hasExecutingStart = logs.some(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_start' || d.type === 'phase_start') && d.phase === 'executing'; } catch { return false; } });
     const executingCompleteEvent = logs.find(log => { try { const d = JSON.parse(log.data); return (log.type === 'phase_complete' || d.type === 'phase_complete') && d.phase === 'executing'; } catch { return false; } });
     const executingSuccess = executingCompleteEvent ? (() => { try { return JSON.parse(executingCompleteEvent.data).success !== false; } catch { return true; } })() : false;
@@ -287,16 +281,9 @@ export function WorkerLogsPage() {
     if (state === 'building') { pre[2].status = 'running'; return [{ type: 'sequential', phases: pre }, { type: 'parallel', phases: parallel }, { type: 'sequential', phases: post }]; }
     pre[2].status = 'completed';
 
-    // Parallel phases: codedmap and executing independently
-    if (hasCodedmapStart) {
-      if (codedmapCompleteEvent) { parallel[0].status = codedmapSuccess ? 'completed' : 'failed'; parallel[0].time = codedmapCompleteEvent.createdAt; }
-      else parallel[0].status = 'running';
-    } else {
-      parallel[0].status = 'skipped';
-    }
-
-    if (state === 'completed') { parallel[1].status = executingSuccess ? 'completed' : 'failed'; }
-    else if (state === 'failed') { parallel[1].status = 'failed'; }
+    // Parallel phases: executing
+    if (state === 'completed') { parallel[0].status = executingSuccess ? 'completed' : 'failed'; }
+    else if (state === 'failed') { parallel[0].status = 'failed'; }
     else if (hasExecutingStart && executingCompleteEvent) { parallel[1].status = executingSuccess ? 'completed' : 'failed'; parallel[1].time = executingCompleteEvent.createdAt; }
     else if (hasExecutingStart || ['running', 'dispatched'].includes(state) || (state === 'failed' && !taskDetail.completedAt)) { parallel[1].status = 'running'; }
     else { parallel[1].status = 'running'; }
@@ -466,12 +453,11 @@ export function WorkerLogsPage() {
                     const isAgent = first.level === 'agent';
                     const isError = first.stream === 'stderr' || first.type === 'error';
                     const isTool = first.type === 'tool_call';
-                    const isCodedmap = content.includes('[Codedmap]') || (() => { try { const d = JSON.parse(first.data); return (first.type === 'phase_start' || first.type === 'phase_complete') && d.phase === 'codedmap'; } catch { return false; } })();
                     const toolInfo = getToolCallInfo(first);
                     return (
-                      <div key={`g-${gi}`} className={`w-full border-l-2 ${isError ? 'border-l-red-500 bg-red-900/10' : isCodedmap ? 'border-l-indigo-500 bg-indigo-900/10' : isTool ? 'border-l-amber-500 bg-amber-900/10' : isAgent ? 'border-l-blue-500 bg-blue-900/10' : 'border-l-gray-500 bg-gray-800/30'} px-3 py-1.5`}>
+                      <div key={`g-${gi}`} className={`w-full border-l-2 ${isError ? 'border-l-red-500 bg-red-900/10' : isTool ? 'border-l-amber-500 bg-amber-900/10' : isAgent ? 'border-l-blue-500 bg-blue-900/10' : 'border-l-gray-500 bg-gray-800/30'} px-3 py-1.5`}>
                           <div className="flex items-center gap-2 text-xs opacity-60 mb-0.5">
-                            <span className="flex items-center gap-1">{isCodedmap ? <Brain size={12} /> : isTool ? <Wrench size={12} /> : isAgent ? <MessageSquare size={12} /> : <Cpu size={12} />}<span className={`font-medium ${isError ? 'text-red-400' : isCodedmap ? 'text-indigo-400' : isTool ? 'text-amber-400' : isAgent ? 'text-blue-400' : 'text-gray-400'}`}>{isCodedmap ? 'Codedmap' : isTool ? 'Tool' : isAgent ? 'Agent' : 'Worker'}</span></span>
+                            <span className="flex items-center gap-1">{isTool ? <Wrench size={12} /> : isAgent ? <MessageSquare size={12} /> : <Cpu size={12} />}<span className={`font-medium ${isError ? 'text-red-400' : isTool ? 'text-amber-400' : isAgent ? 'text-blue-400' : 'text-gray-400'}`}>{isTool ? 'Tool' : isAgent ? 'Agent' : 'Worker'}</span></span>
                             <span className="font-mono text-gray-500">{formatTime(first.createdAt)}</span>
                             <button onClick={() => copyToClipboard(content)} className="ml-auto text-gray-400 hover:text-gray-200"><Copy size={12} /></button>
                           </div>

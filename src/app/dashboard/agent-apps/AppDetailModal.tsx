@@ -11,7 +11,6 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   inputRequirements?: string | null;
-  requireCodedmap?: boolean;
   isPublic: boolean;
   tenantId?: string | null;
   createdAt: string;
@@ -29,7 +28,6 @@ interface FormData {
   defaultAgentName: string;
   startCommand?: string;
   inputRequirements?: string;
-  requireCodedmap?: boolean;
   tenantId: string;
 }
 
@@ -58,7 +56,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     tenantId: '',
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
-  const [requireCodedmap, setRequireCodedmap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -101,7 +98,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
         tenantId: app.isPublic ? '__public__' : (app.tenantId || ''),
       });
       setAgentHarnessFile(null);
-      setRequireCodedmap(app.requireCodedmap || false);
     }
   }, [app, isOpen]);
 
@@ -121,7 +117,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     setIsSubmitting(true);
     try {
       const isPublic = formData.tenantId === '__public__';
-      await onUpdate(app.id, { ...formData, requireCodedmap }, agentHarnessFile || undefined, isPublic);
+      await onUpdate(app.id, formData, agentHarnessFile || undefined, isPublic);
       toast.success('Agent更新成功');
       handleClose();
     } catch (error: any) {
@@ -134,7 +130,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   const handleClose = () => {
     setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', inputRequirements: '', tenantId: '' });
     setAgentHarnessFile(null);
-    setRequireCodedmap(false);
     onClose();
   };
 
@@ -325,21 +320,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
             <p className="mt-1 text-xs text-gray-500">留空则不校验上传文件的目录结构</p>
           </div>
 
-          <div className="flex items-center justify-between py-1">
-            <div>
-              <span className="text-sm font-medium text-gray-300">需要知识图谱</span>
-              <p className="text-xs text-gray-500">启用后，使用此 Agent 的任务会自动加载知识图谱</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setRequireCodedmap(!requireCodedmap)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${requireCodedmap ? 'bg-primary-500' : 'bg-gray-600'}`}
-              disabled={isSubmitting}
-            >
-              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${requireCodedmap ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
+                  </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-dark-bg">
           <button

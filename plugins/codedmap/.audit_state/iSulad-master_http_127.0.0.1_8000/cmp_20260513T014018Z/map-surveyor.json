@@ -1,8 +1,0 @@
-{
-  "id": "map-surveyor",
-  "status": "done",
-  "started_at": "2026-05-13T01:40:18.963920+00:00",
-  "finished_at": "2026-05-13T01:58:16.706623+00:00",
-  "error": null,
-  "summary": "Completed Map Surveyor workflow for iSulad container daemon (650K nodes, 715 files, 12K methods). Assigned 518 files to 7 modules (daemon_entry, daemon_executor, daemon_modules, client, cmd, utils, sandbox). Tagged 4 REST API entrypoints (rest_create_cb, rest_kill_cb, rest_network_create_cb) as SEMANTIC:ENTRYPOINT:PROTOCOL_DISPATCH and task_console_accept as SEMANTIC:BRIDGE:IPC. Tagged 2 guards (util_valid_container_name, util_valid_image_name) as ONTOLOGY:GUARD:BOUNDS_CHECK. Added 2 rules (rest_callback entrypoint pattern, util_read_text_file source). Repaired 1 broken trace link (console_init→task_console_accept callback). Created Survey_Handoff COORDINATION note with 5 investigation candidates for Hunter attention."
-}

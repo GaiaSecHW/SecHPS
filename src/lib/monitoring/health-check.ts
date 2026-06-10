@@ -114,7 +114,7 @@ async function checkMinIO(): Promise<InfrastructureService> {
       secretKey: process.env.MINIO_SECRET_KEY || '',
       useSSL: process.env.MINIO_USE_SSL === 'true',
     });
-    const bucket = process.env.MINIO_BUCKET || 'codedmap-dbs';
+    const bucket = process.env.MINIO_BUCKET || 'codeswarm';
     await mc.bucketExists(bucket);
     return {
       name: 'MinIO', type: 'object-storage', host: endpoint, port,

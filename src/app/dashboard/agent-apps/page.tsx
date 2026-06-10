@@ -14,7 +14,6 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   isPublic: boolean;
-  requireCodedmap?: boolean;
   tenantId?: string | null;
   Tenant?: {
     name: string;
@@ -231,7 +230,6 @@ export default function AgentAppsPage() {
         fd.append('inputRequirements', formData.inputRequirements);
       }
       fd.append('isPublic', isPublic ? 'true' : 'false');
-      fd.append('requireCodedmap', formData.requireCodedmap ? 'true' : 'false');
       // __public__ 是前端占位值，后端收到 isPublic=true 时不需要 tenantId
       const tenantId = formData.tenantId === '__public__' ? '' : (formData.tenantId || '');
       fd.append('tenantId', tenantId);
@@ -287,7 +285,6 @@ export default function AgentAppsPage() {
           fd.append('inputRequirements', formData.inputRequirements);
         }
         fd.append('isPublic', isPublic ? 'true' : 'false');
-        fd.append('requireCodedmap', formData.requireCodedmap ? 'true' : 'false');
         fd.append('agentHarnessFileType', agentHarnessFile.type);
         
         if (agentHarnessFile.type === 'archive') {
@@ -339,7 +336,6 @@ export default function AgentAppsPage() {
             defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
             inputRequirements: formData.inputRequirements || null,
-            requireCodedmap: formData.requireCodedmap || false,
             isPublic: isPublic,
           }),
         });
