@@ -32,8 +32,8 @@ interface QueueMonitorProps {
 /**
  * 队列状态监控组件
  *
- * 显示当前评估队列状态：
- * - 运行中数量 / 最大并发
+ * 显示当前智能体集群任务队列状态：
+ * - 运行中数量 / Worker总容量
  * - 排队中数量
  * - 排队列表（默认收缩，点击展开，支持分页）
  */
@@ -153,11 +153,7 @@ export function QueueMonitor({
                 {status.queuedCount}
               </span>
             </div>
-            {hasQueuedEvaluations && (
-              <p className="mt-1 text-xs text-yellow-500">
-                预估等待: ~{status.queuedCount * 5}分钟
-              </p>
-            )}
+            
           </div>
 
           {/* 状态 */}
@@ -189,9 +185,9 @@ export function QueueMonitor({
                 {isQueueFull ? '队列已满' : hasActiveEvaluations ? '正常运行' : '空闲'}
               </span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">
-              最大并发: {status.maxConcurrent}
-            </p>
+<p className="mt-1 text-xs text-gray-500">
+                  Worker 容量: {status.maxConcurrent}
+                </p>
           </div>
         </div>
       )}
@@ -206,7 +202,7 @@ export function QueueMonitor({
           >
             <span className="flex items-center">
               <ListOrdered size={16} className="mr-2 text-gray-500" />
-              排队评估列表
+              排队任务列表
               {hasQueuedEvaluations && (
                 <span className="ml-2 text-xs text-gray-500">
                   ({status.queuedCount} 个)
@@ -274,7 +270,7 @@ export function QueueMonitor({
                 </>
               ) : (
                 <p className="text-sm text-gray-500 text-center py-2">
-                  当前没有排队等待的评估
+                  当前没有排队等待的任务
                 </p>
               )}
             </div>
@@ -312,10 +308,10 @@ function QueueItem({
           {evaluation.queuePosition}
         </div>
 
-        {/* 项目名 */}
+        {/* 任务名 */}
         <div className="min-w-0">
           <p className="text-sm font-medium text-gray-100 truncate">
-            {evaluation.projectName}
+            {evaluation.taskName}
           </p>
           <p className="text-xs text-gray-500 truncate">
             ID: {evaluation.id.slice(0, 8)}...
@@ -366,9 +362,9 @@ export function QueueStatusIndicator() {
       {/* 分隔符 */}
       <span className="text-gray-600">|</span>
 
-      {/* 最大并发 */}
+      {/* Worker 容量 */}
       <span className="text-gray-500 text-xs">
-        max {status.maxConcurrent}
+        容量 {status.maxConcurrent}
       </span>
     </div>
   );
