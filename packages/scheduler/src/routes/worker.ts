@@ -62,6 +62,16 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
         ? generateWorkerToken(worker.id, worker.nodeId)
         : undefined;
 
+      // Sync in-memory topology (dispatcher.selectWorker depends on this)
+      dispatcher?.onHeartbeat?.({
+        nodeId: worker.nodeId,
+        id: worker.id,
+        address: worker.address,
+        maxConcurrent: worker.maxConcurrent,
+        currentTasks: worker.currentTasks,
+        status: worker.status,
+      });
+
       // Trigger dispatch check on capacity change
       dispatcher?.triggerDispatch?.();
 
