@@ -1,0 +1,16 @@
+{
+  "name": "@codeswarm/sdk-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.101"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: scheduler-metrics
+  namespace: codeswarm
+  labels:
+    release: prometheus    # 匹配 Prometheus Operator 的 serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: scheduler
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

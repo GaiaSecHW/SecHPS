@@ -1,0 +1,39 @@
+# docker/Dockerfile.scheduler
+# 多阶段构建：编译 + 生产镜像
+
+FROM node:20-bookworm AS builder
+
+WORKDIR /app
+RUN corepack enable
+
+# 先复制依赖声明
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/types/package.json ./packages/types/
+COPY packages/scheduler/package.json ./packages/scheduler/
+COPY prisma/ ./prisma/
+
+RUN pnpm install --no-frozen-lockfile
+
+# 复制源码
+COPY packages/types/ ./packages/types/
+COPY packages/scheduler/ ./packages/scheduler/
+COPY tsconfig.json ./
+
+# 构建
+RUN pnpm --filter @codeswarm/types build
+RUN pnpm --filter @codeswarm/scheduler build
+
+# 生成 Prisma Client
+RUN npx prisma generate --schema=prisma/schema.prisma
+
+# 生产镜像
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/scheduler/dist ./dist
+COPY --from=builder /app/packages/types/dist ./packages/types/dist
+COPY --from=builder /app/prisma ./prisma
+
+EXPOSE 8080
+CMD ["node", "dist/index.js"]

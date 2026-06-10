@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  namespace: codeswarm
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/component: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: scheduler
+          image: codeswarm-scheduler:latest   # 替换为 Registry 地址
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: codeswarm-config
+            - secretRef:
+                name: codeswarm-secrets
+          volumeMounts:
+            - name: workspace
+              mountPath: /mnt/workspace
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: shared-workspace

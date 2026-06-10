@@ -144,11 +144,8 @@ export async function register() {
       await initGitSkillSync();
       console.log(`${LOG_PREFIX} Git Skill 同步初始化完成`);
 
-      // Step 7: 初始化 CodeSwarm 调度器（Redis 队列 + Worker 拓扑恢复 + 离线检测）
-      console.log(`${LOG_PREFIX} 初始化 CodeSwarm 调度器...`);
-      const { codeswarmDispatcher } = await import('./src/services/codeswarm-dispatcher');
-      await codeswarmDispatcher.init();
-      console.log(`${LOG_PREFIX} CodeSwarm 调度器初始化完成`);
+      // Step 7: CodeSwarm 调度器已拆分为独立微服务，不再在此初始化
+      // 如需启动调度器，请部署 codeswarm-service/ 到 K8s 或使用 docker-compose
 
       // Step 8: 启动日志归档调度器（每周一自动压缩上周日志）
       const { startLogArchiveScheduler } = await import('./src/lib/log-archiver');

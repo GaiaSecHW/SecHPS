@@ -1,0 +1,127 @@
+# CodeSwarm Service — 本地开发调试环境
+#
+# 使用方式：
+#   cd docker && docker compose up --build
+#
+# Scheduler API: http://localhost:8080
+# Worker-1:      http://localhost:8081
+# Worker-2:      http://localhost:8082
+# MinIO Console:  http://localhost:9001
+# PostgreSQL:     localhost:5432
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: codeswarm
+      POSTGRES_USER: codeswarm
+      POSTGRES_PASSWORD: codeswarm_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codeswarm"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # 初始化共享工作区卷权限
+  workspace-init:
+    image: busybox
+    command: ["chmod", "777", "/mnt/workspace"]
+    volumes:
+      - workspace_data:/mnt/workspace
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.scheduler
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.docker
+    volumes:
+      - workspace_data:/mnt/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workspace-init:
+        condition: service_completed_successfully
+
+  worker-1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    ports:
+      - "8081:8080"
+    environment:
+      NODE_ID: worker-1
+      PORT: 8080
+      MAX_CONCURRENT: 3
+      SCHEDULER_URL: http://scheduler:8080
+      WORKER_ADDRESS: worker-1:8080,http://localhost:8081
+      WORKSPACE_BASE_PATH: /mnt/workspace
+      TASK_TIMEOUT_SEC: "86400"
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: codeswarm
+      MINIO_USE_SSL: "false"
+    volumes:
+      - workspace_data:/mnt/workspace
+    depends_on:
+      - scheduler
+
+  worker-2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    ports:
+      - "8082:8080"
+    environment:
+      NODE_ID: worker-2
+      PORT: 8080
+      MAX_CONCURRENT: 3
+      SCHEDULER_URL: http://scheduler:8080
+      WORKER_ADDRESS: worker-2:8080,http://localhost:8082
+      WORKSPACE_BASE_PATH: /mnt/workspace
+      TASK_TIMEOUT_SEC: "86400"
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: codeswarm
+      MINIO_USE_SSL: "false"
+    volumes:
+      - workspace_data:/mnt/workspace
+    depends_on:
+      - scheduler
+
+volumes:
+  pgdata:
+  minio_data:
+  workspace_data:    # 模拟 NFS PVC，所有容器共享

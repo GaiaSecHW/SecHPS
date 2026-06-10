@@ -1,0 +1,44 @@
+# docker/Dockerfile.worker
+# 多阶段构建：编译 + 生产镜像（含 AI 引擎预装）
+
+FROM node:20-bookworm AS builder
+
+WORKDIR /app
+RUN corepack enable
+
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/types/package.json ./packages/types/
+COPY packages/acp/package.json ./packages/acp/
+COPY packages/sdk-adapter/package.json ./packages/sdk-adapter/
+COPY packages/worker/package.json ./packages/worker/
+
+RUN pnpm install --no-frozen-lockfile
+
+COPY packages/types/ ./packages/types/
+COPY packages/acp/ ./packages/acp/
+COPY packages/sdk-adapter/ ./packages/sdk-adapter/
+COPY packages/worker/ ./packages/worker/
+COPY tsconfig.json ./
+
+RUN pnpm -r build
+
+# 生产镜像 — 预装 AI 引擎
+FROM node:20-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 opencode + claude-agent-acp
+RUN npm install -g opencode-ai@latest 2>/dev/null || true
+RUN npm install -g @agentclientprotocol/claude-agent-acp@latest 2>/dev/null || true
+
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/types/dist ./packages/types/dist
+COPY --from=builder /app/packages/acp/dist ./packages/acp/dist
+COPY --from=builder /app/packages/sdk-adapter/dist ./packages/sdk-adapter/dist
+COPY --from=builder /app/packages/worker/dist ./packages/worker/dist
+
+EXPOSE 8080
+CMD ["node", "packages/worker/dist/index.js"]
