@@ -31,6 +31,9 @@ interface Stats {
   failed: number;
   running: number;
   pending: number;
+  queued: number;
+  dispatched: number;
+  executing: number;
 }
 
 interface VulnerabilityStats {
@@ -60,6 +63,9 @@ export default function OverviewPage() {
     failed: 0,
     running: 0,
     pending: 0,
+    queued: 0,
+    dispatched: 0,
+    executing: 0,
   });
   const [vulnStats, setVulnStats] = useState<VulnerabilityStats>({
     total: 0,
@@ -79,6 +85,7 @@ export default function OverviewPage() {
   });
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasRunningTasks, setHasRunningTasks] = useState(false);
+  const [showRunningDetail, setShowRunningDetail] = useState(false);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -100,10 +107,17 @@ export default function OverviewPage() {
     return () => clearInterval(pollInterval);
   }, [hasRunningTasks]);
 
+  useEffect(() => {
+    if (!showRunningDetail) return;
+    const handler = () => setShowRunningDetail(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showRunningDetail]);
+
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/codeswarm/tasks', {
+      const response = await fetch('/api/task-builder/stats', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -117,41 +131,19 @@ export default function OverviewPage() {
       }
 
       const data = await response.json();
-      const taskList = data.tasks || [];
+      const s = data.stats;
 
-      const hasRunning = taskList.some((t: any) =>
-        t.state === 'running' || t.state === 'dispatched' || t.state === 'queued'
-      );
-      setHasRunningTasks(hasRunning);
-
-      let completed = 0;
-      let failed = 0;
-      let running = 0;
-      let pending = 0;
-
-      for (const task of taskList) {
-        const state = task.state;
-        // 已完成 = completed
-        if (state === 'completed') {
-          completed++;
-        } else if (state === 'failed') {
-          // 失败 = failed
-          failed++;
-        } else if (state === 'running' || state === 'building') {
-          // 运行中 = 执行中（running）+ 构建中（building）
-          running++;
-        } else if (state === 'queued' || state === 'dispatched' || state === 'pending') {
-          // 待执行 = 未执行（pending）+ 排队中（queued）+ 已分发（dispatched）
-          pending++;
-        }
-      }
+      setHasRunningTasks((s.queued + s.dispatched + s.executing) > 0);
 
       setStats({
-        total: taskList.length,
-        completed,
-        failed,
-        running,
-        pending,
+        total: s.total,
+        completed: s.completed,
+        failed: s.failed,
+        running: s.queued + s.dispatched + s.executing,
+        pending: s.pending,
+        queued: s.queued,
+        dispatched: s.dispatched,
+        executing: s.executing,
       });
       setLoading(false);
     } catch (err) {
@@ -275,13 +267,36 @@ export default function OverviewPage() {
                 icon={<MessageSquare size={18} />}
                 color="violet"
               />
-              <MetricCard
-                label="运行中"
-                value={stats.running}
-                icon={<Activity size={18} />}
-                color="cyan"
-                active={stats.running > 0}
-              />
+              <div className="relative">
+                <MetricCard
+                  label="运行中"
+                  value={stats.running}
+                  icon={<Activity size={18} />}
+                  color="cyan"
+                  active={stats.running > 0}
+                  onClick={() => stats.running > 0 && setShowRunningDetail(v => !v)}
+                  clickable={stats.running > 0}
+                />
+                {showRunningDetail && stats.running > 0 && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl p-3 min-w-[160px]" onClick={e => e.stopPropagation()}>
+                    <div className="text-xs text-zinc-400 mb-2 text-center font-medium">运行中详情</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-zinc-300">排队中</span>
+                        <span className="text-xs font-semibold text-amber-400">{stats.queued}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-zinc-300">已分发</span>
+                        <span className="text-xs font-semibold text-blue-400">{stats.dispatched}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-zinc-300">执行中</span>
+                        <span className="text-xs font-semibold text-cyan-400">{stats.executing}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <MetricCard
                 label="待执行"
                 value={stats.pending}
@@ -498,12 +513,16 @@ function MetricCard({
   icon,
   color,
   active = false,
+  onClick,
+  clickable = false,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   color: string;
   active?: boolean;
+  onClick?: () => void;
+  clickable?: boolean;
 }) {
   const styles: Record<string, { bg: string; iconBg: string; text: string }> = {
     violet: { bg: 'bg-violet-500/10', iconBg: 'bg-gradient-to-br from-violet-400 to-purple-500', text: 'text-violet-400' },
@@ -516,7 +535,10 @@ function MetricCard({
   const style = styles[color] || styles.cyan;
 
   return (
-    <div className={`${style.bg} rounded-lg p-3 md:p-3.5 border border-zinc-800/50 min-w-0`}>
+    <div
+      className={`${style.bg} rounded-lg p-3 md:p-3.5 border border-zinc-800/50 min-w-0 ${clickable ? 'cursor-pointer hover:border-cyan-500/30 transition-colors' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between mb-2">
         <div className={`w-7 h-7 md:w-8 md:h-8 ${style.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
           <div className="text-white text-sm">{icon}</div>
