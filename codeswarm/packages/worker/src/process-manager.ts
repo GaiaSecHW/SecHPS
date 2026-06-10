@@ -291,7 +291,7 @@ export class ProcessManager {
 
   /**
    * Execute agent via `opencode run` (non-interactive mode).
-   * Output is piped to workspace/opencode_debug.log via tee AND sent as real-time events.
+   * Output is piped to workspace/opencode_stdout.logs via tee AND sent as real-time events.
    * No ACP protocol — simpler, faster, more stable than `opencode acp`.
    */
   private async runOpencodeRun(
@@ -305,7 +305,7 @@ export class ProcessManager {
   ): Promise<RunAgentResult> {
     const state: RunState = { stdout: '', stderr: '', currentSkill: null };
     let childProcess: ChildProcess | null = null;
-    const logFilePath = path.join(workspace, 'opencode_debug.log');
+    const logFilePath = path.join(workspace, 'opencode_stdout.logs');
 
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN START ==========`);
 
