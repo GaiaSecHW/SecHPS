@@ -7,9 +7,10 @@ import * as os from 'node:os';
 import { logger, LOG_MODULES } from './logger.js';
 
 interface ProcessEntry {
-  client: ACPClient;
+  client?: ACPClient;
+  process?: ChildProcess;
   workspace: string;
-  sessionId: string;
+  sessionId?: string;
   createdAt: number;
 }
 
@@ -121,19 +122,20 @@ export class ProcessManager {
 
   async sendPrompt(taskId: string, instruction: string): Promise<StopReason> {
     const entry = this.processes.get(taskId);
-    if (!entry) throw new Error(`No process found for task ${taskId}`);
+    if (!entry?.client) throw new Error(`No ACP client found for task ${taskId}`);
     return entry.client.sendPrompt(instruction);
   }
 
   async terminate(taskId: string): Promise<void> {
     const entry = this.processes.get(taskId);
     if (!entry) return;
-    await entry.client.destroy();
+    if (entry.client) await entry.client.destroy();
+    if (entry.process && entry.process.exitCode === null) entry.process.kill('SIGTERM');
     this.processes.delete(taskId);
   }
 
   getClient(taskId: string): ACPClient | undefined {
-    return this.processes.get(taskId)?.client as ACPClient | undefined;
+    return this.processes.get(taskId)?.client;
   }
 
   async runAgent(
@@ -195,7 +197,13 @@ export class ProcessManager {
         mergedEnv.CLAUDE_API_KEY = mergedEnv.ANTHROPIC_API_KEY;
       }
 
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step B: Creating and starting client...');
+      // ========== OPENCODE RUN MODE (direct spawn, no ACP) ==========
+      if (engine === 'opencode') {
+        return this.runOpencodeRun(taskId, workspace, agentName, instruction || '执行任务', onEvent, mergedEnv, effectiveTimeoutMs);
+      }
+      // ========== CLAUDECODE ACP MODE ==========
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step B: Creating and starting ACP client...');
       const clientConfig: ACPClientConfig = {
         cwd: workspace,
         env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
@@ -278,6 +286,124 @@ export class ProcessManager {
       if (client) await client.destroy();
       this.processes.delete(taskId);
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Cleanup done');
+    }
+  }
+
+  /**
+   * Execute agent via `opencode run` (non-interactive mode).
+   * Uses --print-logs + pipefail tee: file write by tee, stdout capture by Node.js.
+   * No ACP protocol — simpler, faster, more stable than `opencode acp`.
+   */
+  private async runOpencodeRun(
+    taskId: string,
+    workspace: string,
+    agentName: string,
+    instruction: string,
+    onEvent?: AgentEventCallback,
+    mergedEnv?: Record<string, string>,
+    timeoutMs: number = 7 * 24 * 3600 * 1000,
+  ): Promise<RunAgentResult> {
+    const state: RunState = { stdout: '', stderr: '', currentSkill: null };
+    let childProcess: ChildProcess | null = null;
+    const logFilePath = path.join(workspace, 'opencode_stdout.logs');
+
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN START ==========`);
+
+    try {
+      // Build opencode args
+      const args = ['run', '--print-logs'];
+      if (agentName) args.push('--agent', agentName);
+      args.push('--dir', workspace);
+
+      const prompt = instruction?.trim() || agentName || '执行任务';
+
+      // Shell command with pipefail + tee: file write by tee, stdout capture by Node.js
+      // pipefail ensures exit code reflects opencode (not tee)
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+      const shellCmd = `set -o pipefail; opencode ${args.join(' ')} '${escapedPrompt}' 2>&1 | tee "${logFilePath}"`;
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `shell: ${shellCmd.substring(0, 200)}`);
+
+      const env: Record<string, string> = mergedEnv || process.env as Record<string, string>;
+
+      childProcess = spawn('bash', ['-c', shellCmd], {
+        cwd: workspace,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      // Store in processes map for terminate() support
+      this.processes.set(taskId, { process: childProcess, workspace, createdAt: Date.now() });
+
+      // Resolve function for exit — hoisted so spawn error handler can use it
+      let resolveExit!: (code: number | null) => void;
+      const exitPromise = new Promise<number | null>((resolve) => {
+        resolveExit = resolve;
+      });
+
+      // stdout: tee writes to file, we capture for real-time events
+      childProcess.stdout?.on('data', (data: Buffer) => {
+        const content = data.toString();
+        state.stdout += content;
+        if (onEvent) {
+          onEvent({
+            type: 'agent_message_chunk',
+            content,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      });
+
+      // stderr of shell process (usually empty since 2>&1 merged into tee pipe)
+      childProcess.stderr?.on('data', (data: Buffer) => {
+        const content = data.toString();
+        state.stderr += content;
+      });
+
+      // Handle spawn error (ENOENT/EACCES etc — process never started, close may not fire)
+      childProcess.on('error', (err) => {
+        logger.taskError(taskId, LOG_MODULES.PROCESS, `opencode run spawn error: ${err.message}`);
+        state.stderr += err.message;
+        resolveExit(1);
+      });
+
+      // Normal exit
+      childProcess.on('close', (code) => {
+        resolveExit(code);
+      });
+
+      const result = await Promise.race([
+        exitPromise.then(code => ({
+          exitCode: code ?? 1,
+          stdout: state.stdout,
+          stderr: state.stderr,
+        })),
+        new Promise<RunAgentResult>((resolve) => {
+          setTimeout(() => {
+            resolve({
+              exitCode: 124,
+              stdout: state.stdout,
+              stderr: state.stderr + '\nTimeout exceeded',
+            });
+          }, timeoutMs);
+        }),
+      ]);
+
+      if (result.exitCode === 124 && childProcess && childProcess.exitCode === null) {
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Timeout, killing opencode process');
+        childProcess.kill('SIGTERM');
+      }
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN END (exitCode=${result.exitCode}) ==========`);
+      return result;
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.taskError(taskId, LOG_MODULES.PROCESS, `opencode run error: ${errorMsg}`);
+      state.stderr += errorMsg;
+      return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
+    } finally {
+      this.processes.delete(taskId);
     }
   }
 
