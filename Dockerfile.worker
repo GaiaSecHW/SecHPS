@@ -101,7 +101,7 @@ RUN JDK21_VER_SHORT=$(echo "${JDK21_VERSION}" | sed 's/+/_/') && \
 # ---------------------------------------------------------------------------
 FROM node:20-trixie AS worker-builder
 
-WORKDIR /build/codeswarm
+WORKDIR /build/codeswarm-service
 
 RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
     && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
@@ -110,19 +110,19 @@ RUN npm config set registry https://registry.npmmirror.com
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-COPY codeswarm/package.json codeswarm/pnpm-workspace.yaml codeswarm/pnpm-lock.yaml codeswarm/tsconfig.json ./
+COPY codeswarm-service/package.json codeswarm-service/pnpm-workspace.yaml codeswarm-service/pnpm-lock.yaml codeswarm-service/tsconfig.json ./
 
-COPY codeswarm/packages/types/package.json ./packages/types/package.json
-COPY codeswarm/packages/acp/package.json ./packages/acp/package.json
-COPY codeswarm/packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
-COPY codeswarm/packages/worker/package.json ./packages/worker/package.json
+COPY codeswarm-service/packages/types/package.json ./packages/types/package.json
+COPY codeswarm-service/packages/acp/package.json ./packages/acp/package.json
+COPY codeswarm-service/packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
+COPY codeswarm-service/packages/worker/package.json ./packages/worker/package.json
 
 RUN pnpm install --no-frozen-lockfile
 
-COPY codeswarm/packages/types/ ./packages/types/
-COPY codeswarm/packages/acp/ ./packages/acp/
-COPY codeswarm/packages/sdk-adapter/ ./packages/sdk-adapter/
-COPY codeswarm/packages/worker/ ./packages/worker/
+COPY codeswarm-service/packages/types/ ./packages/types/
+COPY codeswarm-service/packages/acp/ ./packages/acp/
+COPY codeswarm-service/packages/sdk-adapter/ ./packages/sdk-adapter/
+COPY codeswarm-service/packages/worker/ ./packages/worker/
 
 RUN pnpm run build
 
@@ -143,7 +143,7 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple uv
 
-COPY codeswarm/plugins/codedmap/ ./codedmap/
+COPY plugins/codedmap/ ./codedmap/
 
 RUN uv venv /opt/codedmap-venv && \
     . /opt/codedmap-venv/bin/activate && \
@@ -324,7 +324,7 @@ COPY --from=codedmap-builder /usr/local/bin/python3.12 /usr/local/bin/python3.12
 COPY --from=codedmap-builder /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
 COPY --from=codedmap-builder /usr/local/lib/libpython3.12.so.1.0 /usr/local/lib/libpython3.12.so.1.0
 RUN ldconfig && ln -sf python3.12 /usr/local/bin/python && ln -sf python3.12 /usr/local/bin/python3
-COPY codeswarm/plugins/codedmap/ /opt/codedmap/
+COPY plugins/codedmap/ /opt/codedmap/
 
 ENV CODEDMAP_HOME=/opt/codedmap
 ENV PATH="/opt/jdk-21/bin:/opt/codedmap-venv/bin:${PATH}"

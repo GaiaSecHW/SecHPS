@@ -1,2 +1,2 @@
 packages:
-  - 'codeswarm/packages/*'
+  - 'codeswarm-service/packages/*'

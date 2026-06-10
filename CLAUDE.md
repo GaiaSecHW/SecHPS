@@ -53,7 +53,7 @@ npm run db:seed-fsm         # FSM 模板种子数据
 │   │   ├── agentflow-editor/       # AgentFlow 可视化编辑器
 │   │   ├── agentflow-pipeline/     # AgentFlow 管道管理
 │   │   ├── chat/                   # 聊天组件
-│   │   ├── codeswarm/              # CodeSwarm 分布式调度
+│   │   ├── codeswarm/              # CodeSwarm 分布式调度（已迁移至 codeswarm-service/）
 │   │   ├── evaluation/             # 评估系统
 │   │   ├── files/                  # 文件管理
 │   │   ├── plugins/                # 插件系统
@@ -79,7 +79,8 @@ npm run db:seed-fsm         # FSM 模板种子数据
 │   ├── services/                   # 业务服务层（评估、Skill 进化、CodeSwarm 调度等）
 │   ├── types/                      # 类型定义（permissions、workflow、config）
 │   └── middleware.ts               # Next.js 中间件
-├── codeswarm/                      # 分布式 Worker 系统（Worker + ACP + Types）
+├── codeswarm-service/              # 分布式调度微服务（Scheduler + Worker + ACP + Types）
+├── plugins/codedmap/               # Python 代码安全分析引擎（污点分析、Joern、Neo4j）
 │   └── plugins/codedmap/           # Python 代码分析引擎（污点分析、Joern 集成、Neo4j）
 ├── prisma/
 │   ├── schema.prisma               # 数据库 Schema（60+ 模型）
@@ -120,8 +121,8 @@ npm run db:seed-fsm         # FSM 模板种子数据
 |--------|-------------|------|
 | Agent 管理 | `src/lib/agent-*.ts`、`src/app/api/agent-apps/` | AgentApp、AgentDefinition、AgentTeam |
 | AgentFlow | `src/app/api/agentflow-pipelines/`、`src/components/agentflow-editor/` | 可视化管道编辑器，DAG 编排 |
-| CodeSwarm | `codeswarm/`、`src/services/codeswarm-dispatcher.ts` | Redis 驱动的分布式任务调度 |
-| CodeMap | `codeswarm/plugins/codedmap/` | Python 代码安全分析（污点分析、Joern、Neo4j） |
+| CodeSwarm | `codeswarm-service/`、`src/services/codeswarm-dispatcher.ts` | Scheduler + Worker 独立微服务，Redis 驱动的分布式任务调度 |
+| CodeMap | `plugins/codedmap/` | Python 代码安全分析（污点分析、Joern、Neo4j） |
 | 工作流引擎 | `src/lib/workflow/`、`src/lib/fsm/` | DAG/FSM 双引擎工作流 |
 | Skill 系统 | `src/lib/skill-*.ts`、`src/services/skill-*.ts` | 构建、分类、去重、进化、治理 |
 | 漏洞管理 | `src/lib/vulnerability/`、`src/app/api/vulnerabilities/` | 全生命周期漏洞追踪 |

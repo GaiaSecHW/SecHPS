@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildModelConfig } from '../../codeswarm/packages/worker/src/environment';
+import { buildModelConfig } from '../../codeswarm-service/packages/worker/src/environment';
 
 vi.mock('@/lib/logger', () => ({
   logger: {

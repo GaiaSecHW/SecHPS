@@ -30,7 +30,7 @@ npm run rollback:agent-team             # 回滚 AgentTeam 迁移
 ```bash
 # 启动服务
 screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'   # 启动 Web 应用（自动加载 .env）
-screen -dmS worker1 bash -c 'cd codeswarm/packages/worker && PORT=8090 NODE_ID=worker-1 MAX_CONCURRENT=5 ORCHESTRATOR_URL=http://<主机IP>:3000 node --env-file=../../../.env dist/index.js > /tmp/worker1.log 2>&1; exec bash'  # 启动 Worker（注意 ORCHESTRATOR_URL 指向实际可达地址）
+screen -dmS worker1 bash -c 'cd codeswarm-service/packages/worker && PORT=8090 NODE_ID=worker-1 MAX_CONCURRENT=5 SCHEDULER_URL=http://<主机IP>:8080 node dist/index.js > /tmp/worker1.log 2>&1; exec bash'  # 启动 Worker（注意 SCHEDULER_URL 指向实际可达地址）
 
 # 停止服务
 screen -S sechps -X quit                                             # 停止 Web 应用
@@ -47,7 +47,7 @@ curl -s http://localhost:8090/health              # Worker 状态
 
 # 重启流程
 screen -S sechps -X quit && screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'
-screen -S worker1 -X quit && screen -dmS worker1 bash -c 'cd codeswarm/packages/worker && PORT=8090 NODE_ID=worker-1 MAX_CONCURRENT=5 ORCHESTRATOR_URL=http://<主机IP>:3000 node --env-file=../../../.env dist/index.js > /tmp/worker1.log 2>&1; exec bash'
+screen -S worker1 -X quit && screen -dmS worker1 bash -c 'cd codeswarm-service/packages/worker && PORT=8090 NODE_ID=worker-1 MAX_CONCURRENT=5 SCHEDULER_URL=http://<主机IP>:8080 node dist/index.js > /tmp/worker1.log 2>&1; exec bash'
 ```
 
 **语言规则**: 用中文回答
@@ -124,8 +124,8 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 ### CodeSwarm（分布式调度）
 
 - Redis 队列驱动的任务调度系统
-- `codeswarm/` — Worker 进程 + ACP 通信协议 + 共享类型 + CodeMap 插件
-- Worker 独立配置: `codeswarm/.env.example`
+- `codeswarm-service/` — Scheduler 调度引擎 + Worker 进程 + ACP 通信协议 + 共享类型
+- Worker 独立配置: `codeswarm-service/.env.example`
 - Worker 回调地址: `NEXT_PUBLIC_BASE_URL`（主服务器侧配置）
 - 本地测试: `src/app/api/codeswarm/local-test/`
 - **任务输入子目录**: 用户上传文件统一放入 `TASK_INPUT_DIR` 子目录（默认 `vlu_scan_code`），不在工作区根目录散布
@@ -133,7 +133,7 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 
 ### CodeMap（代码分析引擎）
 
-- `codeswarm/plugins/codedmap/` — 独立 Python 项目（污点分析、Joern 集成）
+- `plugins/codedmap/` — 独立 Python 项目（污点分析、Joern 集成）
 - 污点分析、数据流分析、Joern 集成
 - Neo4j / SQLite 存储驱动
 - C/C++ 和 Python 规则集
@@ -173,7 +173,7 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 
 **主服务器** `.env` 必需: `DATABASE_URL`、`JWT_SECRET`、`NODE_ENV`、`REDIS_URL`。完整列表见 `.env.example`。
 
-**CodeSwarm Worker** 独立配置见 `codeswarm/.env.example`（Worker 专属变量: `ORCHESTRATOR_URL`、`MINIO_*`、`CODEDMAP_HOME`、`JOERN_HOME` 等）。Worker 启动命令中的 `--env-file=../../../.env` 会加载主服务器 `.env`，`ORCHESTRATOR_URL` 等变量通过启动命令参数覆盖。
+**CodeSwarm Service** 独立配置见 `codeswarm-service/.env.example`（Scheduler 专属变量: `PORT`、`JWT_SECRET`；Worker 专属变量: `SCHEDULER_URL`、`MINIO_*` 等）。
 
 关键可选配置:
 - `NEXT_PUBLIC_BASE_URL` — Worker 回调地址（必须指向 Web 应用可达地址）

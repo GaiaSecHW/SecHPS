@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { Semaphore } from '../../codeswarm/packages/worker/dist/semaphore.js';
+import { Semaphore } from '../../codeswarm-service/packages/worker/dist/semaphore.js';
 
 interface TaskPayload {
   taskId: string;

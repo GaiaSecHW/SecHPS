@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { findAuditReportCandidate } from '../../codeswarm/packages/worker/src/daemon.js';
+import { findAuditReportCandidate } from '../../codeswarm-service/packages/worker/src/daemon.js';
 
 describe('findAuditReportCandidate', () => {
   let workspace: string;

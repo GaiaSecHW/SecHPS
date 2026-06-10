@@ -8,7 +8,7 @@
 node_modules
 
 # === Separate Docker image (worker has its own build) ===
-codeswarm/
+codeswarm-service/
 
 # === Version control ===
 .git

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Semaphore } from '../../codeswarm/packages/worker/dist/semaphore.js';
+import { Semaphore } from '../../codeswarm-service/packages/worker/dist/semaphore.js';
 
 describe('Semaphore 5并发控制', () => {
   it('初始状态 available=5', () => {

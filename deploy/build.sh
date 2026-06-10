@@ -22,8 +22,8 @@ WORKER_IMAGE="sechps-worker"
 # ---------------------------------------------------------------------------
 # .dockerignore management
 # Server and Worker need different .dockerignore files:
-#   - Server: excludes codeswarm/ (has its own Dockerfile)
-#   - Worker: includes codeswarm/ (needs worker source + codedmap)
+#   - Server: excludes codeswarm-service/ (has its own Dockerfile)
+#   - Worker: includes codeswarm-service/ + plugins/codedmap/
 # ---------------------------------------------------------------------------
 SERVER_DOCKERIGNORE="$PROJECT_DIR/.dockerignore"
 WORKER_DOCKERIGNORE="$SCRIPT_DIR/worker.dockerignore"
@@ -54,7 +54,7 @@ build_server() {
 
     cd "$PROJECT_DIR"
 
-    # Server uses the existing .dockerignore (excludes codeswarm/)
+    # Server uses the existing .dockerignore (excludes codeswarm-service/)
     docker build \
         -f Dockerfile.server \
         -t "$SERVER_IMAGE:$VERSION_TAG" \
@@ -78,7 +78,7 @@ build_worker() {
 
     cd "$PROJECT_DIR"
 
-    # Worker needs custom .dockerignore that includes codeswarm/
+    # Worker needs custom .dockerignore that includes codeswarm-service/
     backup_dockerignore
 
     if [ ! -f "$WORKER_DOCKERIGNORE" ]; then
@@ -88,7 +88,7 @@ build_worker() {
     fi
 
     cp "$WORKER_DOCKERIGNORE" "$SERVER_DOCKERIGNORE"
-    echo "[build] Swapped .dockerignore for worker build (includes codeswarm/)"
+    echo "[build] Swapped .dockerignore for worker build (includes codeswarm-service/)"
 
     # Ensure .dockerignore is restored even if docker build fails
     trap restore_dockerignore EXIT

@@ -1,7 +1,7 @@
 # .dockerignore for SecHPS Worker image
 # Build: docker build -f Dockerfile.worker .
 #
-# Worker needs codeswarm/ (worker source + codedmap plugin) in build context,
+# Worker needs codeswarm-service/ (worker source) + plugins/codedmap/ in build context,
 # but does NOT need src/, prisma/, or other server-only code.
 
 # === Rebuilt in Docker ===
