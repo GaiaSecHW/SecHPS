@@ -199,7 +199,8 @@ export class ProcessManager {
 
       // ========== OPENCODE RUN MODE (direct spawn, no ACP) ==========
       if (engine === 'opencode') {
-        return this.runOpencodeRun(taskId, workspace, agentName, instruction || '执行任务', onEvent, mergedEnv, effectiveTimeoutMs);
+        const result = await this.runOpencodeRun(taskId, workspace, agentName, instruction || '执行任务', onEvent, mergedEnv, effectiveTimeoutMs);
+        return result;
       }
       // ========== CLAUDECODE ACP MODE ==========
 
@@ -322,7 +323,7 @@ export class ProcessManager {
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
       const shellCmd = `set -o pipefail; opencode ${args.join(' ')} '${escapedPrompt}' 2>&1 | tee "${logFilePath}"`;
 
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `shell: ${shellCmd.substring(0, 200)}`);
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `shell: ${shellCmd.substring(0, 400)}`);
 
       const env: Record<string, string> = mergedEnv || process.env as Record<string, string>;
 
