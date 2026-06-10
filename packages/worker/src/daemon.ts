@@ -14,57 +14,6 @@ import { ProcessManager, type AgentEvent } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 import { ensureBucket } from './minio-client.js';
 
-interface AuditReportCandidate {
-  filePath: string;
-  size: number;
-  mtimeMs: number;
-}
-
-const AUDIT_REPORT_BASENAME = 'AUDIT_REPORT';
-const AUDIT_REPORT_ACCEPTED_EXTS = new Set(['.json', '.md']);
-const DEFAULT_REPORT_POLL_INTERVAL_SEC = 600;
-const REPORT_NOT_GENERATED_ERROR = '任务执行失败，报告未生成。';
-
-export function findAuditReportCandidate(workspace: string): AuditReportCandidate | null {
-  const reportDir = path.join(workspace, 'Report');
-
-  try {
-    if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) {
-      return null;
-    }
-
-    const entries = fs.readdirSync(reportDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile()) continue;
-
-      const parsed = path.parse(entry.name);
-      if (!parsed.name.startsWith(AUDIT_REPORT_BASENAME)) continue;
-      if (!AUDIT_REPORT_ACCEPTED_EXTS.has(parsed.ext.toLowerCase())) continue;
-
-      const filePath = path.join(reportDir, entry.name);
-      const stat = fs.statSync(filePath);
-      if (stat.size <= 0) continue;
-
-      return { filePath, size: stat.size, mtimeMs: stat.mtimeMs };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
-
-function isSameAuditReportCandidate(previous: AuditReportCandidate | null, current: AuditReportCandidate | null): boolean {
-  return !!previous && !!current
-    && previous.filePath === current.filePath
-    && previous.size === current.size
-    && previous.mtimeMs === current.mtimeMs;
-}
-
-function getReportPollIntervalMs(): number {
-  const configured = parseInt(process.env.REPORT_POLL_INTERVAL_SEC || String(DEFAULT_REPORT_POLL_INTERVAL_SEC), 10);
-  return (Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REPORT_POLL_INTERVAL_SEC) * 1000;
-}
 
 interface WorkerDaemonConfig {
   nodeId: string;
@@ -578,7 +527,6 @@ this.server.get('/health', async () => ({
         return; // finally 块会清理 cancelledTasks + semaphore
       }
 
-      const taskStartTime = Date.now();
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[${this.config.nodeId}] taskId: ${taskId}`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.engine: ${payloadEngine}`);
@@ -709,62 +657,18 @@ this.server.get('/health', async () => ({
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `stderr preview: "${result.stderr.substring(0, 200)}..."`);
       this.server.log.info({ taskId, exitCode: result.exitCode, stdoutLen: result.stdout.length }, 'Agent execution completed');
 
-      let isCancelled = this.cancelledTasks.has(taskId);
+      const isCancelled = this.cancelledTasks.has(taskId);
       let status: TaskResultStatus;
-      let reportContent: string | undefined;
       let error: string | undefined;
 
       if (isCancelled) {
         status = 'failed';
         error = 'Task cancelled by user';
       } else if (result.exitCode !== 0) {
-        const auditReport = findAuditReportCandidate(workspacePath);
-        if (auditReport) {
-          await this.processMgr.terminate(taskId);
-          status = 'completed';
-          reportContent = this.collectReport(workspacePath);
-        } else {
-          status = 'failed';
-          error = REPORT_NOT_GENERATED_ERROR;
-        }
+        status = 'failed';
+        error = `任务执行失败，进程退出码: ${result.exitCode}`;
       } else {
-        onEvent({
-          type: 'phase_start',
-          phase: 'report_waiting',
-          message: '等待 Report/AUDIT_REPORT.* 生成',
-          timestamp: new Date().toISOString(),
-          level: 'worker',
-        });
-
-        const auditReport = await this.waitForAuditReport(taskId, workspacePath, taskStartTime, taskTimeoutMs, onEvent);
-        if (this.cancelledTasks.has(taskId)) {
-          isCancelled = true;
-          status = 'failed';
-          error = 'Task cancelled by user';
-        } else if (auditReport) {
-          await this.processMgr.terminate(taskId);
-          status = 'completed';
-          reportContent = this.collectReport(workspacePath);
-          onEvent({
-            type: 'phase_complete',
-            phase: 'report_waiting',
-            success: true,
-            message: '已检测到稳定的 Report/AUDIT_REPORT.*',
-            timestamp: new Date().toISOString(),
-            level: 'worker',
-          });
-        } else {
-          status = 'failed';
-          error = REPORT_NOT_GENERATED_ERROR;
-          onEvent({
-            type: 'phase_complete',
-            phase: 'report_waiting',
-            success: false,
-            message: REPORT_NOT_GENERATED_ERROR,
-            timestamp: new Date().toISOString(),
-            level: 'worker',
-          });
-        }
+        status = 'completed';
       }
 
       // ========== PHASE COMPLETE: 执行任务 ==========
@@ -809,7 +713,6 @@ this.server.get('/health', async () => ({
         status,
         result: isCancelled ? undefined : (result.stdout || undefined),
         error: isCancelled ? 'Task cancelled by user' : error,
-        reportContent: isCancelled ? undefined : reportContent,
       }).catch(err => {
         this.server.log.warn({ taskId, error: err }, 'postResult (success path) failed (non-blocking)');
       });
@@ -862,93 +765,6 @@ this.server.get('/health', async () => ({
     }
   }
 
-  private async waitForAuditReport(
-    taskId: string,
-    workspacePath: string,
-    taskStartTime: number,
-    taskTimeoutMs: number,
-    onEvent: (event: AgentEvent) => void,
-  ): Promise<AuditReportCandidate | null> {
-    const pollIntervalMs = getReportPollIntervalMs();
-    const deadline = taskStartTime + taskTimeoutMs;
-    let previous = findAuditReportCandidate(workspacePath);
-
-    if (previous) {
-      onEvent({
-        type: 'log_chunk',
-        content: `[Worker] 检测到 AUDIT_REPORT，等待文件写入稳定: ${path.basename(previous.filePath)}`,
-        timestamp: new Date().toISOString(),
-        level: 'worker',
-      });
-    }
-
-    while (Date.now() < deadline && !this.cancelledTasks.has(taskId)) {
-      const delayMs = Math.min(pollIntervalMs, Math.max(0, deadline - Date.now()));
-      if (delayMs > 0) {
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(() => {
-            clearInterval(interval);
-            resolve();
-          }, delayMs);
-          const interval = setInterval(() => {
-            if (this.cancelledTasks.has(taskId)) {
-              clearTimeout(timeout);
-              clearInterval(interval);
-              resolve();
-            }
-          }, 1000);
-        });
-      }
-
-      if (this.cancelledTasks.has(taskId)) {
-        return null;
-      }
-
-      const current = findAuditReportCandidate(workspacePath);
-      if (isSameAuditReportCandidate(previous, current)) {
-        return current;
-      }
-
-      previous = current;
-      onEvent({
-        type: 'log_chunk',
-        content: current
-          ? `[Worker] AUDIT_REPORT 仍在变化，${Math.round(pollIntervalMs / 1000)}秒后继续检查`
-          : `[Worker] 未发现 AUDIT_REPORT，${Math.round(pollIntervalMs / 1000)}秒后继续检查`,
-        timestamp: new Date().toISOString(),
-        level: 'worker',
-      });
-    }
-
-    return null;
-  }
-
-  /** Read security report files from the workspace. */
-  private collectReport(workspace: string): string | undefined {
-    const reportDir = path.join(workspace, 'Report');
-    const reportFileExts = [ '.json','.md'];
-    
-    if (!fs.existsSync(reportDir) || !fs.statSync(reportDir).isDirectory()) {
-      return undefined;
-    }
-    
-    try {
-      const entries = fs.readdirSync(reportDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isFile()) continue;
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!reportFileExts.includes(ext)) continue;
-        const filePath = path.join(reportDir, entry.name);
-        try {
-          const content = fs.readFileSync(filePath, 'utf-8');
-          if (content.trim().length > 0) return content;
-        } catch { continue; }
-      }
-    } catch { /* ignore */ }
-    
-    return undefined;
-  }
-
   private async postEvent(payload: TaskPayload, events: unknown[]): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
     const maxRetries = 3;
@@ -987,7 +803,6 @@ this.server.get('/health', async () => ({
     status: TaskResultStatus;
     result?: string;
     error?: string;
-    reportContent?: string;
   }): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
     const maxRetries = 3;
