@@ -31,6 +31,8 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: /mnt/workspace
+            - name: fileserver
+              mountPath: /data
           resources:
             requests:
               cpu: 200m
@@ -54,3 +56,6 @@ spec:
         - name: workspace
           persistentVolumeClaim:
             claimName: shared-workspace
+        - name: fileserver
+          persistentVolumeClaim:
+            claimName: secflow-platform-fileserver-data-nfs-pvc
