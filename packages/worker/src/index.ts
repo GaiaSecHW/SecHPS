@@ -43,7 +43,5 @@ process.on('uncaughtException', (err) => {
 export { WorkerDaemon } from './daemon.js';
 export { Semaphore } from './semaphore.js';
 export { EnvironmentFactory } from './environment.js';
-export { AgentRunner } from './agent-runner.js';
 export { ProcessManager } from './process-manager.js';
 export type { EnvironmentFactoryConfig } from './environment.js';
-export type { AgentRunnerConfig, AgentRunnerEvents, AgentRunResult } from './agent-runner.js';

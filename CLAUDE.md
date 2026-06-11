@@ -61,7 +61,6 @@ bash scripts/dev.sh         # 开发环境初始化
 │   ├── worker/        # @codeswarm/worker — Worker 执行守护进程
 │   │   ├── src/
 │   │   │   ├── daemon.ts           # Worker 主循环（心跳、任务接收、报告轮询）
-│   │   │   ├── agent-runner.ts     # Agent 执行（OpenCode/Claude Code）
 │   │   │   ├── environment.ts      # 运行环境工厂
 │   │   │   ├── process-manager.ts  # 子进程管理 + 事件流
 │   │   │   ├── minio-client.ts     # MinIO 上传

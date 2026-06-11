@@ -74,7 +74,6 @@ packages/
 ├── worker/          # Worker 执行引擎
 │   └── src/
 │       ├── daemon.ts        # Worker 主循环
-│       ├── agent-runner.ts  # Agent 执行
 │       ├── environment.ts   # 运行环境
 │       ├── process-manager.ts # 子进程管理
 │       └── minio-client.ts  # 对象存储
