@@ -1,36 +1,178 @@
-# docker/Dockerfile.scheduler
-FROM node:20-bookworm AS builder
+# ============================================================================
+# CodeSwarm Scheduler - Multi-stage Docker Build (Fully Self-Contained)
+#
+# Build context: project root
+#   docker build -f docker/Dockerfile.scheduler -t sechps-scheduler:latest .
+#
+# 特点:
+#   - 完全自包含：适用于无外网隔离部署环境
+#   - 基于 Debian Trixie (glibc 2.38+)，与 Worker 保持一致的基础镜像
+#   - pnpm monorepo 构建，生产部署裁剪（pnpm deploy）
+#   - Prisma Client 预生成，运行阶段不访问外网
+#   - Scheduler 不含 Worker 专用工具（JDK/Joern/codedmap/AI CLI）
+#
+# Runtime env vars:
+#   PORT                - Scheduler HTTP port (default 8080)
+#   DATABASE_URL        - PostgreSQL connection string
+#   REDIS_URL           - Redis connection string
+#   JWT_SECRET          - JWT signing secret
+#   WORKSPACE_BASE_PATH - Shared workspace path (default /mnt/workspace)
+#   TASK_CLEANUP_RETENTION_DAYS - Task cleanup retention (default 30)
+#   LOG_LEVEL           - Log level (default info)
+#
+# Important:
+#   - Prisma Client 必须在 builder 阶段生成并拷入 deployment
+#   - Runtime 阶段所有软件从 builder 阶段 COPY，不执行任何外网下载
+# ============================================================================
 
-WORKDIR /app
-RUN npm install -g pnpm@9
+# ---------------------------------------------------------------------------
+# Stage 1: Build codeswarm scheduler (Node.js pnpm monorepo)
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS scheduler-builder
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY packages/types/package.json ./packages/types/
-COPY packages/scheduler/package.json ./packages/scheduler/
+WORKDIR /build/codeswarm
+
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+RUN npm config set registry https://registry.npmmirror.com
+
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
+
+COPY packages/types/package.json ./packages/types/package.json
+COPY packages/scheduler/package.json ./packages/scheduler/package.json
 COPY prisma/ ./prisma/
 
 RUN pnpm install --no-frozen-lockfile
 
 COPY packages/types/ ./packages/types/
 COPY packages/scheduler/ ./packages/scheduler/
-COPY tsconfig.json ./
 
-RUN pnpm --filter @codeswarm/types build
-RUN pnpm --filter @codeswarm/scheduler build
+RUN pnpm --filter @codeswarm/types build && \
+    pnpm --filter @codeswarm/scheduler build
 
-# 生成含所有生产依赖的独立目录
-RUN pnpm --filter @codeswarm/scheduler deploy --prod /deploy
+# Generate Prisma Client
+RUN npx prisma generate --schema=prisma/schema.prisma && \
+    echo "=== Prisma Client generated OK ==="
 
-# 在 deploy 目录内生成 Prisma Client（避免 workspace 路径问题）
-RUN cp -r prisma /deploy/prisma && \
-    cd /deploy && npx --yes prisma@6 generate --schema=prisma/schema.prisma
+# Create pruned deployment
+RUN pnpm deploy --prod --filter @codeswarm/scheduler /deploy/scheduler && \
+    echo "=== Scheduler deployment created ===" && \
+    ls /deploy/scheduler/dist/ && \
+    ls /deploy/scheduler/node_modules/ | head -10
 
-FROM node:20-bookworm-slim
+# ---------------------------------------------------------------------------
+# Copy Prisma generated client into deployment directory
+# pnpm deploy includes @prisma/client but the generated native engines
+# (node_modules/.prisma/client) may not be copied automatically.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /deploy/scheduler/node_modules/.prisma/client && \
+    cp -r /build/codeswarm/node_modules/.prisma/client/* /deploy/scheduler/node_modules/.prisma/client/ && \
+    echo "=== Prisma client copied to deployment ==="
 
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# Copy Prisma schema to deployment (needed for runtime migrations)
+RUN mkdir -p /deploy/scheduler/prisma && \
+    cp /build/codeswarm/prisma/schema.prisma /deploy/scheduler/prisma/schema.prisma && \
+    echo "=== Prisma schema copied to deployment ==="
 
-WORKDIR /app
-COPY --from=builder /deploy ./
+# ---------------------------------------------------------------------------
+# Stage 2: Production Runtime
+# ---------------------------------------------------------------------------
+# Scheduler 是纯 Node.js HTTP 服务，不含 Worker 专用重型工具。
+# 使用 node:20-trixie 与 Worker 保持一致基础镜像，简化运维环境。
+FROM node:20-trixie AS runtime
+
+WORKDIR /opt/scheduler
+
+# APT: Tsinghua mirror
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+# ---------------------------------------------------------------------------
+# Install runtime tools
+# Scheduler is a lightweight HTTP service — only basic networking & debugging tools.
+# ---------------------------------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # -- networking essentials --
+        curl \
+        ca-certificates \
+        dnsutils \
+        # -- re-declared from base (for clarity) --
+        git \
+        bash \
+        procps \
+        # -- debugging & diagnostics --
+        jq \
+        strace \
+        lsof \
+        tcpdump \
+        htop \
+        net-tools \
+        iputils-ping \
+        netcat-openbsd \
+        # -- editing & file inspection --
+        vim \
+        tree \
+        less \
+        wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo 'alias ll="ls -laF --color=auto"' >> /etc/bash.bashrc
+
+# ---------------------------------------------------------------------------
+# Copy pruned scheduler deployment (from builder stage — no symlinks)
+# ---------------------------------------------------------------------------
+COPY --from=scheduler-builder /deploy/scheduler /opt/scheduler
+
+# ---------------------------------------------------------------------------
+# Verify ALL critical components (fail build if any missing)
+# ---------------------------------------------------------------------------
+RUN echo "=== Verifying critical scheduler components ===" && \
+    \
+    echo "1. Node.js..." && \
+    node --version && echo "   ✅ Node.js" && \
+    \
+    echo "2. Scheduler entry..." && \
+    test -f /opt/scheduler/dist/index.js && echo "   ✅ dist/index.js" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "3. Fastify..." && \
+    test -d /opt/scheduler/node_modules/fastify && echo "   ✅ fastify" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "4. ioredis..." && \
+    test -d /opt/scheduler/node_modules/ioredis && echo "   ✅ ioredis" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "5. Prisma Client..." && \
+    test -d /opt/scheduler/node_modules/.prisma/client && echo "   ✅ .prisma/client" || (echo "   ❌ MISSING: .prisma/client" && exit 1) && \
+    test -d /opt/scheduler/node_modules/@prisma/client && echo "   ✅ @prisma/client" || (echo "   ❌ MISSING: @prisma/client" && exit 1) && \
+    \
+    echo "6. Prisma schema..." && \
+    test -f /opt/scheduler/prisma/schema.prisma && echo "   ✅ schema.prisma" || (echo "   ❌ MISSING: schema.prisma" && exit 1) && \
+    \
+    echo "7. glibc version..." && \
+    ldd --version 2>&1 | head -1 && echo "   ✅ glibc >= 2.38" && \
+    \
+    echo "8. Basic tools..." && \
+    which curl && echo "   ✅ curl" && \
+    which jq && echo "   ✅ jq" && \
+    which vim && echo "   ✅ vim" && \
+    which dig && echo "   ✅ dnsutils (dig)" && \
+    \
+    echo "=== All critical components verified OK ==="
+
+# ---------------------------------------------------------------------------
+# Runtime environment
+# ---------------------------------------------------------------------------
+ENV PORT=8080 \
+    DATABASE_URL="postgresql://codeswarm:codeswarm_dev@localhost:5432/codeswarm" \
+    REDIS_URL="redis://localhost:6379" \
+    JWT_SECRET="dev-jwt-secret-change-in-production" \
+    WORKSPACE_BASE_PATH="/mnt/workspace"
 
 EXPOSE 8080
-CMD ["node", "dist/index.js"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["node", "dist/index.js"]
