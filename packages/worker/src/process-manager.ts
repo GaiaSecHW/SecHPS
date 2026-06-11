@@ -307,25 +307,28 @@ export class ProcessManager {
     const state: RunState = { stdout: '', stderr: '', currentSkill: null };
     let childProcess: ChildProcess | null = null;
     const logFilePath = path.join(workspace, 'opencode_stdout.logs');
+    let logStream: fs.WriteStream | null = null;
 
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN START ==========`);
 
     try {
-      // Build opencode args
+      // Spawn opencode directly (NO shell) — the prompt is passed as a single
+      // argv element, so shell metacharacters ($, `, ;, etc.) in the instruction
+      // cannot be interpreted. This eliminates command-injection risk that the
+      // previous `bash -c "... '${escaped}'"` construction carried.
       const args = ['run', '--print-logs', '--dir', workspace];
-
       const prompt = instruction?.trim() || agentName || '执行任务';
+      args.push(prompt);
 
-      // Shell command with pipefail + tee: file write by tee, stdout capture by Node.js
-      // pipefail ensures exit code reflects opencode (not tee)
-      const escapedPrompt = prompt.replace(/'/g, "'\\''");
-      const shellCmd = `set -o pipefail; opencode ${args.join(' ')} '${escapedPrompt}' 2>&1 | tee "${logFilePath}"`;
-
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `shell: ${shellCmd.substring(0, 400)}`);
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `argv: opencode ${args.slice(0, -1).join(' ')} <prompt len=${prompt.length}>`);
 
       const env: Record<string, string> = mergedEnv || process.env as Record<string, string>;
 
-      childProcess = spawn('bash', ['-c', shellCmd], {
+      // tee replacement: Node-side WriteStream mirrors `2>&1 | tee file`.
+      // Both stdout and stderr are appended to the log file AND captured in state.
+      logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
+
+      childProcess = spawn('opencode', args, {
         cwd: workspace,
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -340,10 +343,10 @@ export class ProcessManager {
         resolveExit = resolve;
       });
 
-      // stdout: tee writes to file, we capture for real-time events
-      childProcess.stdout?.on('data', (data: Buffer) => {
+      const handleStdout = (data: Buffer) => {
         const content = data.toString();
         state.stdout += content;
+        logStream?.write(data);
         if (onEvent) {
           onEvent({
             type: 'agent_message_chunk',
@@ -351,13 +354,16 @@ export class ProcessManager {
             timestamp: new Date().toISOString(),
           });
         }
-      });
+      };
 
-      // stderr of shell process (usually empty since 2>&1 merged into tee pipe)
-      childProcess.stderr?.on('data', (data: Buffer) => {
+      const handleStderr = (data: Buffer) => {
         const content = data.toString();
         state.stderr += content;
-      });
+        logStream?.write(data); // mirror `2>&1 | tee` behavior
+      };
+
+      childProcess.stdout?.on('data', handleStdout);
+      childProcess.stderr?.on('data', handleStderr);
 
       // Handle spawn error (ENOENT/EACCES etc — process never started, close may not fire)
       childProcess.on('error', (err) => {
@@ -366,8 +372,9 @@ export class ProcessManager {
         resolveExit(1);
       });
 
-      // Normal exit
+      // Normal exit — flush log stream before resolving
       childProcess.on('close', (code) => {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `opencode exited with code=${code}`);
         resolveExit(code);
       });
 
@@ -388,9 +395,17 @@ export class ProcessManager {
         }),
       ]);
 
+      // Timeout: SIGTERM first, then SIGKILL after grace period to guarantee
+      // process death and avoid zombie processes consuming a slot forever.
       if (result.exitCode === 124 && childProcess && childProcess.exitCode === null) {
-        logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Timeout, killing opencode process');
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Timeout, sending SIGTERM to opencode');
         childProcess.kill('SIGTERM');
+        // Grace period, then force kill if still alive
+        await new Promise<void>(r => setTimeout(r, 10000));
+        if (childProcess.exitCode === null && !childProcess.killed) {
+          logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Process ignored SIGTERM, sending SIGKILL');
+          childProcess.kill('SIGKILL');
+        }
       }
 
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN END (exitCode=${result.exitCode}) ==========`);
@@ -403,6 +418,9 @@ export class ProcessManager {
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
     } finally {
       this.processes.delete(taskId);
+      if (logStream) {
+        try { logStream.end(); } catch { /* non-critical */ }
+      }
     }
   }
 
