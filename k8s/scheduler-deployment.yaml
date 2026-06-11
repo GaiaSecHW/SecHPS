@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: scheduler
-  namespace: codeswarm
+  namespace: secflow-ns
   labels:
     app.kubernetes.io/name: scheduler
     app.kubernetes.io/component: scheduler
@@ -20,7 +20,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: scheduler
-          image: codeswarm-scheduler:latest   # 替换为 Registry 地址
+          image: ghcr.io/gaiasechw/codeswarm-scheduler:dev_secflow_codeswarm
           ports:
             - containerPort: 8080
           envFrom:

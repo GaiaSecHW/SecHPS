@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: codeswarm-config
-  namespace: codeswarm
+  namespace: secflow-ns
 data:
   NODE_ENV: "production"
   PORT: "8080"

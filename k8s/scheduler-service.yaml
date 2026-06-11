@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: scheduler
-  namespace: codeswarm
+  namespace: secflow-ns
   labels:
     app.kubernetes.io/name: scheduler
 spec:
@@ -19,7 +19,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: scheduler-headless
-  namespace: codeswarm
+  namespace: secflow-ns
 spec:
   selector:
     app: scheduler

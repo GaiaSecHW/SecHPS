@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: scheduler-metrics
-  namespace: codeswarm
+  namespace: secflow-ns
   labels:
     release: prometheus    # 匹配 Prometheus Operator 的 serviceMonitorSelector
 spec:

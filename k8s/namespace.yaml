@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: codeswarm
+  name: secflow-ns
   labels:
-    app.kubernetes.io/name: codeswarm
+    app.kubernetes.io/name: secflow-ns
     app.kubernetes.io/part-of: codeswarm-service
