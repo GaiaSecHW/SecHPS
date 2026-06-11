@@ -1,0 +1,440 @@
+# ============================================================================
+# CodeSwarm Worker - Multi-stage Docker Build (Fully Self-Contained)
+#
+# Build context: project root (same as server Dockerfile)
+#   docker build -f Dockerfile.worker -t sechps-worker:latest .
+#
+# 特点:
+#   - 完全自包含：适用于无外网隔离部署环境
+#   - 所有依赖预打包：Node.js worker、Python codedmap、Joern CLI、OpenCode CLI
+#   - 基于 Debian Trixie (glibc 2.38+)，兼容需要 GLIBC_2.38 的程序（如 executor）
+#   - JDK 21 预下载到构建阶段，同时满足 Joern CLI (>=21) 和 codedmap/executor 需求
+#   - Joern CLI 预下载到构建阶段，运行阶段不访问外网
+#   - OpenCode CLI 在 builder 阶段预安装，COPY 到 runtime
+#   - Node.js 20 在 builder 阶段预编译，COPY 到 runtime（不用 NodeSource）
+#   - Python codedmap + [api,ai,parsers] 预安装，venv 与 runtime Python 版本一致
+#   - pnpm monorepo 构建，生产部署裁剪（保留 optional deps）
+#
+# Runtime env vars:
+#   NODE_ID             - Worker node identifier (auto-generated if empty)
+#   PORT                - Worker HTTP port (default 8090)
+#   MAX_CONCURRENT      - Max parallel tasks (default 5)
+#   ORCHESTRATOR_URL    - Orchestrator backend URL (e.g. http://host:3000)
+#   WORKER_ADDRESS      - External reachable address for heartbeat
+#   CODEDMAP_HOME       - Codedmap install path (default /opt/codedmap)
+#   JOERN_HOME          - Joern CLI path (default /opt/joern-cli)
+#   JAVA_HOME           - Java runtime path (default /opt/jdk-21)
+#   MINIO_ENDPOINT      - MinIO endpoint for codedmap DB cache
+#   MINIO_PORT          - MinIO port (default 9000)
+#   MINIO_ACCESS_KEY    - MinIO access key
+#   MINIO_SECRET_KEY    - MinIO secret key
+#   MINIO_BUCKET        - MinIO bucket name (default codedmap-dbs)
+#   MINIO_USE_SSL       - MinIO SSL toggle (default false)
+#   GITEA_CODEDMAP_REPO - Gitea repo URL for codedmap db cache
+#   GITEA_CODEDMAP_TOKEN- Gitea access token
+#   PATH_MAPPING        - NFS path mapping
+#
+# Important:
+#   - pnpm install MUST include optional deps (@img/sharp-* for claude-agent-sdk)
+#   - Joern CLI needs Java JRE 21+ (now uses JDK 21 from /opt/jdk-21)
+#   - JDK 21+ required (for executor and other programs)
+#   - Python 3.12+ required for codedmap
+#   - OpenCode CLI required for ACP agent execution
+#   - Runtime 阶段所有软件从 builder 阶段 COPY，不执行任何外网下载
+#   - 基于 Debian Trixie (glibc 2.38+) 解决 executor GLIBC_2.38 依赖问题
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Download Joern CLI (separate stage for clean caching)
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS joern-downloader
+
+ARG JOERN_VERSION=v4.0.542
+ARG GITHUB_PROXY=https://gh-proxy.com/
+
+WORKDIR /tmp
+
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends unzip curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL "${GITHUB_PROXY}https://github.com/joernio/joern/releases/download/${JOERN_VERSION}/joern-cli.zip" -o joern-cli.zip && \
+    unzip -q joern-cli.zip -d /opt/ && \
+    rm joern-cli.zip && \
+    ls /opt/joern-cli/ && \
+    echo "=== Joern CLI downloaded OK ==="
+
+# ---------------------------------------------------------------------------
+# Stage 1.5: Download JDK 21 (LTS, pre-built from Adoptium GitHub archive)
+# JDK 21 required for: Joern CLI (>=21), codedmap (javac), executor (>=21)
+# Downloaded as tar.gz to avoid Adoptium apt repo dependency on Trixie.
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS jdk21-downloader
+
+ARG JDK21_VERSION=21.0.6+7
+ARG GITHUB_PROXY=https://gh-proxy.com/
+
+WORKDIR /tmp
+
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN JDK21_VER_SHORT=$(echo "${JDK21_VERSION}" | sed 's/+/_/') && \
+    JDK21_VER_ENCODED=$(echo "${JDK21_VERSION}" | sed 's/+/%2B/') && \
+    curl -fsSL "${GITHUB_PROXY}https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${JDK21_VER_ENCODED}/OpenJDK21U-jdk_x64_linux_hotspot_${JDK21_VER_SHORT}.tar.gz" -o jdk21.tar.gz && \
+    mkdir -p /opt/jdk-21 && \
+    tar -xzf jdk21.tar.gz -C /opt/jdk-21 --strip-components=1 && \
+    rm jdk21.tar.gz && \
+    /opt/jdk-21/bin/java -version && \
+    /opt/jdk-21/bin/javac -version && \
+    echo "=== JDK 21 downloaded OK ==="
+
+# ---------------------------------------------------------------------------
+# Stage 2: Build codeswarm worker (Node.js pnpm monorepo)
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS worker-builder
+
+WORKDIR /build/codeswarm
+
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+RUN npm config set registry https://registry.npmmirror.com
+
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+COPY codeswarm/package.json codeswarm/pnpm-workspace.yaml codeswarm/pnpm-lock.yaml codeswarm/tsconfig.json ./
+
+COPY codeswarm/packages/types/package.json ./packages/types/package.json
+COPY codeswarm/packages/acp/package.json ./packages/acp/package.json
+COPY codeswarm/packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
+COPY codeswarm/packages/worker/package.json ./packages/worker/package.json
+
+RUN pnpm install --no-frozen-lockfile
+
+COPY codeswarm/packages/types/ ./packages/types/
+COPY codeswarm/packages/acp/ ./packages/acp/
+COPY codeswarm/packages/sdk-adapter/ ./packages/sdk-adapter/
+COPY codeswarm/packages/worker/ ./packages/worker/
+
+RUN pnpm run build
+
+RUN pnpm deploy --prod --filter @codeswarm/worker /deploy/worker && \
+    echo "=== Worker deployment created ===" && \
+    ls /deploy/worker/dist/ && \
+    ls /deploy/worker/node_modules/ | head -10
+
+# ---------------------------------------------------------------------------
+# Stage 3: Build Python codedmap venv (same Python version as runtime)
+# ---------------------------------------------------------------------------
+FROM python:3.12-trixie AS codedmap-builder
+
+WORKDIR /build
+
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple uv
+
+COPY codeswarm/plugins/codedmap/ ./codedmap/
+
+RUN uv venv /opt/codedmap-venv && \
+    . /opt/codedmap-venv/bin/activate && \
+    cd ./codedmap && \
+    uv pip install --no-cache -i https://pypi.tuna.tsinghua.edu.cn/simple ".[api,ai,parsers]" && \
+    cp -r ./codedmap/infra/ai/prompts/templates \
+         /opt/codedmap-venv/lib/python3.12/site-packages/codedmap/infra/ai/prompts/templates && \
+    echo "=== codedmap installed OK ===" && \
+    python -c "import codedmap; print('codedmap import OK')"
+
+# ---------------------------------------------------------------------------
+# Stage 4: Pre-install Claude Code CLI in builder (has internet access)
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS claude-builder
+
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g @anthropic-ai/claude-code@2.1.132 && \
+    which claude && \
+    claude --version && \
+    echo "=== Claude Code CLI installed OK ==="
+
+# ---------------------------------------------------------------------------
+# Stage 4.5: Pre-install OpenCode CLI in builder (has internet access)
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS opencode-builder
+
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g opencode-ai@1.15.10 && \
+    which opencode && \
+    opencode --version && \
+    echo "=== OpenCode CLI installed OK ==="
+
+# ---------------------------------------------------------------------------
+# Stage 4.6: Pre-install claude-agent-acp in builder (has internet access)
+# Worker uses claude-agent-acp as the "claudecode" engine for ACP protocol
+# ---------------------------------------------------------------------------
+FROM node:20-trixie AS acp-builder
+
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g @agentclientprotocol/claude-agent-acp@latest && \
+    which claude-agent-acp && \
+    claude-agent-acp --version && \
+    echo "=== claude-agent-acp installed OK ==="
+
+# ---------------------------------------------------------------------------
+# Stage 5: Production Runtime
+# ---------------------------------------------------------------------------
+# Strategy: Use node:20-trixie as base (Debian Trixie with glibc 2.38+),
+# which solves the executor GLIBC_2.38 dependency. JDK 21 downloaded as
+# tar.gz (not via apt) to avoid Adoptium repo compatibility issues on Trixie.
+# This avoids:
+#   - NodeSource download at runtime (needs internet)
+#   - Alpine musl incompatibility with @img/sharp-linux-x64
+#   - Python version mismatch between builder and runtime (both Trixie)
+#   - npm registry access at runtime
+#   - Adoptium apt repo on Trixie (no official Trixie support)
+FROM node:20-trixie AS runtime
+
+WORKDIR /opt/worker
+
+# APT: Tsinghua mirror
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
+# ---------------------------------------------------------------------------
+# Install runtime tools (no Adoptium apt — JDK 21 comes from download stage)
+# All apt packages are from Tsinghua mirror — no external internet needed
+#
+# NOTE: node:20-trixie is based on buildpack-deps:trixie which already includes:
+#   bash, coreutils, grep, sed, gawk(awk), find, diff, gzip, less,
+#   curl, wget, ca-certificates, git, openssh-client, procps,
+#   gcc, g++, make, autoconf, automake, patch, file, unzip, python3, perl,
+#   + many dev libraries (libssl-dev, libffi-dev, etc.)
+# Below we only install what's NOT already in the base, plus a few
+# explicitly re-declared essentials for clarity/safety.
+# ---------------------------------------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # -- AI agent tool calling essentials --
+        # OpenCode requires ripgrep (rg) as primary search tool (issue #4420)
+        # fd-find provides fast file finding (binary: fdfind, alias: fd)
+        ripgrep \
+        fd-find \
+        jq \
+        fzf \
+        dnsutils \
+        # -- re-declared from base (for clarity, harmless if already present) --
+        curl \
+        ca-certificates \
+        git \
+        bash \
+        python3 \
+        procps \
+        # -- debugging & diagnostics --
+        strace \
+        lsof \
+        tcpdump \
+        htop \
+        net-tools \
+        iputils-ping \
+        netcat-openbsd \
+        # -- editing & file inspection --
+        vim \
+        tree \
+        less \
+        wget \
+    && rm -rf /var/lib/apt/lists/* \
+    # fd-find binary is 'fdfind' on Debian; create 'fd' alias for AI agent compatibility
+    && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
+    && echo 'alias ll="ls -laF --color=auto"' >> /etc/bash.bashrc
+
+# ---------------------------------------------------------------------------
+# Install JDK 21 (from downloader stage — full JDK with javac)
+# Used for: codedmap (JAVA_HOME), Joern CLI (PATH), executor (>=21)
+# ---------------------------------------------------------------------------
+COPY --from=jdk21-downloader /opt/jdk-21 /opt/jdk-21
+
+RUN /opt/jdk-21/bin/java -version && \
+    /opt/jdk-21/bin/javac -version && \
+    echo "=== JDK 21 OK ==="
+
+ENV JAVA_HOME=/opt/jdk-21
+
+# ---------------------------------------------------------------------------
+# Install Claude Code CLI (from builder stage — no runtime download)
+# ---------------------------------------------------------------------------
+COPY --from=claude-builder /usr/local/bin/claude /usr/local/bin/claude
+COPY --from=claude-builder /usr/local/lib/node_modules/@anthropic-ai/claude-code /usr/local/lib/node_modules/@anthropic-ai/claude-code
+
+RUN which claude && claude --version && echo "=== Claude Code CLI OK ==="
+
+# ---------------------------------------------------------------------------
+# Install OpenCode CLI (from builder stage — no runtime download)
+# ---------------------------------------------------------------------------
+# opencode-ai@1.15.10 ships bin/opencode.exe (native ELF binary, 144MB),
+# NOT a Node.js wrapper script. npm global install symlinks /usr/local/bin/opencode
+# to the .exe binary directly. Docker COPY --from= resolves symlinks to file content,
+# so we must copy the module dir then recreate the symlink manually.
+COPY --from=opencode-builder /usr/local/lib/node_modules/opencode-ai /usr/local/lib/node_modules/opencode-ai
+RUN ln -sf ../lib/node_modules/opencode-ai/bin/opencode.exe /usr/local/bin/opencode && \
+    which opencode && opencode --version && echo "=== OpenCode CLI OK ==="
+
+# ---------------------------------------------------------------------------
+# Install claude-agent-acp (from builder stage — no runtime download)
+# Also includes @anthropic-ai/claude-agent-sdk (required peer dependency)
+#
+# IMPORTANT: claude-agent-acp is a Node.js ESM script (#!/usr/bin/env node),
+# NOT a compiled binary like claude/opencode. It relies on npm module resolution
+# to find @anthropic-ai/claude-agent-sdk. Docker COPY --from= resolves symlinks
+# to file content, so we must NOT copy the binary separately — instead, we
+# create a symlink from /usr/local/bin/claude-agent-acp to the package entry
+# point. This ensures Node.js ESM resolution starts from the package directory
+# where node_modules/@anthropic-ai/claude-agent-sdk is available.
+# ---------------------------------------------------------------------------
+COPY --from=acp-builder /usr/local/lib/node_modules/@agentclientprotocol/claude-agent-acp /usr/local/lib/node_modules/@agentclientprotocol/claude-agent-acp
+COPY --from=acp-builder /usr/local/lib/node_modules/@agentclientprotocol/claude-agent-acp/node_modules/@anthropic-ai /usr/local/lib/node_modules/@anthropic-ai
+
+# Create symlink so Node.js ESM resolves deps from the package directory
+RUN ln -sf /usr/local/lib/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js /usr/local/bin/claude-agent-acp \
+    && which claude-agent-acp && claude-agent-acp --version && echo "=== claude-agent-acp OK ==="
+
+# ---------------------------------------------------------------------------
+# Install Joern CLI (from downloader stage — no runtime download)
+# ---------------------------------------------------------------------------
+COPY --from=joern-downloader /opt/joern-cli /opt/joern-cli
+
+RUN ln -sf /opt/joern-cli/joern-parse /usr/local/bin/joern-parse && \
+    ln -sf /opt/joern-cli/joern-export /usr/local/bin/joern-export && \
+    ln -sf /opt/joern-cli/joern /usr/local/bin/joern && \
+    echo "=== Joern CLI OK ==="
+
+ENV JOERN_HOME=/opt/joern-cli
+
+# ---------------------------------------------------------------------------
+# Install Python codedmap (from codedmap-builder — pre-built venv)
+# ---------------------------------------------------------------------------
+COPY --from=codedmap-builder /opt/codedmap-venv /opt/codedmap-venv
+COPY --from=codedmap-builder /usr/local/bin/python3.12 /usr/local/bin/python3.12
+COPY --from=codedmap-builder /usr/local/lib/python3.12/ /usr/local/lib/python3.12/
+COPY --from=codedmap-builder /usr/local/lib/libpython3.12.so.1.0 /usr/local/lib/libpython3.12.so.1.0
+RUN ldconfig && ln -sf python3.12 /usr/local/bin/python && ln -sf python3.12 /usr/local/bin/python3
+COPY codeswarm/plugins/codedmap/ /opt/codedmap/
+
+ENV CODEDMAP_HOME=/opt/codedmap
+ENV PATH="/opt/jdk-21/bin:/opt/codedmap-venv/bin:${PATH}"
+
+RUN python3 -c "import codedmap; print('codedmap import OK')" && \
+    ls /opt/codedmap/tools/build_map.py && \
+    echo "=== codedmap verified OK ==="
+
+# ---------------------------------------------------------------------------
+# Copy pruned worker deployment (from builder stage — no symlinks)
+# ---------------------------------------------------------------------------
+COPY --from=worker-builder /deploy/worker /opt/worker
+
+RUN mkdir -p /opt/worker/data/task_workspaces
+
+# ---------------------------------------------------------------------------
+# Copy models.json to OpenCode cache directory
+# OpenCode uses this file for AI model configuration
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.cache/opencode
+COPY models.json /root/.cache/opencode/models.json
+
+# ---------------------------------------------------------------------------
+# Pre-install opencode runtime dependencies into cache directory
+# opencode Bun auto-installer looks in ~/.cache/opencode/node_modules/ at runtime.
+# In an isolated environment (no internet), these packages must be pre-installed
+# to prevent "cache mode 'only-if-cached'" failures.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /tmp/opencode-pkg && \
+    cd /tmp/opencode-pkg && \
+    npm config set registry https://registry.npmjs.org && \
+    npm init -y && \
+    npm install @opencode-ai/plugin@latest @ai-sdk/openai-compatible@latest && \
+    mkdir -p /root/.cache/opencode/node_modules && \
+    cp -r node_modules/* /root/.cache/opencode/node_modules/ && \
+    rm -rf /tmp/opencode-pkg && \
+    echo "=== opencode runtime deps pre-installed OK ==="
+
+# ---------------------------------------------------------------------------
+# Verify ALL critical components (fail build if any missing)
+# ---------------------------------------------------------------------------
+RUN echo "=== Verifying critical worker components ===" && \
+    \
+    echo "1. Node.js..." && \
+    node --version && echo "   ✅ Node.js" && \
+    \
+    echo "2. JDK 21..." && \
+    /opt/jdk-21/bin/javac -version 2>&1 | head -1 && \
+    /opt/jdk-21/bin/java -version 2>&1 | head -1 && \
+    java -version 2>&1 | head -1 && echo "   ✅ JDK 21" && \
+    \
+    echo "3. Claude Code CLI..." && \
+    which claude && echo "   ✅ claude CLI" && \
+    \
+    echo "3b. OpenCode CLI..." && \
+    which opencode && echo "   ✅ opencode CLI" && \
+    \
+    echo "3c. claude-agent-acp..." && \
+    which claude-agent-acp && echo "   ✅ claude-agent-acp CLI" && \
+    \
+    echo "4. Joern CLI..." && \
+    test -f /opt/joern-cli/joern && echo "   ✅ joern" || (echo "   ❌ MISSING: joern" && exit 1) && \
+    \
+    echo "5. Python 3..." && \
+    python3 --version && echo "   ✅ Python 3" && \
+    \
+    echo "6. codedmap..." && \
+    python3 -c "import codedmap" && echo "   ✅ codedmap" && \
+    \
+    echo "7. Worker entry..." && \
+    test -f /opt/worker/dist/index.js && echo "   ✅ dist/index.js" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "8. build_map.py..." && \
+    test -f /opt/codedmap/tools/build_map.py && echo "   ✅ build_map.py" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "9. Fastify..." && \
+    test -d /opt/worker/node_modules/fastify && echo "   ✅ fastify" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "10. MinIO..." && \
+    test -d /opt/worker/node_modules/minio && echo "   ✅ minio" || (echo "   ❌ MISSING" && exit 1) && \
+    \
+    echo "11. glibc version..." && \
+    ldd --version 2>&1 | head -1 && echo "   ✅ glibc >= 2.38" && \
+    \
+    echo "12. AI agent tool calling essentials..." && \
+    which rg && echo "   ✅ ripgrep (rg)" && \
+    which fd && echo "   ✅ fd (alias for fdfind)" && \
+    which fzf && echo "   ✅ fzf" && \
+    which jq && echo "   ✅ jq" && \
+    which vim && echo "   ✅ vim" && \
+    which dig && echo "   ✅ dnsutils (dig)" && \
+    \
+    echo "13. OpenCode runtime deps..." && \
+    test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin && echo "   ✅ @opencode-ai/plugin" || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
+    test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible && echo "   ✅ @ai-sdk/openai-compatible" || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
+    \
+    echo "=== All critical components verified OK ==="
+
+# ---------------------------------------------------------------------------
+# Runtime environment
+# ---------------------------------------------------------------------------
+ENV NODE_ID="" \
+    PORT=8090 \
+    MAX_CONCURRENT=5 \
+    ORCHESTRATOR_URL="http://host.docker.internal:3000"
+
+EXPOSE 8090
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8090/health || exit 1
+
+ENTRYPOINT ["node", "dist/index.js"]
