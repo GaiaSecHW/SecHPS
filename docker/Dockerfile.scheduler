@@ -17,17 +17,18 @@ COPY tsconfig.json ./
 
 RUN pnpm --filter @codeswarm/types build
 RUN pnpm --filter @codeswarm/scheduler build
-RUN npx prisma generate --schema=prisma/schema.prisma
 
-# 生成含所有生产依赖的独立目录（解决 workspace symlink 问题）
+# 生成含所有生产依赖的独立目录
 RUN pnpm --filter @codeswarm/scheduler deploy --prod /deploy
-RUN cp -r node_modules/.prisma /deploy/node_modules/.prisma
+
+# 在 deploy 目录内生成 Prisma Client（避免 workspace 路径问题）
+RUN cp -r prisma /deploy/prisma && \
+    cd /deploy && npx --yes prisma@6 generate --schema=prisma/schema.prisma
 
 FROM node:20-bookworm-slim
 
 WORKDIR /app
 COPY --from=builder /deploy ./
-COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 8080
 CMD ["node", "dist/index.js"]
