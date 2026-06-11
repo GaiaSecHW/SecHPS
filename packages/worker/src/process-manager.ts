@@ -312,9 +312,7 @@ export class ProcessManager {
 
     try {
       // Build opencode args
-      const args = ['run', '--print-logs'];
-      if (agentName) args.push('--agent', agentName);
-      args.push('--dir', workspace);
+      const args = ['run', '--print-logs', '--dir', workspace];
 
       const prompt = instruction?.trim() || agentName || '执行任务';
 

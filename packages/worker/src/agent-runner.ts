@@ -76,11 +76,6 @@ export class AgentRunner {
 
     const args: string[] = [];
     
-    // Add agent flag if specified
-    if (config.agent) {
-      args.push('--agent', config.agent);
-    }
-    
     // Add model flag if specified
     if (config.model) {
       args.push('--model', config.model);
