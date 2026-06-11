@@ -237,6 +237,29 @@ export class CodeswarmDispatcher {
     }
   }
 
+  /**
+   * Enqueue an already-created DB task to Redis Stream for dispatch.
+   *
+   * Use this when the DB record was created elsewhere (e.g. in the HTTP route
+   * handler) to avoid a duplicate insert. submitTask() also creates the DB
+   * record, so calling it on an existing task triggers a unique-constraint
+   * failure that silently drops the Stream message — tasks then never dispatch.
+   */
+  async enqueueExistingTask(dbTaskId: string): Promise<boolean> {
+    if (!this.redis) {
+      logger.warn(`Redis unavailable, task ${dbTaskId} stays queued (DB scan will pick it up)`);
+      return false;
+    }
+    try {
+      await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+      logger.info(`Task ${dbTaskId} enqueued to Redis Stream`);
+      return true;
+    } catch (e) {
+      logger.error(`Failed to enqueue task ${dbTaskId}: ${e instanceof Error ? e.message : String(e)}`);
+      return false;
+    }
+  }
+
   /** Cancel a task — marks DB as cancelled and notifies Worker */
   async cancelTask(taskId: string): Promise<boolean> {
     try {

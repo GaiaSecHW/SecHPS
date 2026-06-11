@@ -110,9 +110,12 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
         })
       );
 
-      // Submit to dispatcher (Redis Stream or DB queue)
-      if (dispatcher?.submitTask) {
-        await dispatcher.submitTask(task);
+      // Push the already-created task to Redis Stream for dispatch.
+      // Do NOT call dispatcher.submitTask() here — it would re-insert the DB
+      // row (duplicate taskId) and the unique-constraint failure would drop
+      // the Stream message, leaving the task stuck in 'queued'.
+      if (dispatcher?.enqueueExistingTask) {
+        await dispatcher.enqueueExistingTask(task.id);
       }
 
       logger.info(`[Task] Submitted: ${taskId} (workspace: ${workspacePath}${toolTaskId ? `, toolTaskId: ${toolTaskId}` : ''})`);
