@@ -19,7 +19,7 @@ pnpm run db:generate        # 生成 Prisma Client
 pnpm run db:push            # 推送 schema 到数据库
 
 # Docker
-cd docker && docker compose up --build   # 本地完整环境（PostgreSQL + Redis + MinIO + Scheduler + Workers）
+cd docker && docker compose up --build   # 本地完整环境（PostgreSQL + Redis + Scheduler + Workers）
 
 # 脚本
 bash scripts/build.sh       # 构建
@@ -32,7 +32,6 @@ bash scripts/dev.sh         # 开发环境初始化
 - Fastify 5（Scheduler/Worker HTTP 服务）
 - Prisma 6 + PostgreSQL（3 模型：CodeswarmTask、CodeswarmWorker、CodeswarmEvent）
 - ioredis（Redis Stream 任务队列）
-- MinIO（对象存储，报告/工作区文件）
 - Zod（运行时 schema 验证）
 - @agentclientprotocol/sdk（ACP Agent 协议）
 - @anthropic-ai/claude-agent-sdk（Claude Agent SDK）
@@ -63,7 +62,6 @@ bash scripts/dev.sh         # 开发环境初始化
 │   │   │   ├── daemon.ts           # Worker 主循环（心跳、任务接收、报告轮询）
 │   │   │   ├── environment.ts      # 运行环境工厂
 │   │   │   ├── process-manager.ts  # 子进程管理 + 事件流
-│   │   │   ├── minio-client.ts     # MinIO 上传
 │   │   │   └── semaphore.ts        # 并发控制
 │   │   └── dist/
 │   └── debug-ui/      # @codeswarm/debug-ui — Vite + React 调试面板

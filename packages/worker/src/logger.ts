@@ -14,7 +14,6 @@ export const LOG_MODULES = {
   DAEMON: 'DAEMON',
   AGENT: 'AGENT',
   ENV: 'ENV',
-  MINIO: 'MINIO',
   PROCESS: 'PROCESS',
   HEARTBEAT: 'HEARTBEAT',
 } as const;

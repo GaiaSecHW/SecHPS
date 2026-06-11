@@ -8,7 +8,6 @@
 - **HTTP 框架**: Fastify 5
 - **数据库**: Prisma 6 + PostgreSQL（3 模型）
 - **消息队列**: Redis Stream（ioredis）
-- **对象存储**: MinIO
 - **AI 引擎**: OpenCode CLI + Claude Code CLI（ACP 协议）
 - **包管理**: pnpm workspace monorepo
 
@@ -52,7 +51,7 @@ pnpm run db:generate    # 生成 Prisma Client
 pnpm run dev:scheduler   # 调度器（端口 8080）
 pnpm run dev:worker      # Worker（端口 8090）
 
-# 或使用 Docker Compose（含 PostgreSQL + Redis + MinIO）
+# 或使用 Docker Compose（含 PostgreSQL + Redis）
 cd docker && docker compose up --build
 ```
 
@@ -76,7 +75,6 @@ packages/
 │       ├── daemon.ts        # Worker 主循环
 │       ├── environment.ts   # 运行环境
 │       ├── process-manager.ts # 子进程管理
-│       └── minio-client.ts  # 对象存储
 └── debug-ui/        # 调试面板
 prisma/
 └── schema.prisma    # 3 模型（Task, Worker, Event）
@@ -109,7 +107,6 @@ scripts/             # 构建/开发脚本
 | `REDIS_URL` | Redis 连接 |
 | `JWT_SECRET` | JWT 签名密钥 |
 | `PORT` | Scheduler 端口（默认 8080） |
-| `MINIO_*` | MinIO 对象存储配置 |
 
 ## 部署
 

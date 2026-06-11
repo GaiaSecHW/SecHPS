@@ -22,12 +22,6 @@
 #   WORKER_ADDRESS      - External reachable address for heartbeat
 #   JOERN_HOME          - Joern CLI path (default /opt/joern-cli)
 #   JAVA_HOME           - Java runtime path (default /opt/jdk-21)
-#   MINIO_ENDPOINT      - MinIO endpoint
-#   MINIO_PORT          - MinIO port (default 9000)
-#   MINIO_ACCESS_KEY    - MinIO access key
-#   MINIO_SECRET_KEY    - MinIO secret key
-#   MINIO_BUCKET        - MinIO bucket name (default codesgraph)
-#   MINIO_USE_SSL       - MinIO SSL toggle (default false)
 #
 # Important:
 #   - pnpm install MUST include optional deps (@img/sharp-* for claude-agent-sdk)
@@ -342,13 +336,10 @@ RUN echo "=== Verifying critical worker components ===" && \
     echo "6. Fastify..." && \
     test -d /opt/worker/node_modules/fastify && echo "   ✅ fastify" || (echo "   ❌ MISSING" && exit 1) && \
     \
-    echo "7. MinIO..." && \
-    test -d /opt/worker/node_modules/minio && echo "   ✅ minio" || (echo "   ❌ MISSING" && exit 1) && \
-    \
-    echo "8. glibc version..." && \
+    echo "7. glibc version..." && \
     ldd --version 2>&1 | head -1 && echo "   ✅ glibc >= 2.38" && \
     \
-    echo "9. AI agent tool calling essentials..." && \
+    echo "8. AI agent tool calling essentials..." && \
     which rg && echo "   ✅ ripgrep (rg)" && \
     which fd && echo "   ✅ fd (alias for fdfind)" && \
     which fzf && echo "   ✅ fzf" && \
@@ -356,7 +347,7 @@ RUN echo "=== Verifying critical worker components ===" && \
     which vim && echo "   ✅ vim" && \
     which dig && echo "   ✅ dnsutils (dig)" && \
     \
-    echo "10. OpenCode runtime deps..." && \
+    echo "9. OpenCode runtime deps..." && \
     test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin && echo "   ✅ @opencode-ai/plugin" || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
     test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible && echo "   ✅ @ai-sdk/openai-compatible" || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
     \

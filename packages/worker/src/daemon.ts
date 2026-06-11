@@ -12,7 +12,6 @@ import {
 import { EnvironmentFactory } from './environment.js';
 import { ProcessManager, type AgentEvent } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
-import { ensureBucket } from './minio-client.js';
 
 
 interface WorkerDaemonConfig {
@@ -291,10 +290,6 @@ this.server.get('/health', async () => ({
     this.checkBinaries();
     this.startHeartbeat();
     startLogArchive();
-    // Ensure MinIO bucket exists at startup
-    ensureBucket().catch(err => {
-      this.server.log.warn({ error: err }, 'MinIO bucket check failed (non-fatal)');
-    });
     this.server.log.info({ config: this.config }, 'Worker daemon started');
     logger.info(LOG_MODULES.DAEMON, `\n${'='.repeat(50)}`);
     logger.info(LOG_MODULES.DAEMON, `  Worker Node: ${this.config.nodeId}`);

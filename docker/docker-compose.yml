@@ -6,7 +6,6 @@
 # Scheduler API: http://localhost:8080
 # Worker-1:      http://localhost:8081
 # Worker-2:      http://localhost:8082
-# MinIO Console:  http://localhost:9001
 # PostgreSQL:     localhost:5432
 
 services:
@@ -33,18 +32,6 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 5
-
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
 
   # 初始化共享工作区卷权限
   workspace-init:
@@ -85,12 +72,6 @@ services:
       WORKER_ADDRESS: worker-1:8090,http://localhost:8081
       WORKSPACE_BASE_PATH: /mnt/workspace
       TASK_TIMEOUT_SEC: "86400"
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: codeswarm
-      MINIO_USE_SSL: "false"
     volumes:
       - workspace_data:/mnt/workspace
     depends_on:
@@ -110,12 +91,6 @@ services:
       WORKER_ADDRESS: worker-2:8090,http://localhost:8082
       WORKSPACE_BASE_PATH: /mnt/workspace
       TASK_TIMEOUT_SEC: "86400"
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_BUCKET: codeswarm
-      MINIO_USE_SSL: "false"
     volumes:
       - workspace_data:/mnt/workspace
     depends_on:
@@ -123,5 +98,4 @@ services:
 
 volumes:
   pgdata:
-  minio_data:
   workspace_data:    # 模拟 NFS PVC，所有容器共享

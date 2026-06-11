@@ -24,12 +24,6 @@
 #   CODEDMAP_HOME       - Codedmap install path (default /opt/codedmap)
 #   JOERN_HOME          - Joern CLI path (default /opt/joern-cli)
 #   JAVA_HOME           - Java runtime path (default /opt/jdk-21)
-#   MINIO_ENDPOINT      - MinIO endpoint for codedmap DB cache
-#   MINIO_PORT          - MinIO port (default 9000)
-#   MINIO_ACCESS_KEY    - MinIO access key
-#   MINIO_SECRET_KEY    - MinIO secret key
-#   MINIO_BUCKET        - MinIO bucket name (default codedmap-dbs)
-#   MINIO_USE_SSL       - MinIO SSL toggle (default false)
 #   GITEA_CODEDMAP_REPO - Gitea repo URL for codedmap db cache
 #   GITEA_CODEDMAP_TOKEN- Gitea access token
 #   PATH_MAPPING        - NFS path mapping
@@ -404,13 +398,10 @@ RUN echo "=== Verifying critical worker components ===" && \
     echo "9. Fastify..." && \
     test -d /opt/worker/node_modules/fastify && echo "   ✅ fastify" || (echo "   ❌ MISSING" && exit 1) && \
     \
-    echo "10. MinIO..." && \
-    test -d /opt/worker/node_modules/minio && echo "   ✅ minio" || (echo "   ❌ MISSING" && exit 1) && \
-    \
-    echo "11. glibc version..." && \
+    echo "10. glibc version..." && \
     ldd --version 2>&1 | head -1 && echo "   ✅ glibc >= 2.38" && \
     \
-    echo "12. AI agent tool calling essentials..." && \
+    echo "11. AI agent tool calling essentials..." && \
     which rg && echo "   ✅ ripgrep (rg)" && \
     which fd && echo "   ✅ fd (alias for fdfind)" && \
     which fzf && echo "   ✅ fzf" && \
@@ -418,7 +409,7 @@ RUN echo "=== Verifying critical worker components ===" && \
     which vim && echo "   ✅ vim" && \
     which dig && echo "   ✅ dnsutils (dig)" && \
     \
-    echo "13. OpenCode runtime deps..." && \
+    echo "12. OpenCode runtime deps..." && \
     test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin && echo "   ✅ @opencode-ai/plugin" || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
     test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible && echo "   ✅ @ai-sdk/openai-compatible" || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
     \
