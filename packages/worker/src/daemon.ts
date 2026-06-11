@@ -516,15 +516,21 @@ this.server.get('/health', async () => ({
       // 早期取消检查：任务在排队/分发阶段已被 /task/cancel 标记
       if (this.cancelledTasks.has(taskId)) {
         logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Task cancelled before execution started — reporting failure`);
-        this.postResult(payload, {
+        await this.postResult(payload, {
           taskId,
           nodeId: this.config.nodeId,
           status: 'failed',
           error: 'Task cancelled by user',
         }).catch(err => {
-          this.server.log.warn({ taskId, error: err }, 'postResult (early cancel) failed (non-blocking)');
+          this.server.log.warn({ taskId, error: err }, 'postResult (early cancel) failed');
         });
-        return; // finally 块会清理 cancelledTasks + semaphore
+        // 主动释放槽位（与 success/error 路径一致），避免依赖外层 finally 兜底
+        if (this.activeTasks.has(taskId)) {
+          this.activeTasks.delete(taskId);
+          this.semaphore.release();
+          logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released after postResult (early cancel)`);
+        }
+        return; // finally 块会清理 cancelledTasks
       }
 
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `========== TASK START [${this.config.nodeId}:${taskId}] ==========`);
@@ -707,23 +713,27 @@ this.server.get('/health', async () => ({
         });
       }
 
-      this.postResult(payload, {
+      // Await postResult before releasing the slot: if we fire-and-forget, a
+      // transient network blip leaves Scheduler believing the task is still
+      // running while the Worker has already freed the slot — state drift.
+      // postResult already retries internally; awaiting guarantees ordering.
+      await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status,
         result: isCancelled ? undefined : (result.stdout || undefined),
         error: isCancelled ? 'Task cancelled by user' : error,
       }).catch(err => {
-        this.server.log.warn({ taskId, error: err }, 'postResult (success path) failed (non-blocking)');
+        this.server.log.warn({ taskId, error: err }, 'postResult (success path) failed');
       });
 
-      // Early release: postResult 已提交，任务槽位可立即释放
-      // 确保 Worker 上报的 semaphore 计数与 DB currentTasks 同步，
-      // 防止心跳 GREATEST 把已递减的 DB 值刷回旧值
+      // Release only after result is reported (or retries exhausted).
+      // Ensures Worker semaphore count stays in sync with DB currentTasks,
+      // preventing heartbeat GREATEST from clobbering a decremented DB value.
       if (this.activeTasks.has(taskId)) {
         this.activeTasks.delete(taskId);
         this.semaphore.release();
-        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released early after postResult (success path)`);
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released after postResult (success path)`);
       }
     } catch (error) {
       const isCancelled = this.cancelledTasks.has(taskId);
@@ -740,20 +750,20 @@ this.server.get('/health', async () => ({
         this.server.log.warn({ taskId, error: err }, 'Failed to post error event from catch block');
       });
 
-      this.postResult(payload, {
+      await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status: 'failed',
         error: errorMsg,
       }).catch(err => {
-        this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed (non-blocking)');
+        this.server.log.warn({ taskId, error: err }, 'postResult (error path) failed');
       });
 
-      // Early release: postResult 已提交，任务槽位可立即释放
+      // Release only after failure result is reported (or retries exhausted).
       if (this.activeTasks.has(taskId)) {
         this.activeTasks.delete(taskId);
         this.semaphore.release();
-        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released early after postResult (error path)`);
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `[Semaphore] Released after postResult (error path)`);
       }
     } finally {
       clearTaskLogFile(taskId);
