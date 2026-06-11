@@ -55,4 +55,5 @@ dev.db
 .claude/
 .codegraph/
 .opencode/
+.omo/
 .sisyphus/
