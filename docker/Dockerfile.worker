@@ -4,7 +4,7 @@
 FROM node:20-bookworm AS builder
 
 WORKDIR /app
-RUN corepack enable
+RUN npm install -g pnpm@9
 
 COPY package.json pnpm-workspace.yaml ./
 COPY packages/types/package.json ./packages/types/
