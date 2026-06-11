@@ -48,6 +48,8 @@ export class CodeswarmDispatcher {
 
   private lastNoWorkerLogTime = 0;
   private lastPreferredUnavailableLogTime = 0;
+  private lastNoWorkerLogInterval = 30_000; // 30s — fast detection of dispatch stalls
+  private lastPreferredUnavailableLogInterval = 30_000; // 30s — fast detection of dispatch stalls
   private lastDbErrorTaskId: string | null = null;
 
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -391,6 +393,7 @@ export class CodeswarmDispatcher {
     status?: string;
   }) {
     const existing = this.workers.get(data.nodeId);
+    const isNewWorker = !existing;
     if (existing) {
       existing.id = data.id;
       existing.address = data.address;
@@ -412,6 +415,15 @@ export class CodeswarmDispatcher {
         lastHeartbeat: Date.now(),
         status: data.status,
       });
+      logger.info(`Worker ${data.nodeId} joined topology (address=${data.address}, maxConcurrent=${data.maxConcurrent})`);
+    }
+
+    // New Worker registration: immediately dispatch queued tasks instead of
+    // waiting for the 5s BLOCK cycle or the 30s DB scan fallback.
+    if (isNewWorker && this.running) {
+      this.dispatchQueuedTasksNow().catch((e: unknown) =>
+        logger.warn(`Immediate dispatch after new worker heartbeat failed: ${e instanceof Error ? e.message : String(e)}`)
+      );
     }
   }
 
@@ -712,6 +724,33 @@ export class CodeswarmDispatcher {
     return best;
   }
 
+  /** 
+   * Immediately dispatch queued tasks from DB — bypasses the Stream cycle.
+   * Called when a new Worker joins topology (onHeartbeat) to avoid the
+   * 5-30s latency of waiting for the next Stream BLOCK / DB scan round.
+   */
+  async dispatchQueuedTasksNow(): Promise<void> {
+    if (!this.running) return;
+    try {
+      const queuedTasks = await prisma.codeswarmTask.findMany({
+        where: { state: 'queued' },
+        select: { id: true, taskId: true, preferredWorkerNodeId: true },
+        take: 20,
+      });
+      if (queuedTasks.length === 0) return;
+
+      logger.info(`New Worker detected, immediately dispatching ${queuedTasks.length} queued tasks`);
+      for (const task of queuedTasks) {
+        const dispatched = await this.dispatchOne(task.id);
+        if (!dispatched && this.redis) {
+          this.scheduleRetry(task.id, 3000);
+        }
+      }
+    } catch (e) {
+      logger.warn(`dispatchQueuedTasksNow error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   /** Manually trigger dispatch of queued tasks */
   async triggerDispatch(): Promise<void> {
     await this.scanDbQueuedTasks();
@@ -859,7 +898,7 @@ export class CodeswarmDispatcher {
       let worker = this.selectWorker(task.preferredWorkerNodeId ?? undefined);
       if (!worker) {
         const now = Date.now();
-        if (now - this.lastPreferredUnavailableLogTime > 60_000) {
+        if (now - this.lastPreferredUnavailableLogTime > this.lastPreferredUnavailableLogInterval) {
           this.lastPreferredUnavailableLogTime = now;
           logger.info('Preferred Worker unavailable, trying auto-assign...');
         }
@@ -867,7 +906,7 @@ export class CodeswarmDispatcher {
       }
       if (!worker) {
         const now = Date.now();
-        if (now - this.lastNoWorkerLogTime > 300_000) {
+        if (now - this.lastNoWorkerLogTime > this.lastNoWorkerLogInterval) {
           this.lastNoWorkerLogTime = now;
           logger.info(`No Worker available, task remains queued: ${task.taskId}`);
         }
@@ -957,6 +996,10 @@ export class CodeswarmDispatcher {
   // ---------------------------------------------------------------------------
 
   private startHealthChecks() {
+    // Immediate cleanup of stale consumers from previous scheduler instances
+    this.cleanupStaleConsumers().catch((e: unknown) =>
+      logger.warn(`Startup stale consumer cleanup failed: ${e instanceof Error ? e.message : String(e)}`)
+    );
     // Fallback poller: every 5 minutes try to dispatch queued tasks
     this.startFallbackPoller();
     // Every 60s detect offline Workers
@@ -1515,7 +1558,7 @@ export class CodeswarmDispatcher {
 
         if (nameStr === CONSUMER_NAME) continue;
 
-        if (idle > 600_000) {
+        if (idle > 300_000) {
           if (pending > 0) {
             try {
               const pendingInfo = await this.redisExec(
