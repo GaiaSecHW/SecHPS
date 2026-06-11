@@ -43,15 +43,18 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 
 COPY packages/types/package.json ./packages/types/package.json
 COPY packages/scheduler/package.json ./packages/scheduler/package.json
+COPY packages/debug-ui/package.json ./packages/debug-ui/package.json
 COPY prisma/ ./prisma/
 
 RUN pnpm install --no-frozen-lockfile
 
 COPY packages/types/ ./packages/types/
 COPY packages/scheduler/ ./packages/scheduler/
+COPY packages/debug-ui/ ./packages/debug-ui/
 
 RUN pnpm --filter @codeswarm/types build && \
-    pnpm --filter @codeswarm/scheduler build
+    pnpm --filter @codeswarm/scheduler build && \
+    pnpm --filter @codeswarm/debug-ui build
 
 # Generate Prisma Client
 RUN npx prisma generate --schema=prisma/schema.prisma && \
@@ -127,6 +130,13 @@ RUN apt-get update && \
 COPY --from=scheduler-builder /deploy/scheduler /opt/scheduler
 
 # ---------------------------------------------------------------------------
+# Copy Debug UI build output (served at /debug/* by Fastify static)
+# server.ts resolves: path.join(__dirname, '../../debug-ui/dist')
+# __dirname = /opt/scheduler/dist → ../../debug-ui/dist = /opt/debug-ui/dist
+# ---------------------------------------------------------------------------
+COPY --from=scheduler-builder /build/codeswarm/packages/debug-ui/dist /opt/debug-ui/dist
+
+# ---------------------------------------------------------------------------
 # Verify ALL critical components (fail build if any missing)
 # ---------------------------------------------------------------------------
 RUN echo "=== Verifying critical scheduler components ===" && \
@@ -153,7 +163,10 @@ RUN echo "=== Verifying critical scheduler components ===" && \
     echo "7. glibc version..." && \
     ldd --version 2>&1 | head -1 && echo "   ✅ glibc >= 2.38" && \
     \
-    echo "8. Basic tools..." && \
+    echo "8. Debug UI..." && \
+    test -f /opt/debug-ui/dist/index.html && echo "   ✅ debug-ui/index.html" || (echo "   ❌ MISSING: debug-ui" && exit 1) && \
+    \
+    echo "9. Basic tools..." && \
     which curl && echo "   ✅ curl" && \
     which jq && echo "   ✅ jq" && \
     which vim && echo "   ✅ vim" && \
