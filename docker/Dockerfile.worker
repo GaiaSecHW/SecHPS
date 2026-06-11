@@ -1,12 +1,10 @@
 # docker/Dockerfile.worker
-# 多阶段构建：编译 + 生产镜像（含 AI 引擎预装）
-
 FROM node:20-bookworm AS builder
 
 WORKDIR /app
 RUN npm install -g pnpm@9
 
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/types/package.json ./packages/types/
 COPY packages/acp/package.json ./packages/acp/
 COPY packages/sdk-adapter/package.json ./packages/sdk-adapter/
@@ -22,23 +20,20 @@ COPY tsconfig.json ./
 
 RUN pnpm -r build
 
-# 生产镜像 — 预装 AI 引擎
+# 生成含所有生产依赖的独立目录（解决 workspace symlink 问题）
+RUN pnpm --filter @codeswarm/worker deploy --prod /deploy
+
 FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 opencode + claude-agent-acp
 RUN npm install -g opencode-ai@latest 2>/dev/null || true
 RUN npm install -g @agentclientprotocol/claude-agent-acp@latest 2>/dev/null || true
 
 WORKDIR /app
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/types/dist ./packages/types/dist
-COPY --from=builder /app/packages/acp/dist ./packages/acp/dist
-COPY --from=builder /app/packages/sdk-adapter/dist ./packages/sdk-adapter/dist
-COPY --from=builder /app/packages/worker/dist ./packages/worker/dist
+COPY --from=builder /deploy ./
 
 EXPOSE 8080
-CMD ["node", "packages/worker/dist/index.js"]
+CMD ["node", "dist/index.js"]
