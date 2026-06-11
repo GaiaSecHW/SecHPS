@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, ChevronDown, ChevronRight, Loader2, Terminal, Trash2 } from 'lucide-react';
+import { Play, ChevronDown, ChevronRight, Loader2, Terminal, Trash2, Settings, Wrench, Sliders } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface TaskDebugPanelProps {
@@ -20,21 +20,77 @@ interface LogEntry {
   stream?: 'stdout' | 'stderr';
 }
 
+// Collapsible section component
+function CollapsibleSection({
+  title,
+  icon,
+  defaultExpanded = false,
+  children,
+  badge,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  defaultExpanded?: boolean;
+  children: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between bg-dark-surface-hover hover:bg-dark-surface transition-colors"
+      >
+        <div className="flex items-center space-x-2">
+          <span className="text-gray-400">{icon}</span>
+          <span className="text-sm font-medium text-gray-200">{title}</span>
+          {badge}
+        </div>
+        {expanded ? (
+          <ChevronDown className="w-4 h-4 text-gray-400" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        )}
+      </button>
+      {expanded && (
+        <div className="p-4 bg-dark-bg space-y-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [workerOptions, setWorkerOptions] = useState<WorkerOption[]>([]);
   const [form, setForm] = useState({
+    // Basic
     instruction: '',
-    agent: '',
     projectPath: '',
     workspacePath: '',
     apiKey: '',
     timeoutSec: 300,
-    skills: '',
-    mcps: '',
     preferredWorkerNodeId: '',
     engine: 'opencode' as 'opencode' | 'claudecode',
+    // Model Config
+    model: '',
+    apiBaseUrl: '',
+    maxTokens: 0,
+    contextWindow: 0,
+    // Tool Dispatch
+    toolId: '',
+    toolPath: '',
+    toolWorkDir: '',
+    // Advanced
+    skills: '',
+    mcps: '',
+    scripts: '',
+    env: '',
+    targetProduct: '',
   });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
@@ -165,19 +221,47 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
       return;
     }
 
+    // Validate env JSON if provided
+    let envParsed: Record<string, string> | undefined;
+    if (form.env.trim()) {
+      try {
+        const parsed = JSON.parse(form.env.trim());
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+          toast.error('env 必须是 JSON 对象格式');
+          return;
+        }
+        envParsed = parsed as Record<string, string>;
+      } catch {
+        toast.error('env JSON 格式无效');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const payload = {
         instruction: form.instruction,
         engine: form.engine,
-        agent: form.agent || undefined,
         projectPath: form.projectPath || undefined,
         workspacePath: form.workspacePath || undefined,
         apiKey: form.apiKey || undefined,
         timeoutSec: form.timeoutSec || undefined,
-        skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
-        mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
         preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
+        // Model Config
+        model: form.model || undefined,
+        apiBaseUrl: form.apiBaseUrl || undefined,
+        maxTokens: form.maxTokens > 0 ? form.maxTokens : undefined,
+        contextWindow: form.contextWindow > 0 ? form.contextWindow : undefined,
+        // Tool Dispatch
+        toolId: form.toolId || undefined,
+        toolPath: form.toolId && form.toolPath ? form.toolPath : undefined,
+        toolWorkDir: form.toolId && form.toolWorkDir ? form.toolWorkDir : undefined,
+        // Advanced
+        skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+        mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+        scripts: form.scripts ? form.scripts.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+        env: envParsed,
+        targetProduct: form.targetProduct || undefined,
       };
 
       const resp = await fetch('/api/task/submit', {
@@ -228,6 +312,9 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     return clean.trim();
   };
 
+  // Tool dispatch mode indicator
+  const isToolMode = form.toolId.trim().length > 0;
+
   return (
     <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
       {/* Header */}
@@ -254,97 +341,172 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
       {/* Form */}
       {expanded && (
         <form onSubmit={handleSubmit} className="p-6 border-t border-gray-700/50 space-y-4">
-          {/* Engine Selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">执行引擎</label>
-            <div className="flex gap-3">
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
-                <input type="radio" name="engine" value="opencode" checked={form.engine === 'opencode'} onChange={() => setForm({ ...form, engine: 'opencode' })} className="sr-only" />
-                <span className="font-medium">OpenCode</span>
-                <span className="text-xs opacity-70">opencode acp</span>
+          {/* Section 1: 基础配置 (always visible) */}
+          <div className="space-y-4">
+            {/* Engine Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">执行引擎</label>
+              <div className="flex gap-3">
+                <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+                  <input type="radio" name="engine" value="opencode" checked={form.engine === 'opencode'} onChange={() => setForm({ ...form, engine: 'opencode' })} className="sr-only" />
+                  <span className="font-medium">OpenCode</span>
+                  <span className="text-xs opacity-70">opencode run</span>
+                </label>
+                <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'claudecode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+                  <input type="radio" name="engine" value="claudecode" checked={form.engine === 'claudecode'} onChange={() => setForm({ ...form, engine: 'claudecode' })} className="sr-only" />
+                  <span className="font-medium">Claude Code</span>
+                  <span className="text-xs opacity-70">claude-code-acp</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Instruction */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                执行指令 <span className="text-red-400">*</span>
               </label>
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'claudecode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
-                <input type="radio" name="engine" value="claudecode" checked={form.engine === 'claudecode'} onChange={() => setForm({ ...form, engine: 'claudecode' })} className="sr-only" />
-                <span className="font-medium">Claude Code</span>
-                <span className="text-xs opacity-70">claude-code-acp</span>
-              </label>
+              <textarea
+                value={form.instruction}
+                onChange={(e) => setForm({ ...form, instruction: e.target.value })}
+                placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
+                rows={5}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+              />
             </div>
-          </div>
 
-          {/* Instruction */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              执行指令 <span className="text-red-400">*</span>
-            </label>
-            <textarea
-              value={form.instruction}
-              onChange={(e) => setForm({ ...form, instruction: e.target.value })}
-              placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
-              rows={5}
-              className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-            />
-          </div>
+            {/* Basic Fields Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">项目路径</label>
+                <input type="text" value={form.projectPath} onChange={(e) => setForm({ ...form, projectPath: e.target.value })} placeholder="/path/to/project" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">工作区路径 (NFS)</label>
+                <input type="text" value={form.workspacePath} onChange={(e) => setForm({ ...form, workspacePath: e.target.value })} placeholder="/shared/workspace/task-123" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+            </div>
 
-          {/* Basic Fields */}
-          <div className="grid grid-cols-2 gap-4">
+            {/* Worker Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">项目路径</label>
-              <input type="text" value={form.projectPath} onChange={(e) => setForm({ ...form, projectPath: e.target.value })} placeholder="/path/to/project" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              <label className="block text-sm font-medium text-gray-300 mb-2">指定 Worker (空则自动分配)</label>
+              <select value={form.preferredWorkerNodeId} onChange={(e) => setForm({ ...form, preferredWorkerNodeId: e.target.value })} className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200">
+                <option value="">自动分配</option>
+                {workerOptions.filter(w => w.status === 'online').map((w) => (
+                  <option key={w.nodeId} value={w.nodeId}>{w.nodeId} ({w.address})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* API Key & Timeout */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
+                <input type="password" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="sk-ant-... (可选，覆盖 Worker 端默认)" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">超时 (秒)</label>
+                <input type="number" value={form.timeoutSec} onChange={(e) => setForm({ ...form, timeoutSec: parseInt(e.target.value) || 300 })} min={60} max={3600} className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200" />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: 模型配置 (collapsible) */}
+          <CollapsibleSection
+            title="模型配置"
+            icon={<Settings className="w-4 h-4" />}
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">AI 模型</label>
+                <input type="text" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="MiniMax-M2.7 / DeepSeek-V3" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">API Base URL</label>
+                <input type="text" value={form.apiBaseUrl} onChange={(e) => setForm({ ...form, apiBaseUrl: e.target.value })} placeholder="https://api.example.com/v1" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Max Tokens</label>
+                <input type="number" value={form.maxTokens || ''} onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value) || 0 })} min={0} placeholder="0 = 不限制" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Context Window</label>
+                <input type="number" value={form.contextWindow || ''} onChange={(e) => setForm({ ...form, contextWindow: parseInt(e.target.value) || 0 })} min={0} placeholder="0 = 不限制" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200" />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* Section 4: Tool 调度 (collapsible) */}
+          <CollapsibleSection
+            title="Tool 调度"
+            icon={<Wrench className="w-4 h-4" />}
+            badge={isToolMode ? (
+              <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded">Tool 模式已启用</span>
+            ) : undefined}
+          >
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Tool ID</label>
+              <input type="text" value={form.toolId} onChange={(e) => setForm({ ...form, toolId: e.target.value })} placeholder="my-tool-identifier" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              <p className="text-xs text-gray-500 mt-1">填写后将启用 Tool 调度模式，自动创建 toolTaskId</p>
+            </div>
+            {isToolMode && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Tool 可执行路径</label>
+                  <input type="text" value={form.toolPath} onChange={(e) => setForm({ ...form, toolPath: e.target.value })} placeholder="/usr/local/bin/my-tool" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Tool 工作目录</label>
+                  <input type="text" value={form.toolWorkDir} onChange={(e) => setForm({ ...form, toolWorkDir: e.target.value })} placeholder="/mnt/tool-workspace (默认 TOOL_WORK_DIR)" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+                </div>
+              </>
+            )}
+          </CollapsibleSection>
+
+          {/* Section 5: 高级配置 (collapsible) */}
+          <CollapsibleSection
+            title="高级配置"
+            icon={<Sliders className="w-4 h-4" />}
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">技能 (逗号分隔)</label>
+                <input type="text" value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="security-audit, code-analysis" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">MCP 配置 (逗号分隔)</label>
+                <input type="text" value={form.mcps} onChange={(e) => setForm({ ...form, mcps: e.target.value })} placeholder='{"type":"local","command":["npx"]}' className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">脚本列表 (逗号分隔)</label>
+                <input type="text" value={form.scripts} onChange={(e) => setForm({ ...form, scripts: e.target.value })} placeholder="setup.sh, build.sh, test.sh" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">目标产品</label>
+                <input type="text" value={form.targetProduct} onChange={(e) => setForm({ ...form, targetProduct: e.target.value })} placeholder="产品名称" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">工作区路径 (NFS)</label>
-              <input type="text" value={form.workspacePath} onChange={(e) => setForm({ ...form, workspacePath: e.target.value })} placeholder="/shared/workspace/task-123" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              <label className="block text-sm font-medium text-gray-300 mb-2">环境变量 (JSON)</label>
+              <textarea
+                value={form.env}
+                onChange={(e) => setForm({ ...form, env: e.target.value })}
+                placeholder='{"NODE_ENV": "production", "DEBUG": "true"}'
+                rows={3}
+                className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">JSON 格式的环境变量对象，将传递给 Agent 进程</p>
             </div>
-          </div>
-
-          {/* Worker Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">指定 Worker (空则自动分配)</label>
-            <select value={form.preferredWorkerNodeId} onChange={(e) => setForm({ ...form, preferredWorkerNodeId: e.target.value })} className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200">
-              <option value="">自动分配</option>
-              {workerOptions.filter(w => w.status === 'online').map((w) => (
-                <option key={w.nodeId} value={w.nodeId}>{w.nodeId} ({w.address})</option>
-              ))}
-            </select>
-          </div>
-
-          {/* API Key */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
-            <input type="password" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="sk-ant-... (可选，覆盖 Worker 端默认)" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
-          </div>
-
-          {/* Timeout */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">超时 (秒)</label>
-            <input type="number" value={form.timeoutSec} onChange={(e) => setForm({ ...form, timeoutSec: parseInt(e.target.value) || 300 })} min={60} max={3600} className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200" />
-          </div>
-
-          {/* Agent Field */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Agent 名称 {form.engine === 'opencode' && <span className="text-red-400">*</span>}
-            </label>
-            <input type="text" value={form.agent} onChange={(e) => setForm({ ...form, agent: e.target.value })} placeholder="如 nazhua-audit" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
-          </div>
-
-          {/* Advanced Fields */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">技能 (逗号分隔)</label>
-              <input type="text" value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder="security-audit, code-analysis" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">MCP 配置 (JSON)</label>
-              <input type="text" value={form.mcps} onChange={(e) => setForm({ ...form, mcps: e.target.value })} placeholder='[{"type":"local","command":["npx"]}]' className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm" />
-            </div>
-          </div>
+          </CollapsibleSection>
 
           {/* Submit Button */}
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={loading || !form.instruction.trim() || (form.engine === 'opencode' && !form.agent.trim())}
+              disabled={loading || !form.instruction.trim()}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
