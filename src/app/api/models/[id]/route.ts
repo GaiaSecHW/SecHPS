@@ -18,6 +18,8 @@ function formatModel(model: any, includeApiKey: boolean = false) {
   return {
     id: model.id,
     userId: model.userId,
+    tenantId: model.tenantId,
+    tenantName: model.Tenant?.name || null,
     name: model.name,
     providerType: model.providerType,
     apiBaseUrl: model.apiBaseUrl,
@@ -89,9 +91,8 @@ export async function GET(
     const model = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
-        User: {
-          select: { id: true, email: true, username: true },
-        },
+        User: { select: { id: true, email: true, username: true } },
+        Tenant: { select: { id: true, name: true, slug: true } },
       },
     });
 
@@ -138,9 +139,8 @@ export async function PUT(
     const existingModel = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
-        User: {
-          select: { id: true, email: true, username: true },
-        },
+        User: { select: { id: true, email: true, username: true } },
+        Tenant: { select: { id: true, name: true, slug: true } },
       },
     });
 
@@ -155,7 +155,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isPublic, isSystemModel, isDefault, assignedTenantId } = body;
 
     // 验证 providerType
     const validProviderTypes = ['claude', 'openai'];
@@ -209,6 +209,17 @@ export async function PUT(
       return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
     }
 
+    if (assignedTenantId !== undefined && assignedTenantId !== null && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json({ error: '只有 ICSL 或平台管理员可以指定分配租户' }, { status: 403 });
+    }
+
+    if (assignedTenantId) {
+      const assignedTenant = await prisma.tenant.findUnique({ where: { id: assignedTenantId } });
+      if (!assignedTenant) {
+        return NextResponse.json({ error: '指定的租户不存在' }, { status: 400 });
+      }
+    }
+
     // 管理员专属字段
     if (isSystemModel !== undefined && !tenant.isPlatformAdmin) {
       return NextResponse.json(
@@ -230,6 +241,17 @@ export async function PUT(
     if (temperature !== undefined) updateData.temperature = temperature;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isPublic !== undefined) updateData.isPublic = isPublic;
+
+    if (tenant.isIcsTenant || tenant.isPlatformAdmin) {
+      const finalIsPublic = isPublic !== undefined ? isPublic : existingModel.isPublic;
+      if (finalIsPublic) {
+        updateData.tenantId = null;
+      } else if (assignedTenantId !== undefined && assignedTenantId !== null) {
+        updateData.tenantId = assignedTenantId;
+      } else if (assignedTenantId === null) {
+        updateData.tenantId = null;
+      }
+    }
 
     // 平台管理员专属字段
     if (tenant.isPlatformAdmin) {
@@ -268,6 +290,7 @@ export async function PUT(
     const model = await prisma.modelConfig.update({
       where: { id },
       data: updateData,
+      include: { Tenant: { select: { id: true, name: true, slug: true } } },
     });
 
     // 记录更新日志

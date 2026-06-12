@@ -5,7 +5,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
-import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 function isValidIntegerRange(value: unknown, min: number, max: number) {
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
@@ -22,11 +22,13 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     userId: model.userId,
     userName: model.User?.name || model.User?.username || null,
     userUsername: model.User?.username || null,
+    tenantId: model.tenantId,
+    tenantName: model.Tenant?.name || null,
     name: model.name,
     providerType: model.providerType,
     apiBaseUrl: model.apiBaseUrl,
-    apiKey: includeApiKey ? model.apiKey : undefined,  // 默认不返回
-    hasApiKey: !!model.apiKey,  // 仅返回是否有 API Key 的标识
+    apiKey: includeApiKey ? model.apiKey : undefined,
+    hasApiKey: !!model.apiKey,
     models: JSON.parse(model.models),
     routeType: model.routeType,
     maxTokens: model.maxTokens ?? 65536,
@@ -87,11 +89,10 @@ export async function GET(request: Request) {
       where,
       include: {
         User: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-          },
+          select: { id: true, name: true, username: true },
+        },
+        Tenant: {
+          select: { id: true, name: true, slug: true },
         },
       },
       orderBy: [
@@ -124,7 +125,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isPublic, isSystemModel, isDefault, assignedTenantId } = body;
 
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
@@ -142,8 +143,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // 获取租户 ID
-    const tenantId = getTenantIdForCreate(tenant, isPublic);
+    if (assignedTenantId && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json(
+        { error: '只有 ICSL 或平台管理员可以指定分配租户' },
+        { status: 403 }
+      );
+    }
+
+    if (assignedTenantId) {
+      const assignedTenant = await prisma.tenant.findUnique({ where: { id: assignedTenantId } });
+      if (!assignedTenant) {
+        return NextResponse.json({ error: '指定的租户不存在' }, { status: 400 });
+      }
+    }
+
+    let tenantId: string | null;
+    if (isPublic) {
+      tenantId = null;
+    } else if (tenant.isIcsTenant || tenant.isPlatformAdmin) {
+      tenantId = assignedTenantId || null;
+    } else if (tenant.tenantId) {
+      tenantId = tenant.tenantId;
+    } else {
+      tenantId = null;
+    }
 
     // 验证 providerType
     const validProviderTypes = ['claude', 'openai'];
@@ -224,7 +247,7 @@ export async function POST(request: Request) {
     const model = await prisma.modelConfig.create({
       data: {
         id: generateId('model'),
-        userId: isSystemModel ? null : payload.userId,  // 系统模型 userId 为 null
+        userId: isSystemModel ? null : payload.userId,
         tenantId,
         name,
         providerType: providerType || 'openai',
@@ -236,14 +259,18 @@ export async function POST(request: Request) {
         contextWindow: finalContextWindow,
         temperature: finalTemperature,
         isActive: isActive !== undefined ? isActive : true,
-        isDefault: isSystemModel && isDefault ? isDefault : false,  // 只有系统模型可设默认
-        isPublic: isSystemModel ? true : (isPublic || false),  // 系统模型默认公开
+        isDefault: isSystemModel && isDefault ? isDefault : false,
+        isPublic: isSystemModel ? true : (isPublic || false),
         updatedAt: new Date(),
       },
     });
 
-    // 格式化返回数据
-    const formattedModel = formatModel(model);
+    const modelWithTenant = await prisma.modelConfig.findUnique({
+      where: { id: model.id },
+      include: { Tenant: { select: { id: true, name: true, slug: true } } },
+    });
+
+    const formattedModel = formatModel(modelWithTenant);
 
     // 记录创建成功日志
     logger.create(LOG_MODULES.MODEL, payload, model.id, { 

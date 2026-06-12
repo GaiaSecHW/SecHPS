@@ -27,21 +27,23 @@ import {
 interface ModelConfig {
   id: string;
   userId: string | null;
-  userName: string | null;  // 创建者姓名
-  userUsername: string | null;  // 创建者用户名
+  userName: string | null;
+  userUsername: string | null;
+  tenantId: string | null;
+  tenantName: string | null;
   name: string;
   providerType: 'claude' | 'openai';
   apiBaseUrl: string;
-  apiKey?: string;  // 可选，仅在确认修改时使用
-  hasApiKey: boolean;  // 是否有 API Key
+  apiKey?: string;
+  hasApiKey: boolean;
   models: string[];
   routeType: string | null;
-  maxTokens: number;      // 最大输出 token 数
-  temperature: number;    // 温度参数
+  maxTokens: number;
+  temperature: number;
   isActive: boolean;
   isDefault: boolean;
   isPublic: boolean;
-  contextWindow: number;  // 上下文窗口大小
+  contextWindow: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,14 +61,16 @@ interface ModelFormData {
   apiBaseUrl: string;
   apiKey: string;
   models: string;
-  maxTokens: number;      // 最大输出 token 数
-  contextWindow: number;  // 上下文窗口大小
-  temperature: number;    // 温度参数
+  maxTokens: number;
+  contextWindow: number;
+  temperature: number;
   isActive: boolean;
   isPublic: boolean;
-  isSystemModel: boolean;  // 系统模型（仅管理员可设置）
-  isDefault: boolean;      // 默认模型（仅系统模型可设置）
-  changeApiKey: boolean;   // 确认修改 API Key
+  isTenantPrivate: boolean;
+  assignedTenantId: string;
+  isSystemModel: boolean;
+  isDefault: boolean;
+  changeApiKey: boolean;
 }
 
 const DEFAULT_MAX_TOKENS = 65536;
@@ -86,6 +90,7 @@ export default function ModelsPage() {
 
   const [user, setUser] = useState<any>(null);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
+  const [tenants, setTenants] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -128,6 +133,8 @@ export default function ModelsPage() {
     temperature: DEFAULT_TEMPERATURE,
     isActive: true,
     isPublic: false,
+    isTenantPrivate: false,
+    assignedTenantId: '',
     isSystemModel: false,
     isDefault: false,
     changeApiKey: false,
@@ -151,6 +158,7 @@ export default function ModelsPage() {
       }
     }
     fetchModels();
+    fetchTenants();
   }, []);
 
   const fetchModels = async () => {
@@ -172,12 +180,28 @@ export default function ModelsPage() {
       setModels((data.models || []).map((m: any) => ({
         ...m,
         hasApiKey: m.hasApiKey ?? !!m.apiKey,
+        tenantId: m.tenantId ?? null,
+        tenantName: m.tenantName ?? null,
       })));
     } catch (err) {
       setError('加载模型列表失败');
       scheduleCleanup(() => setError(null), 3000);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTenants = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/tenants', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setTenants(data.tenants || []);
+    } catch (err) {
+      console.error('获取租户列表失败:', err);
     }
   };
 
@@ -194,36 +218,39 @@ export default function ModelsPage() {
       temperature: DEFAULT_TEMPERATURE,
       isActive: true,
       isPublic: false,
+      isTenantPrivate: false,
+      assignedTenantId: tenants.length > 0 ? tenants[0].id : '',
       isSystemModel: false,
       isDefault: false,
-      changeApiKey: true,  // 新建时默认需要输入 API Key
+      changeApiKey: true,
     });
     setShowModal(true);
   };
 
   const handleOpenEditModal = (model: ModelConfig) => {
-    // 只能编辑自己创建的模型，管理员可编辑所有
     if (!isIcsOrAdmin && model.userId !== user?.id && model.userId !== null) {
       setError('只能编辑自己创建的模型');
       scheduleCleanup(() => setError(null), 3000);
       return;
     }
-    
+
     setEditingModel(model);
     setFormData({
       name: model.name,
       providerType: model.providerType,
       apiBaseUrl: model.apiBaseUrl,
-      apiKey: '',  // 编辑时不显示原有 API Key，需要确认才能修改
+      apiKey: '',
       models: Array.isArray(model.models) ? (model.models[0] || '') : model.models,
       maxTokens: model.maxTokens ?? DEFAULT_MAX_TOKENS,
       contextWindow: model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
       temperature: model.temperature ?? DEFAULT_TEMPERATURE,
       isActive: model.isActive,
       isPublic: model.isPublic,
-      isSystemModel: model.userId === null,  // userId为null表示系统模型
+      isTenantPrivate: !model.isPublic && !!model.tenantId,
+      assignedTenantId: model.tenantId || '',
+      isSystemModel: model.userId === null,
       isDefault: model.isDefault,
-      changeApiKey: false,  // 编辑时默认不修改 API Key
+      changeApiKey: false,
     });
     setShowModal(true);
   };
@@ -242,6 +269,8 @@ export default function ModelsPage() {
       temperature: DEFAULT_TEMPERATURE,
       isActive: true,
       isPublic: false,
+      isTenantPrivate: false,
+      assignedTenantId: '',
       isSystemModel: false,
       isDefault: false,
       changeApiKey: false,
@@ -284,7 +313,6 @@ export default function ModelsPage() {
         name: formData.name,
         providerType: formData.providerType,
         apiBaseUrl: formData.apiBaseUrl,
-        // 只有新建或确认修改时才发送 apiKey
         apiKey: !editingModel || formData.changeApiKey ? formData.apiKey : undefined,
         models: [formData.models],
         maxTokens: formData.maxTokens,
@@ -292,7 +320,7 @@ export default function ModelsPage() {
         temperature: formData.temperature,
         isActive: formData.isActive,
         isPublic: formData.isPublic,
-        // 管理员专属字段
+        assignedTenantId: formData.isTenantPrivate ? formData.assignedTenantId : null,
         isSystemModel: isIcsOrAdmin ? formData.isSystemModel : undefined,
         isDefault: isIcsOrAdmin && formData.isSystemModel ? formData.isDefault : undefined,
       };
@@ -592,7 +620,7 @@ export default function ModelsPage() {
                   状态
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
-                  公开
+                  公开/租户
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
                   连接状态
@@ -698,12 +726,19 @@ export default function ModelsPage() {
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isPublic
                               ? 'bg-blue-500/15 text-blue-400'
-                              : 'bg-dark-surface-hover text-gray-400'
+                              : model.tenantId
+                                ? 'bg-amber-500/15 text-amber-400'
+                                : 'bg-dark-surface-hover text-gray-400'
                           }`}
                         >
                           {model.isPublic ? <Globe size={12} /> : <Lock size={12} />}
-                          {model.isPublic ? '公开' : '私有'}
+                          {model.isPublic ? '公开' : model.tenantId ? '租户' : '私有'}
                         </span>
+                        {model.tenantId && model.tenantName && (
+                          <span className="text-xs text-gray-500 block mt-0.5 truncate" title={model.tenantName}>
+                            {model.tenantName}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 min-w-[100px] w-[100px]">
                         {testResults[model.id] ? (
@@ -1050,13 +1085,46 @@ export default function ModelsPage() {
                       <input
                         type="checkbox"
                         checked={formData.isPublic}
-                        onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+                        onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked, isTenantPrivate: e.target.checked ? false : formData.isTenantPrivate })}
                         className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
                       />
                       <span className="text-sm text-gray-300">公开（跨租户共享）</span>
                     </label>
                   )}
+
+                  {isIcsOrAdmin && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.isTenantPrivate}
+                        onChange={(e) => setFormData({ ...formData, isTenantPrivate: e.target.checked, isPublic: e.target.checked ? false : formData.isPublic, assignedTenantId: e.target.checked ? (formData.assignedTenantId || (tenants.length > 0 ? tenants[0].id : '')) : '' })}
+                        className="w-4 h-4 text-amber-400 border-gray-600 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-amber-300">租户私有</span>
+                    </label>
+                  )}
                 </div>
+
+                {/* 租户选择（仅"租户私有"时显示） */}
+                {isIcsOrAdmin && formData.isTenantPrivate && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      分配租户 <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.assignedTenantId}
+                      onChange={(e) => setFormData({ ...formData, assignedTenantId: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      {tenants.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      该租户下所有成员都能看到和使用此模型
+                    </p>
+                  </div>
+                )}
 
                 {/* 管理员专属选项 */}
                 {isIcsOrAdmin && (
@@ -1065,7 +1133,16 @@ export default function ModelsPage() {
                       <input
                         type="checkbox"
                         checked={formData.isSystemModel}
-                        onChange={(e) => setFormData({ ...formData, isSystemModel: e.target.checked, isDefault: e.target.checked ? formData.isDefault : false })}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFormData({
+                            ...formData,
+                            isSystemModel: checked,
+                            isDefault: checked ? formData.isDefault : false,
+                            isPublic: checked ? true : formData.isPublic,
+                            isTenantPrivate: checked ? false : formData.isTenantPrivate,
+                          });
+                        }}
                         className="w-4 h-4 text-purple-600 border-gray-600 rounded focus:ring-purple-500"
                       />
                       <span className="text-sm text-purple-400 font-medium">系统模型（所有用户可见）</span>
@@ -1086,11 +1163,27 @@ export default function ModelsPage() {
                 )}
               </div>
 
-              {formData.isPublic && (
+              {formData.isPublic && !formData.isSystemModel && (
                 <div className="bg-blue-900/20 border border-blue-800/40 rounded-md p-3">
                   <p className="text-sm text-blue-300">
                     <Globe size={16} className="inline mr-1" />
                     公开的模型将出现在所有用户的评估模型选择列表中。请确保 API Key 安全。
+                  </p>
+                </div>
+              )}
+              {formData.isTenantPrivate && (
+                <div className="bg-amber-900/20 border border-amber-800/40 rounded-md p-3">
+                  <p className="text-sm text-amber-300">
+                    <Lock size={16} className="inline mr-1" />
+                    租户私有的模型仅分配租户的成员可见和使用。其他租户用户无法看到此模型。
+                  </p>
+                </div>
+              )}
+              {!formData.isPublic && !formData.isTenantPrivate && isIcsOrAdmin && !formData.isSystemModel && (
+                <div className="bg-gray-800/40 border border-gray-700/40 rounded-md p-3">
+                  <p className="text-sm text-gray-400">
+                    <Lock size={16} className="inline mr-1" />
+                    两者均未选中时，仅管理员可以看到和使用此模型。
                   </p>
                 </div>
               )}
