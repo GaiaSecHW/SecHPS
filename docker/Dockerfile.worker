@@ -1,8 +1,8 @@
 # ============================================================================
-# CodeSwarm Worker - Multi-stage Docker Build (Fully Self-Contained)
+# Chimera Worker - Multi-stage Docker Build (Fully Self-Contained)
 #
 # Build context: project root
-#   docker build -f docker/Dockerfile.worker -t sechps-worker:latest .
+#   docker build -f docker/Dockerfile.worker -t Chimera-worker:latest .
 #
 # 特点:
 #   - 完全自包含：适用于无外网隔离部署环境
