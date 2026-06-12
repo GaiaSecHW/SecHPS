@@ -47,16 +47,35 @@ export async function POST(request: Request) {
       },
     });
 
-    // currentTasks 用 GREATEST 保证 DB 值不小于 Worker 上报值
-    // 防止心跳覆盖刚分发但 Worker 尚未确认的任务计数（分发竞态保护）
-    // Worker 侧在 postResult 后立即释放 semaphore，确保上报值与 DB 同步
-    // LEAST(..., "maxConcurrent") 防止漂移导致 currentTasks 超过 maxConcurrent
+    // currentTasks 校正逻辑（三层 LEAST/GREATEST）：
+    //
+    // 1) GREATEST("currentTasks", reported) — 防止心跳覆盖刚分发但 Worker 尚未确认的任务计数（分发竞态保护）
+    // 2) GREATEST(actualActive, reported)   — 用 CodeswarmTask 实际活跃计数打破 DB 虚高锁死
+    //    当 dispatch +1 但 postResult 未到达（任务被删除/Worker 重启/掉线重调度），
+    //    DB currentTasks 会虚高且永远无法通过 GREATEST 下调（单向棘轮）。
+    //    actualActive 是 ground truth，原子子查询与 UPDATE 同一事务，
+    //    允许 DB 在实际活跃数低于 DB 值时向下修正。
+    // 3) LEAST(↑, "maxConcurrent")          — 防止漂移超过容量上限
+    //
+    // 微竞态窗口：子查询读 actualActive 与 dispatch 写 task state 之间有毫秒级窗口，
+    // 可能临时将 DB 从 N+1 降为 N（undo dispatch +1），但下一个 30s 心跳周期自动修正，
+    // 远好于 GREATEST 单向棘轮导致的永久 no_capacity。
+    //
     // lastHeartbeat 使用 CURRENT_TIMESTAMP 而非 Node.js new Date()，
     // 确保写入与 NOW()-INTERVAL 比较使用同一时钟源（PostgreSQL），消除跨服务器时钟偏移
     const reportedTasks = currentTasks || 0;
     await prisma.$executeRaw`
       UPDATE "CodeswarmWorker"
-      SET "currentTasks" = LEAST(GREATEST("currentTasks", ${reportedTasks}), "maxConcurrent"),
+      SET "currentTasks" = LEAST(
+            GREATEST("currentTasks", ${reportedTasks}),
+            GREATEST(
+              (SELECT COUNT(*)::int FROM "CodeswarmTask"
+               WHERE "workerId" = "CodeswarmWorker".id
+                 AND state IN ('dispatched', 'running')),
+              ${reportedTasks}
+            ),
+            "maxConcurrent"
+          ),
           "lastHeartbeat" = CURRENT_TIMESTAMP
       WHERE "nodeId" = ${nodeId}
     `;
