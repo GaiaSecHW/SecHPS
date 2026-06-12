@@ -21,6 +21,7 @@ spec:
       containers:
         - name: scheduler
           image: ghcr.io/gaiasechw/codeswarm-scheduler:dev_secflow_codeswarm
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           envFrom:
