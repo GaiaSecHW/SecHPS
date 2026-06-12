@@ -341,7 +341,7 @@ export class ProcessManager {
       // 关闭 stdin：prompt 经 argv 传入，无需任何 stdin 输入。
       // 发送 EOF 可避免 opencode 因等待 stdin 而挂起到超时。
       childProcess.stdin?.end();
-
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Spawned opencode process with PID ${childProcess.pid}`, workspace);
       // Store in processes map for terminate() support
       this.processes.set(taskId, { process: childProcess, workspace, createdAt: Date.now() });
 
