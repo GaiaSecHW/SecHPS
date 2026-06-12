@@ -233,7 +233,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
       if (!task) return reply.status(404).send({ error: 'Task not found' });
 
       if (dispatcher?.triggerDispatch) {
-        dispatcher.triggerDispatch();
+        await dispatcher.triggerDispatch();
       }
 
       return { success: true, taskId, state: task.state };

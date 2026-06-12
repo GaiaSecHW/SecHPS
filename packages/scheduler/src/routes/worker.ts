@@ -73,7 +73,9 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
       });
 
       // Trigger dispatch check on capacity change
-      dispatcher?.triggerDispatch?.();
+      dispatcher?.triggerDispatch?.().catch((err: unknown) =>
+        logger.warn(`[Heartbeat] Trigger dispatch failed: ${err instanceof Error ? err.message : String(err)}`)
+      );
 
       return reply.send({
         workerId: worker.id,
@@ -230,7 +232,9 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
       );
 
       // Trigger dispatch after capacity freed
-      dispatcher?.triggerDispatch?.();
+      dispatcher?.triggerDispatch?.().catch((err: unknown) =>
+        logger.warn(`[Result] Trigger dispatch failed: ${err instanceof Error ? err.message : String(err)}`)
+      );
 
       logger.info(`[Result] Task ${body.taskId} → ${body.status}`);
       return reply.send({ ok: true });

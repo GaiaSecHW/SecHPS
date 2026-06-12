@@ -66,6 +66,7 @@ export class CodeswarmDispatcher {
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
       logger.error('REDIS_URL not configured, scheduler not started (falling back to DB poll mode)');
+      await this.startDbOnlyMode();
       this.startCleanupScheduler();
       return;
     }
@@ -135,7 +136,7 @@ export class CodeswarmDispatcher {
       logger.error(`Redis unavailable, falling back to DB poll mode: ${e instanceof Error ? e.message : String(e)}`);
       logger.error(`REDIS_URL=${redisUrl}`);
       this.teardownRedis();
-      this.startCleanupScheduler();
+      await this.startDbOnlyMode();
     }
   }
 
@@ -157,6 +158,15 @@ export class CodeswarmDispatcher {
     if (this.cleanupTimer) clearTimeout(this.cleanupTimer);
     this.teardownRedis();
     this.initialized = false;
+  }
+
+  private async startDbOnlyMode() {
+    await this.recoverWorkersFromDB();
+    this.running = true;
+    this.initialized = true;
+    logger.warn('Scheduler started in DB-only dispatch mode');
+    this.startHealthChecks();
+    await this.scanDbQueuedTasks();
   }
 
   // ---------------------------------------------------------------------------
@@ -249,16 +259,21 @@ export class CodeswarmDispatcher {
    */
   async enqueueExistingTask(dbTaskId: string): Promise<boolean> {
     if (!this.redis) {
-      logger.warn(`Redis unavailable, task ${dbTaskId} stays queued (DB scan will pick it up)`);
-      return false;
+      logger.warn(`Redis unavailable, dispatching queued task ${dbTaskId} from DB fallback`);
+      return this.dispatchOne(dbTaskId);
     }
     try {
       await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
       logger.info(`Task ${dbTaskId} enqueued to Redis Stream`);
+      queueMicrotask(() => {
+        this.dispatchOne(dbTaskId).catch((e: unknown) =>
+          logger.warn(`Immediate DB dispatch failed for ${dbTaskId}: ${e instanceof Error ? e.message : String(e)}`)
+        );
+      });
       return true;
     } catch (e) {
       logger.error(`Failed to enqueue task ${dbTaskId}: ${e instanceof Error ? e.message : String(e)}`);
-      return false;
+      return this.dispatchOne(dbTaskId);
     }
   }
 
@@ -523,14 +538,8 @@ export class CodeswarmDispatcher {
       return false;
     }
 
-    // Determine if Worker is local
-    const primaryAddr = addresses[0].trim();
-    const isLocalWorker = primaryAddr.startsWith('localhost') || primaryAddr.startsWith('127.');
-    const callbackUrl = isLocalWorker
-      ? `http://localhost:${process.env.PORT || 8080}`
-      : (process.env.SCHEDULER_CALLBACK_URL || `http://localhost:${process.env.PORT || 8080}`);
-
     const sorted = this.sortAddresses(addresses);
+    const callbackUrl = this.getSchedulerCallbackUrl();
 
     // Phase 1: Transactional claim — Worker slot + task dispatched
     const txResult = await withDeadlockRetry(() => prisma.$transaction(async (tx: TransactionClient) => {
@@ -573,8 +582,7 @@ export class CodeswarmDispatcher {
     // In-memory sync (optimistic increment): DB already +1 in transaction, mirror to memory
     worker.currentTasks++;
 
-    // Phase 2: Try multiple addresses to send HTTP request
-    const taskPayload = JSON.stringify({
+    const baseTaskPayload = {
       taskId: task.taskId,
       instruction: task.instruction || undefined,
       projectPath: task.projectPath || undefined,
@@ -588,7 +596,6 @@ export class CodeswarmDispatcher {
       maxTokens: task.maxTokens ?? undefined,
       contextWindow: task.contextWindow ?? undefined,
       timeoutSec: task.timeoutSec || undefined,
-      callbackUrl,
       engine: task.engine || undefined,
       agent: task.agent || undefined,
       preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
@@ -599,10 +606,15 @@ export class CodeswarmDispatcher {
       toolTaskId: task.toolTaskId || undefined,
       toolPath: task.toolPath || undefined,
       toolWorkDir: task.toolWorkDir || undefined,
-    });
+    };
 
+    // Phase 2: Try multiple addresses to send HTTP request
     for (const addr of sorted) {
       try {
+        const taskPayload = JSON.stringify({
+          ...baseTaskPayload,
+          callbackUrl,
+        });
         const resp = await fetch(`http://${addr}/task`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -888,7 +900,9 @@ export class CodeswarmDispatcher {
       // Delay retry for tasks recently rolled back (<1s), avoid 503 storm
       // Scenario: During Worker Semaphore adjustment (30s window after maxConcurrent change),
       // all dispatches will get 503 — without interval, 5s BLOCK cycle would continuously hit Worker
-      const recentlyRolledBack = Date.now() - new Date(task.updatedAt).getTime() < 1000;
+      const recentlyRolledBack =
+        task.createdAt.getTime() !== task.updatedAt.getTime() &&
+        Date.now() - new Date(task.updatedAt).getTime() < 1000;
       if (recentlyRolledBack && this.redis && this.running) {
         this.scheduleRetry(dbTaskId, 1000);
         return false;
@@ -1163,23 +1177,30 @@ export class CodeswarmDispatcher {
 
   /** Scan DB for state='queued' tasks, re-enqueue to Redis Stream */
   private async scanDbQueuedTasks() {
-    if (!this.redis || !this.running) return;
+    if (!this.running) return;
     try {
       const stuckTasks = await prisma.codeswarmTask.findMany({
         where: { state: 'queued' },
-        select: { id: true },
+        select: { id: true, taskId: true },
+        orderBy: { createdAt: 'asc' },
         take: 50,
       });
       if (stuckTasks.length === 0) return;
 
-      let requeued = 0;
+      let dispatched = 0;
+      let retried = 0;
       for (const t of stuckTasks) {
-        // scheduleRetry has NX dedup, won't double-enqueue
-        this.scheduleRetry(t.id, 5000);
-        requeued++;
+        const ok = await this.dispatchOne(t.id);
+        if (ok) {
+          dispatched++;
+        } else if (this.redis) {
+          // scheduleRetry has NX dedup, won't double-enqueue
+          this.scheduleRetry(t.id, 5000);
+          retried++;
+        }
       }
-      if (requeued > 0) {
-        logger.info(`DB queued fallback scan: re-enqueued ${requeued} tasks`);
+      if (dispatched > 0 || retried > 0) {
+        logger.info(`DB queued fallback scan: dispatched=${dispatched}, retryScheduled=${retried}`);
       }
     } catch (e) {
       logger.warn(`DB queued scan failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -1549,33 +1570,50 @@ export class CodeswarmDispatcher {
       let deletedCount = 0;
       let claimedCount = 0;
 
-      // Parse XINFO CONSUMERS flat array into structured objects.
-      // Redis returns [key1, val1, key2, val2, ...] per consumer; field count varies
-      // across Redis versions (e.g. Redis 7.x added 'inactive' field).
-      // Parse by key-value pairs and detect consumer boundaries via the 'name' key.
+      // Parse XINFO CONSUMERS into structured objects. ioredis can return either
+      // an array of consumer rows or a flat key/value array depending on Redis
+      // version / reply transformer configuration.
       const consumerList: { name: string; pending: number; idle: number }[] = [];
-      let cur: Record<string, unknown> = {};
-      for (let i = 0; i < consumers.length; i += 2) {
-        const key = String(consumers[i]);
-        const val = consumers[i + 1];
-        if (key === 'name' && 'name' in cur) {
-          // New consumer block starts — push the previous one
+      const parseConsumerRow = (row: any[]): { name: string; pending: number; idle: number } | null => {
+        const cur: Record<string, unknown> = {};
+        for (let i = 0; i < row.length; i += 2) {
+          cur[String(row[i])] = row[i + 1];
+        }
+        if (!('name' in cur)) return null;
+        return {
+          name: String(cur.name ?? ''),
+          pending: Number(cur.pending ?? 0),
+          idle: Number(cur.idle ?? 0),
+        };
+      };
+
+      if (Array.isArray(consumers[0])) {
+        for (const row of consumers as any[][]) {
+          const consumer = parseConsumerRow(row);
+          if (consumer) consumerList.push(consumer);
+        }
+      } else {
+        let cur: Record<string, unknown> = {};
+        for (let i = 0; i < consumers.length; i += 2) {
+          const key = String(consumers[i]);
+          const val = consumers[i + 1];
+          if (key === 'name' && 'name' in cur) {
+            consumerList.push({
+              name: String(cur.name ?? ''),
+              pending: Number(cur.pending ?? 0),
+              idle: Number(cur.idle ?? 0),
+            });
+            cur = {};
+          }
+          cur[key] = val;
+        }
+        if ('name' in cur) {
           consumerList.push({
             name: String(cur.name ?? ''),
             pending: Number(cur.pending ?? 0),
             idle: Number(cur.idle ?? 0),
           });
-          cur = {};
         }
-        cur[key] = val;
-      }
-      // Push the last consumer
-      if ('name' in cur) {
-        consumerList.push({
-          name: String(cur.name ?? ''),
-          pending: Number(cur.pending ?? 0),
-          idle: Number(cur.idle ?? 0),
-        });
       }
 
       for (const { name: nameStr, pending, idle } of consumerList) {
@@ -1811,6 +1849,11 @@ export class CodeswarmDispatcher {
     return this.redis!.sendCommand(command) as Promise<any>;
   }
 
+  private getSchedulerCallbackUrl(): string | undefined {
+    const configuredUrl = process.env.SCHEDULER_CALLBACK_URL || process.env.SCHEDULER_PUBLIC_URL;
+    return configuredUrl?.replace(/\/+$/, '');
+  }
+
   /** Quick health check: GET /health to Worker (supports comma-separated multi-address) */
   private async pingWorker(address: string): Promise<boolean> {
     const addresses = address.split(',').map(a => a.trim()).filter(Boolean);
@@ -1835,19 +1878,20 @@ export class CodeswarmDispatcher {
   }
 
   /**
-   * Sort addresses by reachability priority:
-   *   External IPs (1) > AWS VPC 172.x (2) > Docker 172.17-21.x (3) > localhost (4) > 198.18.x (5)
+   * Preserve Worker-reported address priority and remove duplicates.
+   *
+   * Workers report WORKER_ADDRESS first, followed by auto-detected fallbacks.
+   * Keeping that order avoids baking local subnet assumptions into scheduler.
    */
   private sortAddresses(addresses: string[]): string[] {
-    return [...addresses].sort((a, b) => {
-      const score = (addr: string) => {
-        if (addr.startsWith('localhost') || addr.startsWith('127.')) return 4;
-        if (addr.startsWith('198.18.')) return 5;
-        if (/^172\.(17|18|19|20|21)\./.test(addr)) return 3;
-        if (addr.startsWith('172.')) return 2;
-        return 1;
-      };
-      return score(a.trim()) - score(b.trim());
-    });
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const address of addresses) {
+      const normalized = address.trim();
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      ordered.push(normalized);
+    }
+    return ordered;
   }
 }
