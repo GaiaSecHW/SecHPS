@@ -6,7 +6,7 @@ const DEFAULT_TASK_TIMEOUT_SEC = 7 * 24 * 3600; // 7 days default
 
 const config = {
   nodeId: process.env.NODE_ID || `node-${Math.random().toString(36).slice(2, 10)}`,
-  port: parseInt(process.env.PORT || '8080'),
+  port: parseInt(process.env.WORKER_PORT || process.env.PORT || '8080'),
   maxConcurrent: parseInt(process.env.MAX_CONCURRENT || '5'),
   schedulerUrl: process.env.SCHEDULER_URL || 'http://localhost:8080',
   address: process.env.WORKER_ADDRESS || undefined,
