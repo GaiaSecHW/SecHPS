@@ -59,7 +59,8 @@ export async function GET(
 
   const presignedUrl = files[fileIndex];
   const objectName = extractObjectName(presignedUrl);
-  const fileName = presignedUrl.split('/').pop()?.split('?')[0] || 'report';
+  const rawLastSegment = presignedUrl.split('/').pop()?.split('?')[0] || 'report';
+  const fileName = decodeURIComponent(rawLastSegment);
   logger.info(LOG_MODULES.MINIO, `[DownloadReport:${id}] objectName=${objectName}, fileName=${fileName}`);
 
   try {
@@ -88,7 +89,7 @@ export async function GET(
     return new NextResponse(webStream, {
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       },
     });
   } catch (err) {

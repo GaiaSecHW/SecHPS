@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     return new NextResponse(fileContent, {
       headers: {
         'Content-Type': 'text/markdown; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
         'Content-Length': fileContent.length.toString(),
       },
     });
