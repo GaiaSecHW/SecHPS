@@ -9,7 +9,7 @@ data:
   WORKSPACE_BASE_PATH: "/mnt/workspace"
   TASK_CLEANUP_RETENTION_DAYS: "30"
   LOG_LEVEL: "info"
-  REDIS_URL: "redis://redis:6379"   # 指向集群内 Redis Service
+  REDIS_URL: "redis://codeswarm-redis:6379"   # 指向集群内 Redis Service
   MAX_CONCURRENT: "5"
   TASK_TIMEOUT_SEC: "86400"
   GRACEFUL_SHUTDOWN_TIMEOUT_MS: "300000"
