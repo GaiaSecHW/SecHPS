@@ -169,6 +169,7 @@ WORKDIR /opt/worker
 #   curl, wget, ca-certificates, git, openssh-client, procps,
 #   gcc, g++, make, autoconf, automake, patch, file, unzip, python3, perl,
 #   + many dev libraries (libssl-dev, libffi-dev, etc.)
+#   Debian Trixie currently ships Python 3.13 as the default python3.
 # Below we only install what's NOT already in the base, plus a few
 # explicitly re-declared essentials for clarity/safety.
 # ---------------------------------------------------------------------------
@@ -188,6 +189,7 @@ RUN apt-get update && \
         git \
         bash \
         python3 \
+        python3-venv \
         procps \
         # -- debugging & diagnostics --
         strace \
@@ -206,6 +208,20 @@ RUN apt-get update && \
     # fd-find binary is 'fdfind' on Debian; create 'fd' alias for AI agent compatibility
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && echo 'alias ll="ls -laF --color=auto"' >> /etc/bash.bashrc
+
+# ---------------------------------------------------------------------------
+# Install Python runtime libraries
+# Keep Python packages in a venv to avoid modifying Debian's externally-managed
+# system Python environment. PATH below makes this venv the default python3/pip.
+# ---------------------------------------------------------------------------
+RUN python3 --version && \
+    python3 -m venv /opt/python-tools && \
+    /opt/python-tools/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/python-tools/bin/pip install --no-cache-dir 'neo4j>=5.0' && \
+    /opt/python-tools/bin/python -c "import neo4j; print('neo4j', neo4j.__version__)" && \
+    echo "=== Python neo4j driver OK ==="
+
+ENV PATH="/opt/python-tools/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # Install JDK 21 (from downloader stage — full JDK with javac)
@@ -326,7 +342,11 @@ RUN echo "=== Verifying critical worker components ===" && \
     echo "7. glibc version..." && \
     ldd --version 2>&1 | head -1 && echo "   ✅ glibc >= 2.38" && \
     \
-    echo "8. AI agent tool calling essentials..." && \
+    echo "8. Python runtime..." && \
+    python3 --version && \
+    python3 -c "import neo4j; print('neo4j', neo4j.__version__)" && echo "   ✅ neo4j python driver" && \
+    \
+    echo "9. AI agent tool calling essentials..." && \
     which rg && echo "   ✅ ripgrep (rg)" && \
     which fd && echo "   ✅ fd (alias for fdfind)" && \
     which fzf && echo "   ✅ fzf" && \
@@ -334,7 +354,7 @@ RUN echo "=== Verifying critical worker components ===" && \
     which vim && echo "   ✅ vim" && \
     which dig && echo "   ✅ dnsutils (dig)" && \
     \
-    echo "9. OpenCode runtime deps..." && \
+    echo "10. OpenCode runtime deps..." && \
     test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin && echo "   ✅ @opencode-ai/plugin" || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
     test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible && echo "   ✅ @ai-sdk/openai-compatible" || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
     \
