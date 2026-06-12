@@ -776,9 +776,8 @@ this.server.get('/health', async () => ({
     } finally {
       clearTaskLogFile(taskId);
       this.cancelledTasks.delete(taskId);
-      if (buildResult) {
-        await this.envFactory.cleanup(buildResult.workspacePath);
-      }
+      // 不在此清理工作区：Tool 任务的 run 产物需保留供调用方取回；
+      // NFS/外部 workspacePath 本就由宿主管理。磁盘回收交由上层统一处理。
       await this.processMgr.terminate(taskId);
     }
   }
