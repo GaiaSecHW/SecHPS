@@ -121,6 +121,8 @@ function TaskDetailContent() {
   const [vulnList, setVulnList] = useState<any[]>([]);
   const [vulnLoading, setVulnLoading] = useState<Record<string, boolean>>({});
   const [expandedVulnId, setExpandedVulnId] = useState<string | null>(null);
+  const [fpVulnId, setFpVulnId] = useState<string | null>(null);
+  const [fpReason, setFpReason] = useState('');
 
   const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
   const sortedVulnList = useMemo(() => [...vulnList].sort((a: any, b: any) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)), [vulnList]);
@@ -449,6 +451,11 @@ function TaskDetailContent() {
   };
 
   const handleVulnAction = async (vulnId: string, action: string) => {
+    if (action === 'false-positive') {
+      setFpVulnId(vulnId);
+      setFpReason('');
+      return;
+    }
     setVulnLoading(prev => ({ ...prev, [vulnId]: true }));
     try {
       const token = localStorage.getItem('token');
@@ -457,8 +464,9 @@ function TaskDetailContent() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
+        const data = await res.json();
         toast.success('操作成功');
-        setVulnList(prev => prev.map(v => v.id === vulnId ? { ...v, status: action === 'false-positive' ? 'false-positive' : action } : v));
+        setVulnList(prev => prev.map(v => v.id === vulnId ? { ...v, ...data.vulnerability } : v));
       } else {
         toast.error('操作失败');
       }
@@ -466,6 +474,32 @@ function TaskDetailContent() {
       toast.error('网络错误');
     } finally {
       setVulnLoading(prev => ({ ...prev, [vulnId]: false }));
+    }
+  };
+
+  const submitFalsePositive = async () => {
+    if (!fpVulnId) return;
+    setVulnLoading(prev => ({ ...prev, [fpVulnId!]: true }));
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/vulnerabilities/${fpVulnId}/false-positive`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: fpReason }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success('已标记为误报');
+        setVulnList(prev => prev.map(v => v.id === fpVulnId ? { ...v, ...data.vulnerability } : v));
+      } else {
+        toast.error('操作失败');
+      }
+    } catch {
+      toast.error('网络错误');
+    } finally {
+      setVulnLoading(prev => ({ ...prev, [fpVulnId!]: false }));
+      setFpVulnId(null);
+      setFpReason('');
     }
   };
 
@@ -855,6 +889,12 @@ function TaskDetailContent() {
                           <pre className="mt-0.5 bg-gray-900/60 text-green-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40">{v.fixSuggestion}</pre>
                         </div>
                       )}
+                      {v.status === 'false-positive' && v.falsePositiveReason && (
+                        <div>
+                          <span className="text-gray-500 text-xs">误报原因</span>
+                          <p className="mt-0.5 text-gray-300 whitespace-pre-wrap bg-gray-900/60 p-2 rounded text-xs">{v.falsePositiveReason}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -962,6 +1002,26 @@ function TaskDetailContent() {
                 return <span className="text-sm text-gray-500">解析失败</span>;
               }
             })()}
+          </div>
+        </div>
+      )}
+
+      {fpVulnId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-gray-800 rounded-lg border border-gray-600 p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-100 mb-3">标记为误报</h3>
+            <p className="text-sm text-gray-400 mb-4">请填写标记为误报的原因（可选）：</p>
+            <textarea
+              value={fpReason}
+              onChange={e => setFpReason(e.target.value)}
+              rows={3}
+              className="w-full bg-gray-900 border border-gray-600 rounded-md p-3 text-sm text-gray-200 resize-none focus:outline-none focus:border-blue-500"
+              placeholder="如：该漏洞在当前上下文中不构成实际威胁..."
+            />
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => { setFpVulnId(null); setFpReason(''); }} className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 rounded-md transition-colors">取消</button>
+              <button onClick={submitFalsePositive} disabled={vulnLoading[fpVulnId]} className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-500 text-gray-100 rounded-md disabled:opacity-50 transition-colors">确认</button>
+            </div>
           </div>
         </div>
       )}

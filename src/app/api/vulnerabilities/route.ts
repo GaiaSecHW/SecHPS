@@ -110,6 +110,7 @@ export async function GET(request: Request) {
           fixSuggestion: true,
           skill: true,
           status: true,
+          falsePositiveReason: true,
           createdAt: true,
           updatedAt: true,
           Project: {

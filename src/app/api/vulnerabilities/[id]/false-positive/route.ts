@@ -18,8 +18,11 @@ export async function POST(
     const { payload, tenant } = auth as AuthSuccessResult;
     
     const { id } = await params;
-    const body = await request.json();
-    const { reason } = body;
+    let reason: string | null = null;
+    try {
+      const body = await request.json();
+      reason = body.reason || null;
+    } catch {}
     
     const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
