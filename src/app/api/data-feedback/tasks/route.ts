@@ -12,10 +12,18 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
   const limit = Math.min(50, parseInt(searchParams.get('limit') || '20', 10));
   const skip = (page - 1) * limit;
+  const search = (searchParams.get('search') || '').trim();
 
   const where: any = {};
   if (!tenant.isPlatformAdmin && !(tenant.isIcsTenant && payload.roles?.includes('admin'))) {
     where.userId = payload.userId;
+  }
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { agentName: { contains: search, mode: 'insensitive' } },
+      { targetProduct: { contains: search, mode: 'insensitive' } },
+    ];
   }
 
   try {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { GitBranch, RefreshCw, CheckCircle, XCircle, Loader2, Clock, ChevronRight, ChevronDown, ArrowUp, ArrowDown, Search } from 'lucide-react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { apiGet } from '@/lib/api-client';
 
@@ -639,7 +639,12 @@ function TracePanel({ taskId }: { taskId: string }) {
 export default function DataFeedbackPage() {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data, loading, refetch } = useApiFetch<TasksResponse>(`/api/data-feedback/tasks?page=${page}&limit=20`);
+  const [search, setSearch] = useState('');
+  const { data, loading, refetch } = useApiFetch<TasksResponse>(
+    `/api/data-feedback/tasks?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`
+  );
+
+  useEffect(() => { setPage(1); }, [search]);
 
   const tasks = data?.tasks || [];
   const total = data?.total || 0;
@@ -675,8 +680,20 @@ export default function DataFeedbackPage() {
       <div className="flex gap-4 mt-4 flex-1 min-h-0">
         {/* Left: task list */}
         <div className="w-80 shrink-0 bg-dark-surface border border-gray-700/50 rounded-xl overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-700/50 text-sm font-medium text-gray-300 shrink-0">
-            任务列表 {total > 0 && <span className="text-gray-500 font-normal">({total})</span>}
+          <div className="px-4 py-3 border-b border-gray-700/50 shrink-0">
+            <div className="text-sm font-medium text-gray-300">
+              任务列表 {total > 0 && <span className="text-gray-500 font-normal">({total})</span>}
+            </div>
+            <div className="mt-2 relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="搜索任务名/Agent/目标产品"
+                className="w-full pl-7 pr-3 py-1.5 bg-dark-surface-hover border border-gray-700/50 rounded-md text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-teal-500/50"
+              />
+            </div>
           </div>
           {loading && tasks.length === 0 ? (
             <div className="flex items-center justify-center flex-1">
