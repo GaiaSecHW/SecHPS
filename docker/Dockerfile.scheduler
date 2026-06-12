@@ -1,8 +1,8 @@
 # ============================================================================
-# CodeSwarm Scheduler - Multi-stage Docker Build (Fully Self-Contained)
+# Chimera Scheduler - Multi-stage Docker Build (Fully Self-Contained)
 #
 # Build context: project root
-#   docker build -f docker/Dockerfile.scheduler -t sechps-scheduler:latest .
+#   docker build -f docker/Dockerfile.scheduler -t Chimera-scheduler:latest .
 #
 # 特点:
 #   - 完全自包含：适用于无外网隔离部署环境
@@ -69,10 +69,32 @@ RUN pnpm deploy --prod --filter @codeswarm/scheduler /deploy/scheduler && \
 # ---------------------------------------------------------------------------
 # Copy Prisma generated client into deployment directory
 # pnpm deploy includes @prisma/client but the generated native engines
-# (node_modules/.prisma/client) may not be copied automatically.
+# (.prisma/client) live in the pnpm virtual store (node_modules/.pnpm/...).
+# Prisma Client runtime resolves .prisma/client from within its own pnpm
+# scope, so we must copy into BOTH:
+#   1. The top-level node_modules/.prisma/client (for some resolution paths)
+#   2. The pnpm virtual store @prisma/client scope (the primary resolution path)
 # ---------------------------------------------------------------------------
-RUN mkdir -p /deploy/scheduler/node_modules/.prisma/client && \
-    cp -r /build/codeswarm/node_modules/.prisma/client/* /deploy/scheduler/node_modules/.prisma/client/ && \
+RUN PRISMA_CLIENT_SRC=$(find /build/codeswarm/node_modules/.pnpm -path '*/.prisma/client' -type d | head -1) && \
+    if [ -z "$PRISMA_CLIENT_SRC" ]; then \
+      echo "❌ FATAL: .prisma/client not found in build pnpm store" && exit 1; \
+    fi && \
+    echo "Found Prisma Client source at: $PRISMA_CLIENT_SRC" && \
+    \
+    # --- Copy to top-level node_modules/.prisma/client --- \
+    mkdir -p /deploy/scheduler/node_modules/.prisma/client && \
+    cp -r "$PRISMA_CLIENT_SRC"/* /deploy/scheduler/node_modules/.prisma/client/ && \
+    echo "✅ Copied to top-level .prisma/client" && \
+    \
+    # --- Copy to pnpm virtual store inside deployment --- \
+    DEPLOY_PRISMA_SCOPE=$(find /deploy/scheduler/node_modules/.pnpm -path '*@prisma+client*/node_modules' -maxdepth 4 -type d | head -1) && \
+    if [ -n "$DEPLOY_PRISMA_SCOPE" ]; then \
+      mkdir -p "$DEPLOY_PRISMA_SCOPE/.prisma/client" && \
+      cp -r "$PRISMA_CLIENT_SRC"/* "$DEPLOY_PRISMA_SCOPE/.prisma/client/" && \
+      echo "✅ Copied to pnpm store: $DEPLOY_PRISMA_SCOPE/.prisma/client"; \
+    else \
+      echo "⚠️ No @prisma/client scope found in deployment pnpm store (top-level copy may suffice)"; \
+    fi && \
     echo "=== Prisma client copied to deployment ==="
 
 # Copy Prisma schema to deployment (needed for runtime migrations)
