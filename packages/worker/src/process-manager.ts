@@ -317,7 +317,7 @@ export class ProcessManager {
       // argv element, so shell metacharacters ($, `, ;, etc.) in the instruction
       // cannot be interpreted. This eliminates command-injection risk that the
       // previous `bash -c "... '${escaped}'"` construction carried.
-      const args = ['run', '--print-logs', '--dir', workspace];
+      const args = ['run', '--print-logs'];
       const prompt = instruction?.trim() || agentName || '执行任务';
       args.push(prompt);
 
@@ -334,6 +334,9 @@ export class ProcessManager {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+      // 关闭 stdin：prompt 经 argv 传入，无需任何 stdin 输入。
+      // 发送 EOF 可避免 opencode 因等待 stdin 而挂起到超时。
+      childProcess.stdin?.end();
 
       // Store in processes map for terminate() support
       this.processes.set(taskId, { process: childProcess, workspace, createdAt: Date.now() });
@@ -451,6 +454,8 @@ export class ProcessManager {
         env: mergedEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+      // prompt/command 经 argv 传入，关闭 stdin 发送 EOF，避免进程等待 stdin 而挂起。
+      proc.stdin?.end();
 
       let stdout = '';
       let stderr = '';
