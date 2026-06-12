@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import spawn from 'cross-spawn';
+import type { ChildProcess } from 'node:child_process';
 import { ACPClient, type StopReason, type ACPClientConfig } from "@codeswarm/acp";
 import { ClaudeCodeClient } from "@codeswarm/sdk-adapter";
 import * as fs from 'node:fs';

@@ -359,7 +359,7 @@ RUN echo "=== Verifying critical worker components ===" && \
 ENV NODE_ID="" \
     PORT=8090 \
     MAX_CONCURRENT=5 \
-    SCHEDULER_URL="http://host.docker.internal:8080"
+    SCHEDULER_URL="http://host.docker.internal:8090"
 
 EXPOSE 8090
 

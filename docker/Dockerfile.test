@@ -19,7 +19,7 @@
 #   NODE_ID             - Worker node identifier (auto-generated if empty)
 #   PORT                - Worker HTTP port (default 8090)
 #   MAX_CONCURRENT      - Max parallel tasks (default 5)
-#   ORCHESTRATOR_URL    - Orchestrator backend URL (e.g. http://host:3000)
+#   ORCHESTRATOR_URL    - Orchestrator backend URL (e.g. http://host:8082)
 #   WORKER_ADDRESS      - External reachable address for heartbeat
 #   CODEDMAP_HOME       - Codedmap install path (default /opt/codedmap)
 #   JOERN_HOME          - Joern CLI path (default /opt/joern-cli)
@@ -421,7 +421,7 @@ RUN echo "=== Verifying critical worker components ===" && \
 ENV NODE_ID="" \
     PORT=8090 \
     MAX_CONCURRENT=5 \
-    ORCHESTRATOR_URL="http://host.docker.internal:3000"
+    ORCHESTRATOR_URL="http://host.docker.internal:8082"
 
 EXPOSE 8090
 

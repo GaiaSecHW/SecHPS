@@ -315,9 +315,8 @@ export class EnvironmentFactory {
               maxTokens: payload.maxTokens,
             });
             Object.assign(autoConfig, modelConfig);
-            if (payload.agent) {
-              autoConfig.default_agent = payload.agent;
-            }
+            // 不写 default_agent：opencode 内置的 build 等是 subagent，作为顶层 default 会让
+            // session 创建时抛 "default agent \"X\" is a subagent"。让 opencode 用内置默认顶层 agent。
             const autoConfigPath = path.join(localWorkspacePath, 'opencode.json');
             fs.writeFileSync(autoConfigPath, JSON.stringify(autoConfig, null, 2));
             progress(`自动生成 opencode.json: model=${autoConfig.model}, agent=${payload.agent || 'none'}`);
@@ -399,10 +398,8 @@ export class EnvironmentFactory {
           }
           progress(`配置 MCP: ${payload.mcps.length}个`);
         }
-        if (payload.agent) {
-          opencodeConfig.default_agent = payload.agent;
-          progress(`配置 agent: ${payload.agent}`);
-        }
+        // 不写 default_agent：opencode 内置的 build 等是 subagent，作为顶层 default 会让
+        // session 创建时抛 "default agent \"X\" is a subagent"。payload.agent 仅作 worker 内部 prompt fallback。
         if (Object.keys(opencodeConfig).length > 0) {
           opencodeConfig["$schema"] = "https://opencode.ai/config.json";
           fs.writeFileSync(

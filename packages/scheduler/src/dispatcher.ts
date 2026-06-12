@@ -527,8 +527,8 @@ export class CodeswarmDispatcher {
     const primaryAddr = addresses[0].trim();
     const isLocalWorker = primaryAddr.startsWith('localhost') || primaryAddr.startsWith('127.');
     const callbackUrl = isLocalWorker
-      ? 'http://localhost:3000'
-      : (process.env.SCHEDULER_CALLBACK_URL || 'http://localhost:3000');
+      ? `http://localhost:${process.env.PORT || 8080}`
+      : (process.env.SCHEDULER_CALLBACK_URL || `http://localhost:${process.env.PORT || 8080}`);
 
     const sorted = this.sortAddresses(addresses);
 
