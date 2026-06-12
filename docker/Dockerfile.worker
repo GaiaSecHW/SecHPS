@@ -42,9 +42,6 @@ ARG GITHUB_PROXY=https://gh-proxy.com/
 
 WORKDIR /tmp
 
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
-
 RUN apt-get update && \
     apt-get install -y --no-install-recommends unzip curl && \
     rm -rf /var/lib/apt/lists/*
@@ -67,9 +64,6 @@ ARG GITHUB_PROXY=https://gh-proxy.com/
 
 WORKDIR /tmp
 
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
-
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
@@ -90,9 +84,6 @@ RUN JDK21_VER_SHORT=$(echo "${JDK21_VERSION}" | sed 's/+/_/') && \
 FROM node:20-trixie AS worker-builder
 
 WORKDIR /build/codeswarm
-
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
 
 RUN npm config set registry https://registry.npmmirror.com
 
@@ -169,13 +160,9 @@ FROM node:20-trixie AS runtime
 
 WORKDIR /opt/worker
 
-# APT: Tsinghua mirror
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
-
 # ---------------------------------------------------------------------------
 # Install runtime tools (no Adoptium apt — JDK 21 comes from download stage)
-# All apt packages are from Tsinghua mirror — no external internet needed
+# All apt packages use the base image's Debian sources.
 #
 # NOTE: node:20-trixie is based on buildpack-deps:trixie which already includes:
 #   bash, coreutils, grep, sed, gawk(awk), find, diff, gzip, less,

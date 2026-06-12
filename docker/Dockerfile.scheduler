@@ -32,9 +32,6 @@ FROM node:20-trixie AS scheduler-builder
 
 WORKDIR /build/codeswarm
 
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
-
 RUN npm config set registry https://registry.npmmirror.com
 
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
@@ -110,10 +107,6 @@ RUN mkdir -p /deploy/scheduler/prisma && \
 FROM node:20-trixie AS runtime
 
 WORKDIR /opt/scheduler
-
-# APT: Tsinghua mirror
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
 
 # ---------------------------------------------------------------------------
 # Install runtime tools
