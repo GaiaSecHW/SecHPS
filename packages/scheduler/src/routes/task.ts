@@ -165,11 +165,29 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     });
     if (!task) return reply.status(404).send({ error: 'Task not found' });
 
-    // Fetch events separately (no Prisma relation — taskId is a soft link)
-    const events = await prisma.codeswarmEvent.findMany({
+    // Fetch events separately (no Prisma relation — taskId is a soft link).
+    // Reshape raw rows into the shape the debug UI consumes: spread the JSON
+    // `data` payload to the top level (content/phase/skill/tool/...) and expose
+    // the DB row time as `timestamp`. Without this the UI reads
+    // `event.timestamp` / `event.content` and renders "Invalid Date" / empty text.
+    const rawEvents = await prisma.codeswarmEvent.findMany({
       where: { taskId: request.params.taskId },
       orderBy: { createdAt: 'desc' },
       take: 100,
+    });
+    const events = rawEvents.map(e => {
+      let payload: Record<string, unknown> = {};
+      if (e.data) {
+        try { payload = JSON.parse(e.data); } catch { payload = {}; }
+      }
+      return {
+        id: e.id,
+        type: e.type,
+        level: e.level,
+        stream: e.stream,
+        timestamp: e.createdAt,
+        ...payload,
+      };
     });
 
     return { ...task, events };

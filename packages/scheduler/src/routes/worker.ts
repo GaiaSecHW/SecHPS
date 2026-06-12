@@ -91,7 +91,24 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
     const body = request.body as {
       taskId: string;
       nodeId: string;
-      events: Array<{ type: string; data?: any; timestamp: string; level?: string; stream?: string; content?: string; message?: string }>;
+      // 对齐 worker 端 AgentEvent（process-manager.ts）。除 type/level/stream 有独立列外，
+      // 其余字段原样落入 CodeswarmEvent.data，供调试 UI 渲染完整正文。
+      events: Array<{
+        type: string;
+        data?: any;
+        timestamp: string;
+        level?: string;
+        stream?: string;
+        content?: string;
+        message?: string;
+        phase?: string;
+        skill?: string;
+        tool?: string;
+        output?: string;
+        title?: string;
+        input?: unknown;
+        success?: boolean;
+      }>;
     };
 
     if (!body.taskId || !body.events?.length) {
@@ -99,19 +116,23 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
     }
 
     try {
-      // Write events to DB
+      // Write events to DB. Only type/level/stream have their own columns;
+      // everything else (content/phase/skill/tool/output/message/timestamp/...)
+      // is preserved verbatim inside the JSON `data` so the debug UI can render
+      // the full payload. Previously only content/message were cherry-picked and
+      // phase/skill/tool/timestamp were silently dropped — which is why the
+      // execution log showed "Invalid Date" and empty detail text.
       await prisma.codeswarmEvent.createMany({
-        data: body.events.map(e => ({
-          taskId: body.taskId,
-          type: e.type,
-          data: JSON.stringify({
-            ...(typeof e.data === 'object' ? e.data : {}),
-            content: e.content,
-            message: e.message,
-          }),
-          level: e.level || null,
-          stream: e.stream || null,
-        })),
+        data: body.events.map(e => {
+          const { type, level, stream, ...rest } = e;
+          return {
+            taskId: body.taskId,
+            type,
+            data: JSON.stringify(rest),
+            level: level || null,
+            stream: stream || null,
+          };
+        }),
       });
 
       // Update task state on key events
