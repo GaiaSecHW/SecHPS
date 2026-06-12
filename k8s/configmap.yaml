@@ -13,4 +13,5 @@ data:
   MAX_CONCURRENT: "5"
   TASK_TIMEOUT_SEC: "86400"
   GRACEFUL_SHUTDOWN_TIMEOUT_MS: "300000"
+  AIGW_WORK_KEYS_URL: "http://secflow.ai.icsl.huawei.com"
   # Worker 地址自动检测，无需配置

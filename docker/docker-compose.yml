@@ -74,6 +74,7 @@ services:
       WORKER_ADDRESS: worker-1:8090,http://localhost:8081
       WORKSPACE_BASE_PATH: /mnt/workspace
       TASK_TIMEOUT_SEC: "86400"
+      AIGW_WORK_KEYS_URL: http://secflow.ai.icsl.huawei.com
     volumes:
       - workspace_data:/mnt/workspace
     depends_on:
@@ -94,6 +95,7 @@ services:
       WORKER_ADDRESS: worker-2:8090,http://localhost:8082
       WORKSPACE_BASE_PATH: /mnt/workspace
       TASK_TIMEOUT_SEC: "86400"
+      AIGW_WORK_KEYS_URL: http://secflow.ai.icsl.huawei.com
     volumes:
       - workspace_data:/mnt/workspace
     depends_on:
