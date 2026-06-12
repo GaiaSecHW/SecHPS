@@ -181,6 +181,7 @@ export async function GET(request: NextRequest) {
       targetProduct: true,
       errorMessage: true,
       createdAt: true,
+      completedAt: true,
       codeswarmTaskId: true,
       User: { select: { username: true } },
     };
@@ -235,14 +236,14 @@ export async function GET(request: NextRequest) {
 
       // 查询 2: 分页 ID
       const idRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT ti.id FROM "TaskInstance" ti LEFT JOIN "CodeswarmTask" ct ON ti."codeswarmTaskId" = ct."taskId" ${baseWhere} ORDER BY ti."createdAt" DESC LIMIT $${idx + 1} OFFSET $${idx + 2}`,
+        `SELECT ti.id FROM "TaskInstance" ti LEFT JOIN "CodeswarmTask" ct ON ti."codeswarmTaskId" = ct."taskId" ${baseWhere} ORDER BY ti."completedAt" DESC NULLS FIRST, ti."createdAt" DESC LIMIT $${idx + 1} OFFSET $${idx + 2}`,
         ...sqlParams, displayStatusFilter, limit, offset
       );
 
       // 查询 3: 按 ID 批量获取完整数据（复用 taskSelect + User 关联）
       const paginatedTasks = await prisma.taskInstance.findMany({
         where: { id: { in: idRows.map(r => r.id) } },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ completedAt: { sort: 'desc', nulls: 'first' } }, { createdAt: 'desc' }],
         select: taskSelect,
       });
 
@@ -265,7 +266,7 @@ export async function GET(request: NextRequest) {
       prisma.taskInstance.count({ where }),
       prisma.taskInstance.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ completedAt: { sort: 'desc', nulls: 'first' } }, { createdAt: 'desc' }],
         select: taskSelect,
         skip: (page - 1) * limit,
         take: limit,
