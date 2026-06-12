@@ -50,6 +50,10 @@ dev.db
 *.pem
 /tmp
 
+# Test artifacts (may contain secrets — never commit)
+_test_task.json
+_test_*.json
+
 # OMC / Claude tools
 .omc/
 .claude/
