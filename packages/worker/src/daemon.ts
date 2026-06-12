@@ -142,10 +142,14 @@ export class WorkerDaemon {
 
     for (const [engine, binary] of Object.entries(binaries)) {
       try {
-        const resolved = execSync(`which ${binary} 2>/dev/null`, {
+        // `which` 仅 Unix 可用，Windows cmd.exe 没有 `which`（对应 `where`），
+        // 且 `2>/dev/null` 在 cmd 下也是非法重定向。否则即便二进制已安装且
+        // cross-spawn 能正常拉起，checkBinaries 在 Windows 上也永远误报 NOT found。
+        const checker = process.platform === 'win32' ? 'where' : 'which';
+        const resolved = execSync(`${checker} ${binary}`, {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
-        }).trim();
+        }).trim().split('\n')[0].trim();
         result[engine] = true;
         this.server.log.info({ engine, binary, path: resolved }, `Engine binary available`);
       } catch {

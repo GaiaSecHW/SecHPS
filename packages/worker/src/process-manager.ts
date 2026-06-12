@@ -278,7 +278,11 @@ export class ProcessManager {
       }
 
       if (hasSubstantialOutput(state.stdout) && !classified.isCritical) {
-        return { exitCode: 0, stdout: state.stdout, stderr: state.stderr };
+        // Agent produced substantial output before erroring — preserve stdout
+        // for inspection but still report failure so caller knows it's incomplete
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS,
+          `Agent error after substantial output (${state.stdout.length} chars), category=${classified.category}. Reporting as failed with partial output.`);
+        return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
       }
 
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
