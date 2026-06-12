@@ -1549,12 +1549,36 @@ export class CodeswarmDispatcher {
       let deletedCount = 0;
       let claimedCount = 0;
 
-      // ioredis XINFO CONSUMERS returns flat array: [name, value, name, value, ...]
-      for (let i = 0; i < consumers.length; i += 10) {
-        const name = consumers[i + 1];
-        const pending = Number(consumers[i + 3]);
-        const idle = Number(consumers[i + 5]);
-        const nameStr = typeof name === 'string' ? name : name?.toString() || '';
+      // Parse XINFO CONSUMERS flat array into structured objects.
+      // Redis returns [key1, val1, key2, val2, ...] per consumer; field count varies
+      // across Redis versions (e.g. Redis 7.x added 'inactive' field).
+      // Parse by key-value pairs and detect consumer boundaries via the 'name' key.
+      const consumerList: { name: string; pending: number; idle: number }[] = [];
+      let cur: Record<string, unknown> = {};
+      for (let i = 0; i < consumers.length; i += 2) {
+        const key = String(consumers[i]);
+        const val = consumers[i + 1];
+        if (key === 'name' && 'name' in cur) {
+          // New consumer block starts — push the previous one
+          consumerList.push({
+            name: String(cur.name ?? ''),
+            pending: Number(cur.pending ?? 0),
+            idle: Number(cur.idle ?? 0),
+          });
+          cur = {};
+        }
+        cur[key] = val;
+      }
+      // Push the last consumer
+      if ('name' in cur) {
+        consumerList.push({
+          name: String(cur.name ?? ''),
+          pending: Number(cur.pending ?? 0),
+          idle: Number(cur.idle ?? 0),
+        });
+      }
+
+      for (const { name: nameStr, pending, idle } of consumerList) {
 
         if (nameStr === CONSUMER_NAME) continue;
 
@@ -1644,18 +1668,66 @@ export class CodeswarmDispatcher {
     const runCleanup = async () => {
       try {
         // Local cleanup: mark tasks in dispatched/running for >7 days as failed
-        const expired = await prisma.codeswarmTask.updateMany({
+        // Query first to know which workers need currentTasks decrement
+        const expiredTasks = await prisma.codeswarmTask.findMany({
           where: {
             state: { in: ['dispatched', 'running'] },
             updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
           },
-          data: {
-            state: 'failed',
-            error: 'Task expired (running >7 days)',
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          },
+          select: { id: true, taskId: true, workerId: true },
+          take: 100,
         });
+
+        if (expiredTasks.length > 0) {
+          // Group by workerId to batch decrements
+          const workerTaskCounts = new Map<string, number>();
+          for (const task of expiredTasks) {
+            if (task.workerId) {
+              workerTaskCounts.set(task.workerId, (workerTaskCounts.get(task.workerId) || 0) + 1);
+            }
+          }
+
+          // Mark tasks as failed (conditional: still dispatched/running)
+          await prisma.codeswarmTask.updateMany({
+            where: {
+              id: { in: expiredTasks.map(t => t.id) },
+              state: { in: ['dispatched', 'running'] },
+            },
+            data: {
+              state: 'failed',
+              error: 'Task expired (running >7 days)',
+              completedAt: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+
+          // Decrement Worker.currentTasks for affected workers
+          for (const [workerId, count] of workerTaskCounts) {
+            try {
+              await withDeadlockRetry(() => prisma.$executeRaw`
+                UPDATE "CodeswarmWorker"
+                SET "currentTasks" = GREATEST("currentTasks" - ${count}, 0)
+                WHERE id = ${workerId}
+              `);
+              // Release in-memory worker slot
+              const workerEntry = [...this.workers.values()].find(w => w.id === workerId);
+              if (workerEntry) {
+                workerEntry.currentTasks = Math.max(workerEntry.currentTasks - count, 0);
+              }
+            } catch (e) {
+              logger.error(`Cleanup: failed to decrement Worker ${workerId} currentTasks: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+
+          // Remove from Redis timeout sorted set
+          if (this.redis) {
+            for (const task of expiredTasks) {
+              await this.redis.zrem('codeswarm:task:timeouts', task.id);
+            }
+          }
+
+          logger.info(`Task cleanup: ${expiredTasks.length} expired tasks marked failed`);
+        }
 
         // Also clean up very old completed/failed tasks (older than 30 days)
         const oldDeleted = await prisma.codeswarmTask.deleteMany({
@@ -1665,8 +1737,8 @@ export class CodeswarmDispatcher {
           },
         });
 
-        if (expired.count > 0 || oldDeleted.count > 0) {
-          logger.info(`Task cleanup: ${expired.count} expired tasks marked failed, ${oldDeleted.count} old tasks deleted`);
+        if (expiredTasks.length > 0 || oldDeleted.count > 0) {
+          logger.info(`Task cleanup: ${expiredTasks.length} expired tasks marked failed, ${oldDeleted.count} old tasks deleted`);
         }
       } catch (e) {
         logger.error(`Task cleanup error: ${e instanceof Error ? e.message : String(e)}`);
