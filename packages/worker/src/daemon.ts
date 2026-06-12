@@ -33,14 +33,21 @@ interface WorkerDaemonConfig {
  * 环境变量 AIGW_WORK_KEYS_URL 控制开关（未设置则跳过，返回原始 apiKey）。
  * 失败直接抛错，任务标记为 failed。
  */
+interface WorkKeyResult {
+  apiKey: string;
+  skipped: boolean;
+  reason?: string;
+}
+
 async function resolveWorkKey(
   apiKey: string,
   taskId: string,
   agentName: string,
-): Promise<string> {
+): Promise<WorkKeyResult> {
   const gatewayUrl = process.env.AIGW_WORK_KEYS_URL;
   if (!gatewayUrl) {
-    return apiKey;
+    logger.warn(LOG_MODULES.DAEMON, '[resolveWorkKey] AIGW_WORK_KEYS_URL 未配置，请提供虚拟 key 网关 URL');
+    return { apiKey, skipped: true, reason: '请提供虚拟 key 网关 URL' };
   }
 
   const endpoint = `${gatewayUrl}/api/aigw/work-keys`;
@@ -88,7 +95,7 @@ async function resolveWorkKey(
   }
 
   logger.info(LOG_MODULES.DAEMON, `[WorkKey] Got work-key successfully for ${taskId}/${agentName}`);
-  return secret;
+  return { apiKey: secret, skipped: false };
 }
 
 export class WorkerDaemon {
@@ -555,15 +562,17 @@ this.server.get('/health', async () => ({
           message: '正在获取虚拟 API Key...',
           timestamp: new Date().toISOString(),
         });
-        const effectiveApiKey = await resolveWorkKey(apiKey, taskId, payload.toolId || agent || 'default');
+        const workKeyResult = await resolveWorkKey(apiKey, taskId, payload.toolId || agent || 'default');
         // 覆盖 payload.apiKey，后续 envFactory.build 和 runAgent 都使用 secret
-        (payload as any).apiKey = effectiveApiKey;
-        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved, payload.apiKey replaced`);
+        (payload as any).apiKey = workKeyResult.apiKey;
+        logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved, skipped=${workKeyResult.skipped}, apiKey=${workKeyResult.skipped ? '(original)' : '(wsk_*)'}`);
         onEvent({
           type: 'phase_complete',
           phase: 'workkey',
-          success: true,
-          message: '虚拟 API Key 获取成功',
+          success: !workKeyResult.skipped,
+          message: workKeyResult.skipped
+            ? `虚拟 API Key 获取跳过: ${workKeyResult.reason || '未配置'}`
+            : '虚拟 API Key 获取成功',
           timestamp: new Date().toISOString(),
         });
       }
