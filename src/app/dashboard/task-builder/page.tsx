@@ -564,14 +564,19 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
                       <span className="text-red-400 line-clamp-1">{task.errorMessage}</span>
                     </div>
                   )}
-
+                  <div className="text-xs text-gray-500">
+                    创建人: {task.User?.username || '未知'}
+                  </div>
                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                     <Clock size={12} className="shrink-0" />
                     <span>创建于 {formatDate(task.createdAt)}</span>
                   </div>
-                  <div className="text-xs text-gray-500">
-                    创建人: {task.User?.username || '未知'}
-                  </div>
+                  {task.completedAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <CheckCircle size={12} className="shrink-0" />
+                      <span>完成于 {formatDate(task.completedAt)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 操作栏 */}

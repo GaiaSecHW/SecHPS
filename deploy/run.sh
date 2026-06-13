@@ -37,6 +37,53 @@ SERVER_ENV_FILE="$SCRIPT_DIR/.env.server"
 WORKER_ENV_FILE="$SCRIPT_DIR/.env.worker"
 
 # ---------------------------------------------------------------------------
+# 自动检测宿主机 IP 并更新 env 文件中的地址配置
+# ---------------------------------------------------------------------------
+update_env_ip() {
+    local HOST_IP
+    HOST_IP=$(hostname -I | awk '{print $1}')
+
+    if [ -z "$HOST_IP" ]; then
+        echo "[run] ⚠️  无法检测宿主机 IP，跳过 env 文件更新"
+        return
+    fi
+
+    echo "[run] 宿主机 IP: $HOST_IP"
+
+    # 更新 .env.server: NEXT_PUBLIC_BASE_URL
+    if [ -f "$SERVER_ENV_FILE" ]; then
+        if grep -q "^NEXT_PUBLIC_BASE_URL=" "$SERVER_ENV_FILE"; then
+            local old_url=$(grep "^NEXT_PUBLIC_BASE_URL=" "$SERVER_ENV_FILE" | cut -d= -f2-)
+            local new_url=$(echo "$old_url" | sed "s/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/$HOST_IP/")
+            if [ "$old_url" != "$new_url" ]; then
+                sed -i "s|^NEXT_PUBLIC_BASE_URL=.*|NEXT_PUBLIC_BASE_URL=$new_url|" "$SERVER_ENV_FILE"
+                echo "[run] ✅ .env.server NEXT_PUBLIC_BASE_URL: $old_url → $new_url"
+            fi
+        fi
+    fi
+
+    # 更新 .env.worker: ORCHESTRATOR_URL, WORKER_ADDRESS
+    if [ -f "$WORKER_ENV_FILE" ]; then
+        if grep -q "^ORCHESTRATOR_URL=" "$WORKER_ENV_FILE"; then
+            local old_orch=$(grep "^ORCHESTRATOR_URL=" "$WORKER_ENV_FILE" | cut -d= -f2-)
+            local new_orch=$(echo "$old_orch" | sed "s|[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}|$HOST_IP|")
+            if [ "$old_orch" != "$new_orch" ]; then
+                sed -i "s|^ORCHESTRATOR_URL=.*|ORCHESTRATOR_URL=$new_orch|" "$WORKER_ENV_FILE"
+                echo "[run] ✅ .env.worker ORCHESTRATOR_URL: $old_orch → $new_orch"
+            fi
+        fi
+        if grep -q "^WORKER_ADDRESS=" "$WORKER_ENV_FILE"; then
+            local old_waddr=$(grep "^WORKER_ADDRESS=" "$WORKER_ENV_FILE" | cut -d= -f2-)
+            local new_waddr=$(echo "$old_waddr" | sed "s/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/$HOST_IP/")
+            if [ "$old_waddr" != "$new_waddr" ]; then
+                sed -i "s|^WORKER_ADDRESS=.*|WORKER_ADDRESS=$new_waddr|" "$WORKER_ENV_FILE"
+                echo "[run] ✅ .env.worker WORKER_ADDRESS: $old_waddr → $new_waddr"
+            fi
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # 停止容器
 # ---------------------------------------------------------------------------
 stop_container() {
@@ -146,6 +193,7 @@ TARGET="${2:-all}"
 
 case "$ACTION" in
     run)
+        update_env_ip
         case "$TARGET" in
             server)
                 run_server

@@ -156,41 +156,47 @@ function TaskDetailContent() {
     }
   }, []);
 
+  const fetchVulnList = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/vulnerabilities?taskId=${taskId}&limit=200`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVulnList(data.data || []);
+      }
+    } catch {}
+  }, [taskId]);
+
+  const fetchVulnStats = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/vulnerabilities/stats?taskId=${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVulnStats(data.stats || null);
+      }
+    } catch {}
+  }, [taskId]);
+
   useEffect(() => {
     fetchTaskDetail(taskId);
   }, [taskId, fetchTaskDetail]);
 
   useEffect(() => {
-    const fetchVulnStats = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`/api/vulnerabilities/stats?taskId=${taskId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setVulnStats(data.stats || null);
-        }
-      } catch {}
-    };
+    fetchVulnList();
     fetchVulnStats();
-  }, [taskId]);
+  }, [fetchVulnList, fetchVulnStats]);
 
   useEffect(() => {
-    const fetchVulnList = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`/api/vulnerabilities?taskId=${taskId}&limit=200`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setVulnList(data.data || []);
-        }
-      } catch {}
-    };
-    fetchVulnList();
-  }, [taskId]);
+    if (task?.status === 'completed' || task?.displayStatus === 'completed') {
+      fetchVulnList();
+      fetchVulnStats();
+    }
+  }, [task?.status, task?.displayStatus, fetchVulnList, fetchVulnStats]);
 
   // 执行时长计时器
   useEffect(() => {
@@ -224,6 +230,7 @@ function TaskDetailContent() {
           return;
         }
         fetchTaskDetail(taskId, false);
+        fetchVulnList();
       }, 5000);
 
       return () => {
@@ -235,6 +242,7 @@ function TaskDetailContent() {
       if (elapsed < 60000) {
         pollingRef.current = setInterval(() => {
           fetchTaskDetail(taskId, false);
+          fetchVulnList();
         }, 5000);
         const remaining = 60000 - elapsed;
         const timeout = setTimeout(() => {
@@ -249,7 +257,7 @@ function TaskDetailContent() {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [task?.status, task?.completedAt, taskId, fetchTaskDetail]);
+  }, [task?.status, task?.completedAt, taskId, fetchTaskDetail, fetchVulnList]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('zh-CN', {

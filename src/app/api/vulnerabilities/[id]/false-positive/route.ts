@@ -20,9 +20,14 @@ export async function POST(
     const { id } = await params;
     let reason: string | null = null;
     try {
-      const body = await request.json();
-      reason = body.reason || null;
-    } catch {}
+      const text = await request.text();
+      if (text) {
+        const body = JSON.parse(text);
+        reason = body.reason || null;
+      }
+    } catch {
+      reason = null;
+    }
     
     const isPrivileged = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles.includes('admin'));
 
