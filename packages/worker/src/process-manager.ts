@@ -95,6 +95,24 @@ interface RunState {
   currentSkill: string | null;
 }
 
+function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: string): void {
+  const prefix = stream === 'stderr' ? '[opencode stderr]' : '[opencode stdout]';
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+
+    const message = line.length > 4000
+      ? `${prefix} ${line.slice(0, 4000)}... <truncated ${line.length - 4000} chars>`
+      : `${prefix} ${line}`;
+
+    if (stream === 'stderr') {
+      logger.taskWarn(taskId, LOG_MODULES.PROCESS, message);
+    } else {
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, message);
+    }
+  }
+}
+
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
 
@@ -355,6 +373,7 @@ export class ProcessManager {
         const content = data.toString();
         state.stdout += content;
         logStream?.write(data);
+        logOpencodeChunk(taskId, 'stdout', content);
         if (onEvent) {
           onEvent({
             type: 'agent_message_chunk',
@@ -368,6 +387,7 @@ export class ProcessManager {
         const content = data.toString();
         state.stderr += content;
         logStream?.write(data); // mirror `2>&1 | tee` behavior
+        logOpencodeChunk(taskId, 'stderr', content);
       };
 
       childProcess.stdout?.on('data', handleStdout);
