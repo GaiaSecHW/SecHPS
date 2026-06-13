@@ -1,12 +1,12 @@
 /**
  * 任务管理路由
- * POST   /api/task/submit       — 提交任务（核心入口）
- * GET    /api/task/list          — 任务列表
- * GET    /api/task/:taskId       — 任务详情
- * DELETE /api/task/:taskId       — 删除任务
- * POST   /api/task/:taskId/dispatch — 手动重新分发
- * POST   /api/task/:taskId/cancel   — 取消任务
- * DELETE /api/task/batch         — 批量删除
+ * POST   /api/codeswarm/task/submit       — 提交任务（核心入口）
+ * GET    /api/codeswarm/task/list          — 任务列表
+ * GET    /api/codeswarm/task/:taskId       — 任务详情
+ * DELETE /api/codeswarm/task/:taskId       — 删除任务
+ * POST   /api/codeswarm/task/:taskId/dispatch — 手动重新分发
+ * POST   /api/codeswarm/task/:taskId/cancel   — 取消任务
+ * DELETE /api/codeswarm/task/batch         — 批量删除
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma, withDeadlockRetry } from '../prisma.js';
@@ -16,8 +16,8 @@ import { logger } from '../logger.js';
 
 export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): void {
 
-  // POST /api/task/submit
-  server.post('/api/task/submit', async (request, reply) => {
+  // POST /api/codeswarm/task/submit
+  server.post('/api/codeswarm/task/submit', async (request, reply) => {
     const body = request.body as {
       instruction: string;
       platformTaskId?: string;
@@ -134,8 +134,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     }
   });
 
-  // GET /api/task/list
-  server.get('/api/task/list', async (request) => {
+  // GET /api/codeswarm/task/list
+  server.get('/api/codeswarm/task/list', async (request) => {
     const query = request.query as { state?: string; limit?: string; offset?: string };
     const where = query.state ? { state: query.state } : {};
     const limit = Math.min(parseInt(query.limit || '50'), 200);
@@ -160,8 +160,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     return { tasks, total, limit, offset };
   });
 
-  // GET /api/task/:taskId
-  server.get<{ Params: { taskId: string } }>('/api/task/:taskId', async (request, reply) => {
+  // GET /api/codeswarm/task/:taskId
+  server.get<{ Params: { taskId: string } }>('/api/codeswarm/task/:taskId', async (request, reply) => {
     const task = await prisma.codeswarmTask.findUnique({
       where: { taskId: request.params.taskId },
     });
@@ -195,8 +195,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     return { ...task, events };
   });
 
-  // DELETE /api/task/:taskId
-  server.delete<{ Params: { taskId: string } }>('/api/task/:taskId', async (request, reply) => {
+  // DELETE /api/codeswarm/task/:taskId
+  server.delete<{ Params: { taskId: string } }>('/api/codeswarm/task/:taskId', async (request, reply) => {
     const { taskId } = request.params;
     try {
       const task = await prisma.codeswarmTask.findUnique({ where: { taskId } });
@@ -227,8 +227,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     }
   });
 
-  // POST /api/task/:taskId/dispatch — manual re-dispatch
-  server.post<{ Params: { taskId: string } }>('/api/task/:taskId/dispatch', async (request, reply) => {
+  // POST /api/codeswarm/task/:taskId/dispatch — manual re-dispatch
+  server.post<{ Params: { taskId: string } }>('/api/codeswarm/task/:taskId/dispatch', async (request, reply) => {
     const { taskId } = request.params;
     try {
       const task = await prisma.codeswarmTask.findUnique({ where: { taskId } });
@@ -244,8 +244,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     }
   });
 
-  // POST /api/task/:taskId/cancel
-  server.post<{ Params: { taskId: string } }>('/api/task/:taskId/cancel', async (request, reply) => {
+  // POST /api/codeswarm/task/:taskId/cancel
+  server.post<{ Params: { taskId: string } }>('/api/codeswarm/task/:taskId/cancel', async (request, reply) => {
     const { taskId } = request.params;
     try {
       await prisma.codeswarmTask.update({
@@ -258,8 +258,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     }
   });
 
-  // DELETE /api/task/batch
-  server.delete('/api/task/batch', async (request, reply) => {
+  // DELETE /api/codeswarm/task/batch
+  server.delete('/api/codeswarm/task/batch', async (request, reply) => {
     const body = request.body as { taskIds?: string[] };
     if (!body.taskIds?.length) {
       return reply.status(400).send({ error: 'Missing taskIds' });

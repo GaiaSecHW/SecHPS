@@ -1,9 +1,9 @@
 /**
  * Worker 节点管理路由
- * GET    /api/node/list
- * GET    /api/node/:nodeId
- * PATCH  /api/node/:nodeId
- * DELETE /api/node/:nodeId
+ * GET    /api/codeswarm/node/list
+ * GET    /api/codeswarm/node/:nodeId
+ * PATCH  /api/codeswarm/node/:nodeId
+ * DELETE /api/codeswarm/node/:nodeId
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../prisma.js';
@@ -11,16 +11,16 @@ import { logger } from '../logger.js';
 
 export function registerNodeRoutes(server: FastifyInstance): void {
 
-  // GET /api/node/list
-  server.get('/api/node/list', async () => {
+  // GET /api/codeswarm/node/list
+  server.get('/api/codeswarm/node/list', async () => {
     const workers = await prisma.codeswarmWorker.findMany({
       orderBy: { lastHeartbeat: 'desc' },
     });
     return { workers };
   });
 
-  // GET /api/node/:nodeId
-  server.get<{ Params: { nodeId: string } }>('/api/node/:nodeId', async (request, reply) => {
+  // GET /api/codeswarm/node/:nodeId
+  server.get<{ Params: { nodeId: string } }>('/api/codeswarm/node/:nodeId', async (request, reply) => {
     const { nodeId } = request.params;
     const worker = await prisma.codeswarmWorker.findUnique({
       where: { nodeId },
@@ -39,8 +39,8 @@ export function registerNodeRoutes(server: FastifyInstance): void {
     return worker;
   });
 
-  // PATCH /api/node/:nodeId — update maxConcurrent
-  server.patch<{ Params: { nodeId: string } }>('/api/node/:nodeId', async (request, reply) => {
+  // PATCH /api/codeswarm/node/:nodeId — update maxConcurrent
+  server.patch<{ Params: { nodeId: string } }>('/api/codeswarm/node/:nodeId', async (request, reply) => {
     const { nodeId } = request.params;
     const body = request.body as { maxConcurrent?: number };
 
@@ -74,8 +74,8 @@ export function registerNodeRoutes(server: FastifyInstance): void {
     }
   });
 
-  // DELETE /api/node/:nodeId
-  server.delete<{ Params: { nodeId: string } }>('/api/node/:nodeId', async (request, reply) => {
+  // DELETE /api/codeswarm/node/:nodeId
+  server.delete<{ Params: { nodeId: string } }>('/api/codeswarm/node/:nodeId', async (request, reply) => {
     const { nodeId } = request.params;
     try {
       await prisma.codeswarmWorker.delete({ where: { nodeId } });

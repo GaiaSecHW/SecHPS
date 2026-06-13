@@ -1,8 +1,8 @@
 /**
  * Worker → Scheduler 路由
- * POST /api/worker/heartbeat — 心跳注册
- * POST /api/worker/event — 事件上报
- * POST /api/worker/result — 任务结果回调
+ * POST /api/codeswarm/worker/heartbeat — 心跳注册
+ * POST /api/codeswarm/worker/event — 事件上报
+ * POST /api/codeswarm/worker/result — 任务结果回调
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma, withDeadlockRetry } from '../prisma.js';
@@ -11,8 +11,8 @@ import { logger } from '../logger.js';
 
 export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): void {
 
-  // POST /api/worker/heartbeat
-  server.post('/api/worker/heartbeat', async (request, reply) => {
+  // POST /api/codeswarm/worker/heartbeat
+  server.post('/api/codeswarm/worker/heartbeat', async (request, reply) => {
     const body = request.body as {
       nodeId: string;
       maxConcurrent: number;
@@ -88,8 +88,8 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
     }
   });
 
-  // POST /api/worker/event
-  server.post('/api/worker/event', async (request, reply) => {
+  // POST /api/codeswarm/worker/event
+  server.post('/api/codeswarm/worker/event', async (request, reply) => {
     const body = request.body as {
       taskId: string;
       nodeId: string;
@@ -166,8 +166,8 @@ export function registerWorkerRoutes(server: FastifyInstance, dispatcher: any): 
     }
   });
 
-  // POST /api/worker/result
-  server.post('/api/worker/result', async (request, reply) => {
+  // POST /api/codeswarm/worker/result
+  server.post('/api/codeswarm/worker/result', async (request, reply) => {
     const body = request.body as {
       taskId: string;
       nodeId: string;

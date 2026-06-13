@@ -66,7 +66,7 @@ const STATE_FILTERS = [
 ] as const;
 
 export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: TaskResultViewerProps) {
-  const { data, loading, error, refetch } = useApiFetch<TasksResponse>('/api/task/list');
+  const { data, loading, error, refetch } = useApiFetch<TasksResponse>('/api/codeswarm/task/list');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [eventFilter, setEventFilter] = useState<string>('all');
@@ -86,7 +86,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
       setTaskEvents(prev => ({ ...prev, [expandedTask]: taskFromList.events as any[] }));
       return;
     }
-    fetch(`/api/task/${expandedTask}`)
+    fetch(`/api/codeswarm/task/${expandedTask}`)
       .then(res => res.json())
       .then(apiData => { if (apiData.events) setTaskEvents(prev => ({ ...prev, [expandedTask]: apiData.events })); })
       .catch(console.error);
@@ -110,7 +110,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     if (!confirm('确定要删除这个任务吗？')) return;
     setDeletingTask(taskId);
     try {
-      const resp = await fetch(`/api/task/${taskId}`, { method: 'DELETE' });
+      const resp = await fetch(`/api/codeswarm/task/${taskId}`, { method: 'DELETE' });
       if (resp.ok) { toast.success('任务已删除'); refetch(); onRefresh(); }
       else toast.error('删除失败');
     } catch { toast.error('删除失败'); }

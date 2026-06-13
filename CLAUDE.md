@@ -81,7 +81,7 @@ bash scripts/dev.sh         # 开发环境初始化
 ### 调度流程
 
 ```
-外部平台/用户 → POST /api/task/create → Scheduler
+外部平台/用户 → POST /api/codeswarm/task/create → Scheduler
   → Redis Stream (codeswarm:task:queue) → Dispatcher 消费
   → 选择可用 Worker → 两阶段原子分发
   → Worker 拉取执行 → Agent Runner (OpenCode/Claude Code)
@@ -92,11 +92,11 @@ bash scripts/dev.sh         # 开发环境初始化
 
 | 路由组 | 前缀 | 说明 |
 |--------|------|------|
-| Worker | `/api/worker/*` | 心跳、事件上报、结果回调 |
-| Task | `/api/task/*` | 任务创建、查询、取消、重试（支持 Tool 调度模式） |
-| Nodes | `/api/nodes/*` | Worker 节点管理 |
-| Stream | `/api/stream/*` | SSE 事件流推送 |
-| Platform | `/api/platform/*` | 平台状态查询（预留） |
+| Worker | `/api/codeswarm/worker/*` | 心跳、事件上报、结果回调 |
+| Task | `/api/codeswarm/task/*` | 任务创建、查询、取消、重试（支持 Tool 调度模式） |
+| Nodes | `/api/codeswarm/nodes/*` | Worker 节点管理 |
+| Stream | `/api/codeswarm/stream/*` | SSE 事件流推送 |
+| Platform | `/api/codeswarm/platform/*` | 平台状态查询（预留） |
 | Debug UI | `/debug/*` | SPA 调试面板 |
 | Health | `/health` | 健康检查 |
 | Metrics | `/metrics` | Prometheus 指标 |

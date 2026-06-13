@@ -2,7 +2,7 @@
  * API 工具 — 直接调用 Scheduler 服务
  *
  * 路径重映射：前端组件原来调用 /api/codeswarm/*（Next.js 代理），
- * 现在直接调用 Scheduler 的 /api/task/*、/api/node/* 等路径。
+ * 现在直接调用 Scheduler 的 /api/codeswarm/task/*、/api/codeswarm/node/* 等路径。
  */
 
 /** 从 API 响应中提取错误消息 */

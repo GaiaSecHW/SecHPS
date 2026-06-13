@@ -106,7 +106,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   useEffect(() => {
     if (!currentTaskId) return;
 
-    const eventSource = new EventSource(`/api/task/${currentTaskId}/stream`);
+    const eventSource = new EventSource(`/api/codeswarm/task/${currentTaskId}/stream`);
 
     eventSource.onmessage = (event) => {
       try {
@@ -204,7 +204,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
   const fetchWorkers = async () => {
     try {
-      const response = await fetch('/api/node/list');
+      const response = await fetch('/api/codeswarm/node/list');
       if (response.ok) {
         const data = await response.json();
         setWorkerOptions(data.workers || []);
@@ -266,7 +266,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         targetProduct: form.targetProduct || undefined,
       };
 
-      const resp = await fetch('/api/task/submit', {
+      const resp = await fetch('/api/codeswarm/task/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

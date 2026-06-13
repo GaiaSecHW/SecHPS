@@ -25,7 +25,7 @@ interface WorkersResponse {
 }
 
 export function WorkerNodesTable() {
-  const { data, loading, error, refetch } = useApiFetch<WorkersResponse>('/api/node/list');
+  const { data, loading, error, refetch } = useApiFetch<WorkersResponse>('/api/codeswarm/node/list');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [editingNode, setEditingNode] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<number>(0);
@@ -34,7 +34,7 @@ export function WorkerNodesTable() {
     if (!confirm('确定要删除这个 Worker 节点吗？')) return;
     setDeleting(nodeId);
     try {
-      const resp = await fetch(`/api/node/${nodeId}`, { method: 'DELETE' });
+      const resp = await fetch(`/api/codeswarm/node/${nodeId}`, { method: 'DELETE' });
       if (resp.ok) { toast.success('节点已删除'); refetch(); }
       else toast.error('删除失败');
     } catch { toast.error('删除失败'); }
@@ -43,7 +43,7 @@ export function WorkerNodesTable() {
 
   const handleSaveConcurrent = async (nodeId: string) => {
     try {
-      const resp = await fetch(`/api/node/${nodeId}`, {
+      const resp = await fetch(`/api/codeswarm/node/${nodeId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ maxConcurrent: editValue }),

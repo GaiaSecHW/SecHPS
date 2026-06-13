@@ -1,13 +1,13 @@
 /**
  * SSE 事件流路由
- * GET /api/task/:taskId/stream
+ * GET /api/codeswarm/task/:taskId/stream
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../prisma.js';
 
 export function registerStreamRoutes(server: FastifyInstance): void {
 
-  server.get<{ Params: { taskId: string } }>('/api/task/:taskId/stream', async (request, reply) => {
+  server.get<{ Params: { taskId: string } }>('/api/codeswarm/task/:taskId/stream', async (request, reply) => {
     const { taskId } = request.params;
 
     // Set SSE headers

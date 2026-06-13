@@ -74,12 +74,12 @@ export default function WorkerLogsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { data: tasksData, loading: tasksLoading, refetch: refetchTasks } = useApiFetch<{ tasks: Task[] }>('/api/task/list');
+  const { data: tasksData, loading: tasksLoading, refetch: refetchTasks } = useApiFetch<{ tasks: Task[] }>('/api/codeswarm/task/list');
 
   // Fetch task detail + events when selecting a task
   useEffect(() => {
     if (selectedTaskId) {
-      fetch(`/api/task/${selectedTaskId}`)
+      fetch(`/api/codeswarm/task/${selectedTaskId}`)
         .then(res => res.json())
         .then(data => {
           if (data.taskId) {
@@ -111,7 +111,7 @@ export default function WorkerLogsPage() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     if (autoRefresh && selectedTaskId) {
       intervalRef.current = setInterval(() => {
-        fetch(`/api/task/${selectedTaskId}`)
+        fetch(`/api/codeswarm/task/${selectedTaskId}`)
           .then(res => res.json())
           .then(data => { if (data.taskId || data.events) { setTaskDetail(data as TaskDetail); setEvents(data.events || []); } })
           .catch(console.error);

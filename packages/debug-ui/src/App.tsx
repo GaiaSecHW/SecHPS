@@ -28,8 +28,8 @@ const API_DOCS: { category: string; endpoints: ApiEndpoint[] }[] = [
   {
     category: '任务管理',
     endpoints: [
-      { method: 'GET', path: '/api/task/list', desc: '获取任务列表', response: [{ name: 'tasks', type: 'Task[]', desc: '任务数组' }] },
-      { method: 'POST', path: '/api/task/submit', desc: '提交任务', requestBody: [
+      { method: 'GET', path: '/api/codeswarm/task/list', desc: '获取任务列表', response: [{ name: 'tasks', type: 'Task[]', desc: '任务数组' }] },
+      { method: 'POST', path: '/api/codeswarm/task/submit', desc: '提交任务', requestBody: [
         { name: 'instruction', type: 'string', required: true, desc: 'AI 执行指令' },
         { name: 'engine', type: 'string', desc: '执行引擎 (opencode/claudecode)' },
         { name: 'projectPath', type: 'string', desc: '项目路径' },
@@ -56,34 +56,34 @@ const API_DOCS: { category: string; endpoints: ApiEndpoint[] }[] = [
         { name: 'workspacePath', type: 'string', desc: '工作区路径' },
         { name: 'queued', type: 'boolean', desc: '是否已入队' },
       ] },
-      { method: 'GET', path: '/api/task/:taskId', desc: '获取任务详情 (含事件)', response: [{ name: 'task', type: 'Task & {events: Event[]}', desc: '任务对象' }] },
-      { method: 'DELETE', path: '/api/task/:taskId', desc: '删除任务', response: [{ name: 'success', type: 'boolean', desc: '是否成功' }] },
-      { method: 'GET', path: '/api/task/:taskId/stream', desc: 'SSE 实时事件流', response: [{ name: 'SSE', type: 'text/event-stream', desc: '实时事件' }] },
+      { method: 'GET', path: '/api/codeswarm/task/:taskId', desc: '获取任务详情 (含事件)', response: [{ name: 'task', type: 'Task & {events: Event[]}', desc: '任务对象' }] },
+      { method: 'DELETE', path: '/api/codeswarm/task/:taskId', desc: '删除任务', response: [{ name: 'success', type: 'boolean', desc: '是否成功' }] },
+      { method: 'GET', path: '/api/codeswarm/task/:taskId/stream', desc: 'SSE 实时事件流', response: [{ name: 'SSE', type: 'text/event-stream', desc: '实时事件' }] },
     ],
   },
   {
     category: '节点管理',
     endpoints: [
-      { method: 'GET', path: '/api/node/list', desc: '获取 Worker 节点列表', response: [{ name: 'workers', type: 'Worker[]', desc: '节点数组' }] },
-      { method: 'GET', path: '/api/node/:nodeId', desc: '获取节点详情', response: [{ name: 'worker', type: 'Worker', desc: '节点对象' }] },
-      { method: 'PATCH', path: '/api/node/:nodeId', desc: '更新节点配置', requestBody: [{ name: 'maxConcurrent', type: 'number', desc: '最大并发数 (1-50)' }], response: [{ name: 'success', type: 'boolean', desc: '是否成功' }] },
-      { method: 'DELETE', path: '/api/node/:nodeId', desc: '删除节点', response: [{ name: 'success', type: 'boolean', desc: '是否成功' }] },
+      { method: 'GET', path: '/api/codeswarm/node/list', desc: '获取 Worker 节点列表', response: [{ name: 'workers', type: 'Worker[]', desc: '节点数组' }] },
+      { method: 'GET', path: '/api/codeswarm/node/:nodeId', desc: '获取节点详情', response: [{ name: 'worker', type: 'Worker', desc: '节点对象' }] },
+      { method: 'PATCH', path: '/api/codeswarm/node/:nodeId', desc: '更新节点配置', requestBody: [{ name: 'maxConcurrent', type: 'number', desc: '最大并发数 (1-50)' }], response: [{ name: 'success', type: 'boolean', desc: '是否成功' }] },
+      { method: 'DELETE', path: '/api/codeswarm/node/:nodeId', desc: '删除节点', response: [{ name: 'success', type: 'boolean', desc: '是否成功' }] },
     ],
   },
   {
     category: 'Worker 回调',
     endpoints: [
-      { method: 'POST', path: '/api/worker/heartbeat', desc: 'Worker 心跳上报', requestBody: [
+      { method: 'POST', path: '/api/codeswarm/worker/heartbeat', desc: 'Worker 心跳上报', requestBody: [
         { name: 'nodeId', type: 'string', required: true, desc: '节点唯一标识' },
         { name: 'maxConcurrent', type: 'number', desc: '最大并发数' },
         { name: 'currentTasks', type: 'number', desc: '当前任务数' },
         { name: 'address', type: 'string', desc: 'Worker 地址' },
       ]},
-      { method: 'POST', path: '/api/worker/event', desc: 'Worker 事件回调', requestBody: [
+      { method: 'POST', path: '/api/codeswarm/worker/event', desc: 'Worker 事件回调', requestBody: [
         { name: 'taskId', type: 'string', required: true, desc: '任务 ID' },
         { name: 'events', type: 'Event[]', required: true, desc: '事件数组' },
       ]},
-      { method: 'POST', path: '/api/worker/result', desc: 'Worker 结果回调', requestBody: [
+      { method: 'POST', path: '/api/codeswarm/worker/result', desc: 'Worker 结果回调', requestBody: [
         { name: 'taskId', type: 'string', required: true, desc: '任务 ID' },
         { name: 'status', type: 'string', required: true, desc: '状态 (completed/failed)' },
         { name: 'result', type: 'object', desc: '执行结果' },
@@ -95,8 +95,8 @@ const API_DOCS: { category: string; endpoints: ApiEndpoint[] }[] = [
 export default function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
-  const { data: tasksData, refetch: refetchTasks } = useApiFetch<TasksResponse>('/api/task/list');
-  const { data: workersData } = useApiFetch<WorkersResponse>('/api/node/list');
+  const { data: tasksData, refetch: refetchTasks } = useApiFetch<TasksResponse>('/api/codeswarm/task/list');
+  const { data: workersData } = useApiFetch<WorkersResponse>('/api/codeswarm/node/list');
 
   const handleTaskCreated = (taskId: string) => {
     setSelectedTaskId(taskId);

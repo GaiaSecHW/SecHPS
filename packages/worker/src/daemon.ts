@@ -460,7 +460,7 @@ this.server.get('/health', async () => ({
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (this.workerToken) headers.Authorization = `Bearer ${this.workerToken}`;
 
-      const resp = await fetch(`${this.config.schedulerUrl}/api/worker/heartbeat`, {
+      const resp = await fetch(`${this.config.schedulerUrl}/api/codeswarm/worker/heartbeat`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -789,7 +789,7 @@ this.server.get('/health', async () => ({
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const response = await fetch(`${callbackUrl}/api/worker/event`, {
+        const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
@@ -827,7 +827,7 @@ this.server.get('/health', async () => ({
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const resp = await fetch(`${callbackUrl}/api/worker/result`, {
+        const resp = await fetch(`${callbackUrl}/api/codeswarm/worker/result`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(result),

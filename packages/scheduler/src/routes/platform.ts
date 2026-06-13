@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 
 export function registerPlatformRoutes(server: FastifyInstance): void {
   // 预留：未来可用于平台主动查询 Scheduler 状态
-  server.get('/api/platform/status', async () => {
+  server.get('/api/codeswarm/platform/status', async () => {
     return {
       service: 'codeswarm-scheduler',
       version: '0.1.0',
