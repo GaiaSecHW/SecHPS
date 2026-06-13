@@ -105,11 +105,7 @@ function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: 
       ? `${prefix} ${line.slice(0, 4000)}... <truncated ${line.length - 4000} chars>`
       : `${prefix} ${line}`;
 
-    if (stream === 'stderr') {
-      logger.taskWarn(taskId, LOG_MODULES.PROCESS, message);
-    } else {
-      logger.taskInfo(taskId, LOG_MODULES.PROCESS, message);
-    }
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, message);
   }
 }
 
