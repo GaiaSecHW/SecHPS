@@ -24,6 +24,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
       callbackUrl?: string;
       workspacePath?: string;
       projectPath?: string;
+      agentPath?: string;
       engine?: string;
       agent?: string;
       model?: string;
@@ -86,6 +87,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             instruction: body.instruction,
             workspacePath,
             projectPath: body.projectPath || null,
+            agentPath: body.agentPath || null,
             engine: body.engine || null,
             agent: body.agent || null,
             model: body.model || null,
@@ -148,7 +150,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
         select: {
           id: true, taskId: true, state: true, instruction: true,
           engine: true, agent: true, model: true,
-          platformTaskId: true, workspacePath: true,
+          platformTaskId: true, workspacePath: true, agentPath: true,
           startedAt: true, completedAt: true, createdAt: true,
         },
       }),

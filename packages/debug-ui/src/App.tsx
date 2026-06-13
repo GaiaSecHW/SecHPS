@@ -33,6 +33,7 @@ const API_DOCS: { category: string; endpoints: ApiEndpoint[] }[] = [
         { name: 'instruction', type: 'string', required: true, desc: 'AI 执行指令' },
         { name: 'engine', type: 'string', desc: '执行引擎 (opencode/claudecode)' },
         { name: 'projectPath', type: 'string', desc: '项目路径' },
+        { name: 'agentPath', type: 'string', desc: 'Agent 目录路径，Worker 会复制到任务工作区' },
         { name: 'workspacePath', type: 'string', desc: '工作空间路径' },
         { name: 'model', type: 'string', desc: 'AI 模型名称 (如 MiniMax-M2.7, DeepSeek-V3)' },
         { name: 'apiBaseUrl', type: 'string', desc: '自定义 API endpoint URL (OpenAI-compatible routers)' },

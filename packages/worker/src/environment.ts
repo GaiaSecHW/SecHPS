@@ -167,6 +167,25 @@ export class EnvironmentFactory {
     ]);
   }
 
+  private copyAgentPathIntoWorkspace(agentPath: string | undefined, workspacePath: string, progress: BuildProgressCallback): void {
+    if (!agentPath) return;
+
+    const sourcePath = mapRemotePathToLocal(agentPath);
+    progress(`拷贝 agentPath: ${agentPath} -> ${workspacePath}`);
+
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`Agent path does not exist: ${agentPath}`);
+    }
+    if (!fs.statSync(sourcePath).isDirectory()) {
+      throw new Error(`Agent path is not a directory: ${agentPath}`);
+    }
+
+    fs.cpSync(sourcePath, workspacePath, {
+      recursive: true,
+      filter: this.excludeNodeModulesFilter,
+    });
+  }
+
   /**
    * Build an isolated workspace for a task.
    * Priority: workspacePath (NFS) > projectPath (local copy)
@@ -198,6 +217,9 @@ export class EnvironmentFactory {
         progress(`PVC 目录不存在，自动创建: ${localWorkspacePath}`);
         fs.mkdirSync(localWorkspacePath, { recursive: true });
       }
+
+      // Copy agent directory before resolving instruction/opencode config.
+      this.copyAgentPathIntoWorkspace(payload.agentPath, localWorkspacePath, progress);
 
       // Check workspace permissions for NFS passthrough mode
       this.checkWorkspacePermissions(localWorkspacePath);
@@ -349,6 +371,7 @@ export class EnvironmentFactory {
       }
       progress(`Step 2: 拷贝项目文件...`);
       fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
+      this.copyAgentPathIntoWorkspace(payload.agentPath, workspacePath, progress);
 
       // Step 3: Create .opencode/skills/ subdirectory
       progress(`Step 3: 创建技能目录`);

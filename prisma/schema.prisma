@@ -17,6 +17,7 @@ model CodeswarmTask {
   state                 String    @default("queued") // queued/dispatched/building/running/completed/failed/cancelled
   instruction           String?
   projectPath           String?
+  agentPath             String?
   workspacePath         String?
   gitUrl                String?
   gitRef                String?

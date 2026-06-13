@@ -12,6 +12,7 @@ interface Task {
   state: string;
   instruction: string;
   projectPath: string | null;
+  agentPath: string | null;
   workspacePath: string | null;
   agent: string | null;
   skills: any;
@@ -237,11 +238,12 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       <div><span className="text-gray-500">Model:</span><span className="ml-2">{task.model || '-'}</span></div>
                     </div>
                     {task.projectPath && <div className="text-sm"><span className="text-gray-500">Project:</span><code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">{task.projectPath}</code></div>}
+                    {task.agentPath && <div className="text-sm"><span className="text-gray-500">Agent Path:</span><code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">{task.agentPath}</code></div>}
                     {task.workspacePath && <div className="text-sm"><span className="text-gray-500">Workspace:</span><code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">{task.workspacePath}</code></div>}
 
                     {/* Input Params */}
                     {(() => {
-                      const params = { instruction: task.instruction, engine: task.engine, agent: task.agent, projectPath: task.projectPath, model: task.model };
+                      const params = { instruction: task.instruction, engine: task.engine, agent: task.agent, projectPath: task.projectPath, agentPath: task.agentPath, model: task.model };
                       const hasParams = Object.values(params).some(v => v !== null && v !== undefined);
                       if (!hasParams) return null;
                       return (

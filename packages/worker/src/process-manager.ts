@@ -124,6 +124,16 @@ function extractOpencodeSessionId(stderr: string): string | null {
   return match?.[1] ?? null;
 }
 
+export function extractOpencodeAssistantText(messages: OpencodeExportMessage[]): string {
+  const assistantMessages = messages.filter(message => message.info?.role === 'assistant');
+  const lastAssistant = assistantMessages[assistantMessages.length - 1];
+  return (lastAssistant?.parts || [])
+    .filter(part => part.type === 'text' && typeof part.text === 'string')
+    .map(part => part.text)
+    .join('\n')
+    .trim();
+}
+
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
 

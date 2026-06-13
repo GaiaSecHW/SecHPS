@@ -178,6 +178,7 @@ export class CodeswarmDispatcher {
     taskId: string;
     instruction?: string;
     projectPath?: string;
+    agentPath?: string;
     workspacePath?: string;
     gitUrl?: string;
     gitRef?: string;
@@ -209,6 +210,7 @@ export class CodeswarmDispatcher {
           taskId: payload.taskId,
           instruction: payload.instruction,
           projectPath: payload.projectPath,
+          agentPath: payload.agentPath,
           workspacePath: payload.workspacePath,
           gitUrl: payload.gitUrl,
           gitRef: payload.gitRef,
@@ -586,6 +588,7 @@ export class CodeswarmDispatcher {
       taskId: task.taskId,
       instruction: task.instruction || undefined,
       projectPath: task.projectPath || undefined,
+      agentPath: task.agentPath || undefined,
       workspacePath: task.workspacePath || undefined,
       skills: task.skills ? safeJsonParse(task.skills) : undefined,
       scripts: task.scripts ? safeJsonParse(task.scripts) : undefined,

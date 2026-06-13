@@ -71,6 +71,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     // Basic
     instruction: '',
     projectPath: '',
+    agentPath: '',
     workspacePath: '',
     apiKey: '',
     timeoutSec: 300,
@@ -243,6 +244,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         instruction: form.instruction,
         engine: form.engine,
         projectPath: form.projectPath || undefined,
+        agentPath: form.agentPath || undefined,
         workspacePath: form.workspacePath || undefined,
         apiKey: form.apiKey || undefined,
         timeoutSec: form.timeoutSec || undefined,
@@ -284,6 +286,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           ...prev,
           instruction: '',
           projectPath: '',
+          agentPath: '',
           workspacePath: '',
         }));
       } else {
@@ -375,10 +378,14 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             </div>
 
             {/* Basic Fields Grid */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">项目路径</label>
                 <input type="text" value={form.projectPath} onChange={(e) => setForm({ ...form, projectPath: e.target.value })} placeholder="/path/to/project" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Agent 路径</label>
+                <input type="text" value={form.agentPath} onChange={(e) => setForm({ ...form, agentPath: e.target.value })} placeholder="/data/agents/my-agent" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">工作区路径 (NFS)</label>

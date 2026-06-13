@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: worker
+  name: codeswarm-worker
   namespace: secflow-ns
   labels:
     app.kubernetes.io/name: worker
