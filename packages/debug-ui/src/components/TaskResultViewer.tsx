@@ -12,12 +12,28 @@ interface Task {
   state: string;
   instruction: string;
   projectPath: string | null;
-  agentPath: string | null;
   workspacePath: string | null;
+  gitUrl: string | null;
+  gitRef: string | null;
   agent: string | null;
   skills: any;
+  scripts: any;
   mcps: any;
   model: string | null;
+  apiKey: string | null;
+  apiBaseUrl: string | null;
+  timeoutSec: number | null;
+  preferredWorkerNodeId: string | null;
+  targetProduct: string | null;
+  maxTokens: number | null;
+  contextWindow: number | null;
+  env: any;
+  platformTaskId: string | null;
+  platformCallbackUrl: string | null;
+  toolId: string | null;
+  toolTaskId: string | null;
+  toolPath: string | null;
+  toolWorkDir: string | null;
   engine: string | null;
   result: string | null;
   reportContent: string | null;
@@ -47,6 +63,49 @@ function CopyButton({ text }: { text: string }) {
       {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? '已复制' : '复制'}</span>
     </button>
+  );
+}
+
+function parseJsonField(value: any) {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function buildInputParams(task: Task) {
+  const params = {
+    instruction: task.instruction,
+    engine: task.engine,
+    agent: task.agent,
+    model: task.model,
+    apiBaseUrl: task.apiBaseUrl,
+    apiKey: task.apiKey ? '***' : task.apiKey,
+    timeoutSec: task.timeoutSec,
+    maxTokens: task.maxTokens,
+    contextWindow: task.contextWindow,
+    projectPath: task.projectPath,
+    workspacePath: task.workspacePath,
+    gitUrl: task.gitUrl,
+    gitRef: task.gitRef,
+    skills: parseJsonField(task.skills),
+    scripts: parseJsonField(task.scripts),
+    mcps: parseJsonField(task.mcps),
+    env: parseJsonField(task.env),
+    preferredWorkerNodeId: task.preferredWorkerNodeId,
+    targetProduct: task.targetProduct,
+    platformTaskId: task.platformTaskId,
+    platformCallbackUrl: task.platformCallbackUrl,
+    toolId: task.toolId,
+    toolTaskId: task.toolTaskId,
+    toolPath: task.toolPath,
+    toolWorkDir: task.toolWorkDir,
+  };
+
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== null && value !== undefined && value !== ''),
   );
 }
 
@@ -238,18 +297,17 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       <div><span className="text-gray-500">Model:</span><span className="ml-2">{task.model || '-'}</span></div>
                     </div>
                     {task.projectPath && <div className="text-sm"><span className="text-gray-500">Project:</span><code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">{task.projectPath}</code></div>}
-                    {task.agentPath && <div className="text-sm"><span className="text-gray-500">Agent Path:</span><code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">{task.agentPath}</code></div>}
                     {task.workspacePath && <div className="text-sm"><span className="text-gray-500">Workspace:</span><code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">{task.workspacePath}</code></div>}
 
                     {/* Input Params */}
                     {(() => {
-                      const params = { instruction: task.instruction, engine: task.engine, agent: task.agent, projectPath: task.projectPath, agentPath: task.agentPath, model: task.model };
-                      const hasParams = Object.values(params).some(v => v !== null && v !== undefined);
+                      const params = buildInputParams(task);
+                      const hasParams = Object.keys(params).length > 0;
                       if (!hasParams) return null;
                       return (
                         <div>
                           <div className="flex items-center justify-between mb-2"><h4 className="text-sm font-medium text-gray-300">输入参数</h4><CopyButton text={JSON.stringify(params, null, 2)} /></div>
-                          <div className="bg-gray-900 rounded-lg p-3 max-h-48 overflow-auto"><pre className="text-xs text-cyan-400 font-mono whitespace-pre-wrap">{JSON.stringify(params, null, 2)}</pre></div>
+                          <div className="bg-gray-900 rounded-lg p-3 max-h-[70vh] overflow-auto"><pre className="text-xs text-cyan-400 font-mono whitespace-pre-wrap break-words">{JSON.stringify(params, null, 2)}</pre></div>
                         </div>
                       );
                     })()}

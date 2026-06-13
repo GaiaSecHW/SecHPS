@@ -102,8 +102,6 @@ export const TaskPayloadSchema = z.object({
   taskId: z.string(),
   instruction: z.string().nullable().optional(),
   projectPath: z.string().optional().default(''),
-  // Optional agent directory to copy into the task workspace before execution
-  agentPath: z.string().optional(),
   skills: z.array(z.string()).optional().default([]),
   scripts: z.array(z.string()).optional().default([]),
   mcps: z.array(z.union([MCPServiceSchema, z.string()])).optional().default([]),

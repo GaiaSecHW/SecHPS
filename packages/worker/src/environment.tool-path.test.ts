@@ -19,28 +19,28 @@ afterEach(() => {
   }
 });
 
-test('copies agentPath directory into provided workspace before resolving agent config', async () => {
+test('copies toolPath directory into provided workspace before resolving tool config', async () => {
   const workspacePath = tempDir('codeswarm-workspace-');
-  const agentPath = tempDir('codeswarm-agent-');
-  fs.writeFileSync(path.join(agentPath, 'instruction.txt'), 'instruction from agentPath');
-  fs.writeFileSync(path.join(agentPath, 'opencode.json'), JSON.stringify({ default_agent: 'agent-from-path' }));
+  const toolPath = tempDir('codeswarm-tool-');
+  fs.writeFileSync(path.join(toolPath, 'instruction.txt'), 'instruction from toolPath');
+  fs.writeFileSync(path.join(toolPath, 'opencode.json'), JSON.stringify({ default_agent: 'tool-from-path' }));
 
   const factory = new EnvironmentFactory({ workspaceBasePath: tempDir('codeswarm-base-') });
 
   const result = await factory.build({
-    taskId: 'task-agent-path',
+    taskId: 'task-tool-path',
     instruction: 'payload instruction',
     projectPath: '',
     skills: [],
     scripts: [],
     mcps: [],
     workspacePath,
-    agentPath,
+    toolPath,
   });
 
-  assert.equal(fs.readFileSync(path.join(workspacePath, 'instruction.txt'), 'utf-8'), 'instruction from agentPath');
+  assert.equal(fs.readFileSync(path.join(workspacePath, 'instruction.txt'), 'utf-8'), 'instruction from toolPath');
   assert.equal(fs.existsSync(path.join(workspacePath, 'opencode.json')), true);
   assert.equal(result.workspacePath, workspacePath);
-  assert.equal(result.instruction, 'instruction from agentPath');
-  assert.equal(result.agent, 'agent-from-path');
+  assert.equal(result.instruction, 'instruction from toolPath');
+  assert.equal(result.agent, 'tool-from-path');
 });

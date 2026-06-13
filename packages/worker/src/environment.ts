@@ -167,17 +167,17 @@ export class EnvironmentFactory {
     ]);
   }
 
-  private copyAgentPathIntoWorkspace(agentPath: string | undefined, workspacePath: string, progress: BuildProgressCallback): void {
-    if (!agentPath) return;
+  private copyToolPathIntoWorkspace(toolPath: string | undefined, workspacePath: string, progress: BuildProgressCallback): void {
+    if (!toolPath) return;
 
-    const sourcePath = mapRemotePathToLocal(agentPath);
-    progress(`拷贝 agentPath: ${agentPath} -> ${workspacePath}`);
+    const sourcePath = mapRemotePathToLocal(toolPath);
+    progress(`拷贝 toolPath: ${toolPath} -> ${workspacePath}`);
 
     if (!fs.existsSync(sourcePath)) {
-      throw new Error(`Agent path does not exist: ${agentPath}`);
+      throw new Error(`Tool path does not exist: ${toolPath}`);
     }
     if (!fs.statSync(sourcePath).isDirectory()) {
-      throw new Error(`Agent path is not a directory: ${agentPath}`);
+      throw new Error(`Tool path is not a directory: ${toolPath}`);
     }
 
     fs.cpSync(sourcePath, workspacePath, {
@@ -218,8 +218,8 @@ export class EnvironmentFactory {
         fs.mkdirSync(localWorkspacePath, { recursive: true });
       }
 
-      // Copy agent directory before resolving instruction/opencode config.
-      this.copyAgentPathIntoWorkspace(payload.agentPath, localWorkspacePath, progress);
+      // Copy tool directory before resolving instruction/opencode config.
+      this.copyToolPathIntoWorkspace(payload.toolPath, localWorkspacePath, progress);
 
       // Check workspace permissions for NFS passthrough mode
       this.checkWorkspacePermissions(localWorkspacePath);
@@ -371,7 +371,7 @@ export class EnvironmentFactory {
       }
       progress(`Step 2: 拷贝项目文件...`);
       fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
-      this.copyAgentPathIntoWorkspace(payload.agentPath, workspacePath, progress);
+      this.copyToolPathIntoWorkspace(payload.toolPath, workspacePath, progress);
 
       // Step 3: Create .opencode/skills/ subdirectory
       progress(`Step 3: 创建技能目录`);
