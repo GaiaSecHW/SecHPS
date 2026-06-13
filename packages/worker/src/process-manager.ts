@@ -95,6 +95,16 @@ interface RunState {
   currentSkill: string | null;
 }
 
+interface OpencodeExportMessage {
+  info?: {
+    role?: string;
+  };
+  parts?: Array<{
+    type?: string;
+    text?: string;
+  }>;
+}
+
 function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: string): void {
   const prefix = stream === 'stderr' ? '[opencode stderr]' : '[opencode stdout]';
   for (const rawLine of content.split(/\r?\n/)) {
@@ -107,6 +117,11 @@ function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: 
 
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, message);
   }
+}
+
+function extractOpencodeSessionId(stderr: string): string | null {
+  const match = stderr.match(/\bsession id=(ses_[^\s]+)/);
+  return match?.[1] ?? null;
 }
 
 export class ProcessManager {
@@ -336,6 +351,7 @@ export class ProcessManager {
       // cannot be interpreted. This eliminates command-injection risk that the
       // previous `bash -c "... '${escaped}'"` construction carried.
       const args = ['run', '--print-logs'];
+      if (agentName) args.push('--agent', agentName);
       const prompt = instruction?.trim() || agentName || '执行任务';
       args.push(prompt);
 
@@ -419,6 +435,23 @@ export class ProcessManager {
         }),
       ]);
 
+      if (result.exitCode === 0 && !result.stdout.trim()) {
+        const recovered = await this.recoverOpencodeAssistantText(taskId, state.stderr, workspace, env);
+        if (recovered) {
+          state.stdout = recovered;
+          result.stdout = recovered;
+          logger.taskInfo(taskId, LOG_MODULES.PROCESS, `[opencode recovered stdout] ${recovered}`);
+          logStream?.write(`\n[opencode recovered stdout]\n${recovered}\n`);
+          if (onEvent) {
+            onEvent({
+              type: 'agent_message_chunk',
+              content: recovered,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       // Timeout: SIGTERM first, then SIGKILL after grace period to guarantee
       // process death and avoid zombie processes consuming a slot forever.
       if (result.exitCode === 124 && childProcess && childProcess.exitCode === null) {
@@ -446,6 +479,85 @@ export class ProcessManager {
         try { logStream.end(); } catch { /* non-critical */ }
       }
     }
+  }
+
+  private async recoverOpencodeAssistantText(
+    taskId: string,
+    stderr: string,
+    workspace: string,
+    env: Record<string, string>,
+  ): Promise<string | null> {
+    const sessionId = extractOpencodeSessionId(stderr);
+    if (!sessionId) {
+      logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'opencode stdout empty and no session id found in stderr');
+      return null;
+    }
+
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `opencode stdout empty; exporting session ${sessionId}`);
+
+    return new Promise((resolve) => {
+      const proc = spawn('opencode', ['export', sessionId], {
+        cwd: workspace,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      let timeout: NodeJS.Timeout | null = null;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+
+        if (proc.exitCode !== 0) {
+          logger.taskWarn(taskId, LOG_MODULES.PROCESS, `opencode export failed with code=${proc.exitCode}: ${stderr.trim()}`);
+          resolve(null);
+          return;
+        }
+
+        try {
+          const exported = JSON.parse(stdout) as { messages?: OpencodeExportMessage[] };
+          const assistantMessages = (exported.messages || []).filter(message => message.info?.role === 'assistant');
+          const lastAssistant = assistantMessages[assistantMessages.length - 1];
+          const text = (lastAssistant?.parts || [])
+            .filter(part => part.type === 'text' && typeof part.text === 'string')
+            .map(part => part.text)
+            .join('\n')
+            .trim();
+
+          resolve(text || null);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.taskWarn(taskId, LOG_MODULES.PROCESS, `Failed to parse opencode export output: ${message}`);
+          resolve(null);
+        }
+      };
+
+      proc.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+      proc.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+      proc.on('error', (error) => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, `opencode export spawn error: ${error.message}`);
+        resolve(null);
+      });
+      proc.on('close', finish);
+      timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, `opencode export timed out for session ${sessionId}`);
+        try { proc.kill('SIGTERM'); } catch {}
+        resolve(null);
+      }, 30000);
+    });
   }
 
   async runOpencodeCommand(
