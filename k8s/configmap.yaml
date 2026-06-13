@@ -6,7 +6,7 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "8080"
-  WORKSPACE_BASE_PATH: "/mnt/workspace"
+  WORKSPACE_BASE_PATH: "/data/codeswarm-workspace"
   TASK_CLEANUP_RETENTION_DAYS: "30"
   LOG_LEVEL: "info"
   REDIS_URL: "redis://codeswarm-redis:6379"   # 指向集群内 Redis Service

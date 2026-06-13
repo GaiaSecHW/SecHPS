@@ -40,13 +40,11 @@ spec:
             - name: GRACEFUL_SHUTDOWN_TIMEOUT_MS
               value: "300000"
             - name: WORKSPACE_BASE_PATH
-              value: "/mnt/workspace"
+              value: "/data/codeswarm-workspace"
           envFrom:
             - secretRef:
                 name: codeswarm-secrets
           volumeMounts:
-            - name: workspace
-              mountPath: /mnt/workspace
             - name: fileserver
               mountPath: /data
           resources:
@@ -68,9 +66,6 @@ spec:
                 command: ["sh", "-c", "sleep 5"]   # 让 K8s 等待 endpoint 摘除
       terminationGracePeriodSeconds: 360   # 6min — 给 draining 留时间
       volumes:
-        - name: workspace
-          persistentVolumeClaim:
-            claimName: shared-workspace
         - name: fileserver
           persistentVolumeClaim:
             claimName: secflow-platform-fileserver-data-nfs-pvc

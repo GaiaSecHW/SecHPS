@@ -30,8 +30,6 @@ spec:
             - secretRef:
                 name: codeswarm-secrets
           volumeMounts:
-            - name: workspace
-              mountPath: /mnt/workspace
             - name: fileserver
               mountPath: /data
           resources:
@@ -54,9 +52,6 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
       volumes:
-        - name: workspace
-          persistentVolumeClaim:
-            claimName: shared-workspace
         - name: fileserver
           persistentVolumeClaim:
             claimName: secflow-platform-fileserver-data-nfs-pvc
