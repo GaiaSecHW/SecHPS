@@ -252,4 +252,140 @@ tail -f logs/codeswarm-dispatcher.log | grep -E "$TASK_ID|dispatch|Worker"
 2. 根据结果走向 Step 2 或 Step 3，按判决矩阵锁定根因
 3. 实在判定不了再走 Step 4 主动复现
 4. 根因锁定后开 Team 拆 A/B 方案修复
+
+
+------------------------------------------------------------
+九、差 1 槽位场景：cancel 流程 Semaphore 泄漏（最强嫌疑）
+------------------------------------------------------------
+
+【现象】
+  - 单 Worker，maxConcurrent=10
+  - UI 显示「运行中=9」（界面口径未确认是 WorkerNodesTable 的
+    currentTasks 还是任务列表 state='running' 计数）
+  - 还有多个 queued 任务不派发
+  - 关键特征：10-9=1，正好差 1 个槽位
+  - 操作史：用户曾点「停止」→「失败」界面点「重试」（cancel 链路）
+
+
+【根因机制（最强嫌疑）】
+  codeswarm/packages/worker/src/daemon.ts:239-268 的 /task/cancel handler
+  只调 cancelledTasks.add() + processMgr.terminate()，
+  不调 semaphore.release()，也不删 activeTasks。
+
+  而 Orchestrator 端 DELETE handler
+  （src/app/api/codeswarm/tasks/[taskId]/route.ts:118,126-132）
+  已经在 DB 端 currentTasks-1。
+
+  结果链路：
+    1. Orchestrator DB currentTasks: 10 → 9（递减）
+    2. Worker 进程内 Semaphore 仍占用 1 个槽位（available=0 但 max=10）
+    3. Worker 下次心跳上报 currentMax - available = 10
+    4. 心跳棘轮 GREATEST(currentTasks=9, reported=10) → DB 刷回 10
+    5. selectWorker 看到 currentTasks=10 >= maxConcurrent=10 → 拒绝派发
+    6. 永久卡 1 个槽位
+
+
+【一步实锤】
+
+  SQL（一条即可判决）：
+    SELECT
+      w."nodeId",
+      w."currentTasks" AS db_current,
+      w."maxConcurrent",
+      (SELECT COUNT(*) FROM "CodeswarmTask"
+       WHERE "workerId"=w.id
+         AND state IN ('dispatched','running','building')) AS actual_active,
+      (SELECT COUNT(*) FROM "CodeswarmTask"
+       WHERE "workerId"=w.id AND state='dispatched') AS stuck_dispatched
+    FROM "CodeswarmWorker" w
+    WHERE w.status='online';
+
+  Worker 真实 Semaphore 状态：
+    curl http://<worker-address>/health
+    关注返回里的 available 和 maxConcurrent 字段
+
+
+【判决矩阵】
+  db_current | actual_active | stuck_dispatched | Worker /health available | 结论
+  -----------+---------------+------------------+--------------------------+---------------------------
+  10         | 9             | 0                | 0                        | 根因 1 实锤（cancel Semaphore 泄漏）
+  10         | 9             | 0                | 1                        | 根因 2 实锤（心跳棘轮锁死，Worker 端正常）
+  10         | 10            | 1                | 0                        | 根因 3 实锤（dispatched 卡死，phase_start 未发）
+  9          | 9             | 0                | 1                        | DB 没满，走第四章 Stream 链路诊断
+
+
+【三条根因详解】
+
+  根因 1（最高概率）：cancel 流程在 Worker 端 Semaphore 泄漏
+    位置：codeswarm/packages/worker/src/daemon.ts:239-268
+    机制：Worker 处理 cancel 时只做 cancelledTasks.add(taskId)
+          + processMgr.terminate(taskId)，不调用 semaphore.release()，
+          也不删除 activeTasks。槽位要等到 executeTask 走到 success/catch 块
+          （daemon.ts:740-744 或 770-774）才释放。
+          但 Orchestrator 端 DELETE handler 已经在 route.ts:118
+          decrementWorkerMemoryLoad + route.ts:126-132 事务里 DB currentTasks-1。
+          下次心跳上报 currentMax-available=10 → 心跳棘轮把 DB 刷回 10
+          → 永久卡 1 个槽位。
+
+  根因 2：心跳棘轮 GREATEST 把瞬时虚高锁死
+    位置：src/app/api/codeswarm/worker/heartbeat/route.ts:67-81
+    机制：Worker 完成一个任务时存在时间窗——DB currentTasks 已 +1
+          （新任务分发，codeswarm-dispatcher.ts:191）但旧任务 postResult 未到。
+          Worker 心跳此时上报 currentMax-available=10。
+          GREATEST(currentTasks, reported) 把 DB 锁在 10。
+          注释 line 60-62 自承认有毫秒级窗口且只能等下一个 30s 心跳自动修正。
+          但如果心跳上报值始终是 10（与根因 1 配合），就永远修不下来。
+
+  根因 3：dispatched→running 转换漏事件
+    位置：src/app/api/codeswarm/worker/event/route.ts:78-81
+    机制：只有 phase_start 且 eventData.phase==='executing' 才把 state
+          从 dispatched→running。session_created 事件 line 70-74 也能转。
+          如果 Worker 在 building 阶段崩溃 / opencode run 模式
+          不发 phase_start(executing)，任务永远卡 dispatched。
+          此时心跳 actualActive 子查询（route.ts:74）仍把 dispatched 算进去，
+          所以 currentTasks 不掉，但 UI 任务列表「运行中」过滤
+          （通常 state='running'）只算 9 个。
+
+
+【Worker 端 Semaphore.release() 全部路径审计】
+
+  位置                                  | 触发条件                                  | 是否可靠
+  -------------------------------------+------------------------------------------+-------------------
+  daemon.ts:175                         | 重复 taskId 拒收                          | 可靠（与 tryAcquire 同步）
+  daemon.ts:192                         | executeTask 异常外的兜底 finally          | 可靠
+  daemon.ts:317                         | stop() 优雅关停遍历 activeTasks           | 可靠
+  daemon.ts:742                         | executeTask try 块 success，postResult 后 | 可靠
+  daemon.ts:772                         | executeTask catch 块，postResult 后        | 可靠
+  daemon.ts:239-268 /task/cancel        | 缺失！只 terminate 不 release             | 泄漏
+  process-manager.ts:589-597 error 事件 | spawn error / exitCode null               | 可能泄漏（依赖 executeTask catch 兜底）
+
+
+【修复方案】
+
+  最小修复（根因 1 实锤后）：1 处改动
+
+    codeswarm/packages/worker/src/daemon.ts:239-268 的 /task/cancel handler 补：
+
+      if (this.activeTasks.has(taskId)) {
+        this.activeTasks.delete(taskId);
+        this.semaphore.release();   // 补这一行
+      }
+
+  更稳健方案：让 executeTask 的 finally 块（daemon.ts:183-194）感知 cancel 信号，
+  统一在退出路径 release，避免 cancel 路径与正常退出路径状态机分叉。
+
+
+------------------------------------------------------------
+十、两条 BUG 的关联
+------------------------------------------------------------
+  第八章场景（running=6/10）与本章场景（running=9/10）根因可能重叠：
+
+  - 第八章的 stop+retry 能成功 = cancel 路径触发了 Semaphore 泄漏
+    但 retry 走的是同步直发 API（POST /tasks/[id]/dispatch），
+    用 DB 真实值判断容量，绕过了 Worker 端泄漏的 Semaphore。
+
+  - 本章 cancel 泄漏是第八章 stop+retry 操作的副作用累积。
+
+  - 修复建议：第八章方案 A（Stream 链路 XACK 修复）+ 本章 cancel release 补丁
+    一起做，能根治两个场景。
 ============================================================
