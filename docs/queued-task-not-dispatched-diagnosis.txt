@@ -1,0 +1,255 @@
+============================================================
+CodeSwarm 排队任务不派发问题 — 确证诊断手册
+============================================================
+日期：2026-06-14
+分支：dev
+关联 commit：9db3333f（减容后 dispatched 卡死文档，仅文档未修代码）
+
+------------------------------------------------------------
+一、现象
+------------------------------------------------------------
+- 单 Worker，maxConcurrent=10
+- 界面显示「执行中=6」（实为 DB CodeswarmWorker.currentTasks 字段，
+  非真实 running 任务数；见 src/components/codeswarm/WorkerNodesTable.tsx:284-296）
+- queued 状态任务不进入派发
+- 把 queued 任务点「停止」→ 失败界面点「重试」后，任务能正常派发执行
+
+------------------------------------------------------------
+二、根因概述
+------------------------------------------------------------
+UI 的「重试」按钮调用 POST /api/codeswarm/tasks/[taskId]/dispatch，
+这是一条**完全同步直发**路径：
+  API → SQL 直接抢占 Worker 槽位 → HTTP POST /task → 失败事务回滚
+它绕过 Redis Stream，不被 NX 锁阻塞，不读 dispatcher 内存拓扑。
+
+而原本 queued 任务的派发走的是 **Redis Stream 链路**：
+  API submitTask → XADD → dispatchLoop(XREADGROUP)
+    → dispatchOne → selectWorker → sendTaskToWorker
+失败时：scheduleRetry (SET NX PX) → XADD 重投
+
+Stream 链路在多处存在「消息丢失/卡死」窗口，原 queued 任务
+只有走 retry API 这条独立路径才能重新触发。
+
+------------------------------------------------------------
+三、三条卡死路径（按可能性排序）
+------------------------------------------------------------
+
+【路径 #1】dispatchOne 失败时无条件 XACK，消息从 Stream 永久消失
+  位置：src/services/codeswarm-dispatcher.ts:517
+  机制：dispatchOne 返回 false（无 Worker / 容量满 / 1 秒回滚节流）
+        后仍然 xack。结果：Stream 消息没了，DB state 还是 queued，
+        只能等 scanDbQueuedTasks 30 秒兜底；兜底又走 scheduleRetry NX 锁。
+
+【路径 #2】scheduleRetry 的 NX 锁卡死窗口
+  位置：src/services/codeswarm-dispatcher.ts:133-148
+  机制：SET NX PX 5000 成功 → 进程在 XADD 之前崩溃/Redis 异常
+        → 锁写了，消息没进 Stream → 5 秒锁窗口内任何
+        scheduleRetry 都被静默丢弃（line 140 直接 return，无日志）
+        → 等 30 秒兜底再试。
+
+【路径 #3】dispatcher 内存 currentTasks 虚高，selectWorker 误判容量满
+  位置：src/services/codeswarm-dispatcher.ts:607-632（selectWorker）
+        +  onHeartbeat 内存更新 :337-338
+        +  daemon.ts:425 上报公式 currentMax - semaphore.available
+  机制：Worker 心跳上报值因 Semaphore 泄漏虚高，dispatcher 内存
+        currentTasks 跟着虚高 → 即使 DB 还有容量，selectWorker 跳过。
+
+------------------------------------------------------------
+四、诊断决策树（按顺序执行，5 分钟内可锁定）
+------------------------------------------------------------
+
+========== Step 1：Redis Stream 现状（决定走向） ==========
+
+# 取所有 queued 任务的 DB ID
+psql -c "SELECT id FROM \"CodeswarmTask\" WHERE state='queued';" > queued_ids.txt
+
+# Stream 里有多少消息
+redis-cli XLEN codeswarm:task:queue
+
+# Stream 里都有哪些 dbTaskId
+redis-cli XRANGE codeswarm:task:queue - + COUNT 100
+
+判决：
+  Stream 里有 queued 任务对应的 dbTaskId  → 跳 Step 3
+  Stream 里没有这些 dbTaskId（XLEN=0 或全是其他任务） → 走 Step 2
+
+
+========== Step 2：消息丢失路径判决（#1 vs #2） ==========
+
+# 1. NX 锁堆积情况
+redis-cli KEYS "codeswarm:task:retrying:*"
+for k in $(redis-cli KEYS "codeswarm:task:retrying:*"); do
+  echo "$k: $(redis-cli TTL $k)s"
+done
+
+# 2. dispatcher 进程是否在跑（consumeLoop 健康）
+ps -ef | grep -i codeswarm-dispatcher | grep -v grep
+
+# 3. 最近 10 分钟的 scheduleRetry / XACK 日志
+grep -E "scheduleRetry|XACK|dispatchOne|无可用 Worker" \
+  logs/codeswarm-dispatcher.log | tail -100
+
+判决矩阵：
+  + retrying:* 大量堆积 + TTL>0 + 日志频繁 scheduleRetry 但没「已分发到」
+    → 路径 #2 实锤（NX 锁卡死，XADD 没执行）
+
+  + retrying:* 几乎没有 + 日志有 dispatchOne 但后续既无「已分发到」也无 scheduleRetry
+    → 路径 #1 实锤（XACK 提前丢消息）
+
+  + retrying:* 正常（0-1 个）+ 日志频繁「无可用 Worker」
+    → 路径 #3 实锤（内存虚高）
+
+
+========== Step 3：消息在 Stream 但不消费 ==========
+
+# 1. pending 消息（被消费者持有但未 ACK）
+redis-cli XPENDING codeswarm:task:queue dispatcher
+
+# 2. 消费者状态（idle 时间长说明卡了）
+redis-cli XINFO CONSUMERS codeswarm:task:queue dispatcher
+
+# 3. DB 真实容量 vs dispatcher 内存判断
+psql -c "
+SELECT
+  w.\"currentTasks\" AS db_current,
+  w.\"maxConcurrent\",
+  (SELECT COUNT(*) FROM \"CodeswarmTask\" t
+   WHERE t.\"workerId\" = w.id
+     AND t.state IN ('dispatched','running','building')) AS actual_active
+FROM \"CodeswarmWorker\" w;
+"
+
+# 4. dispatcher 日志的派发失败原因
+grep -E "无可用 Worker|selectWorker|currentTasks.*maxConcurrent|心跳" \
+  logs/codeswarm-dispatcher.log | tail -50
+
+判决矩阵：
+  XPENDING>0 且 idle 很大 + db_current = actual_active
+    → consumeLoop 卡死（dispatchLoop 死循环或异常）
+
+  XPENDING=0 + db_current < max 但日志频繁「无可用 Worker」
+    → 路径 #3 实锤（内存虚高，selectWorker 用了脏内存值）
+
+  XPENDING=0 + XINFO 活跃 + db_current = actual_active < max
+    → dispatchLoop 没把消息读出来（consumer group 异常）
+
+
+========== Step 4：主动复现（最强证据） ==========
+
+# 1. 记录一个已知 queued 任务的 ID
+TASK_ID=$(psql -t -c "SELECT id FROM \"CodeswarmTask\" WHERE state='queued' LIMIT 1;")
+echo "Task: $TASK_ID"
+
+# 2. 手动注入一条 Stream 消息
+redis-cli XADD codeswarm:task:queue "*" dbTaskId "$TASK_ID"
+
+# 3. 实时观察 Stream 和 DB
+watch -n 1 "redis-cli XLEN codeswarm:task:queue && \
+  psql -t -c \"SELECT state FROM \\\"CodeswarmTask\\\" WHERE id='$TASK_ID';\""
+
+# 4. 同步开 dispatcher 实时日志
+tail -f logs/codeswarm-dispatcher.log | grep -E "$TASK_ID|dispatch|Worker"
+
+判决：
+  手动 XADD 后任务立即派发
+    → 原本是 Stream 没消息（路径 #1 或 #2）
+
+  手动 XADD 后任务不派发 + 日志显示「无可用 Worker」
+    → 路径 #3 实锤
+
+  手动 XADD 后任务不派发 + 日志完全没动静
+    → consumeLoop 死了
+
+
+------------------------------------------------------------
+五、预判与最强嫌疑
+------------------------------------------------------------
+基于「stop + retry 能成功」这个铁证：
+  - DB 容量、Worker 链路均正常
+  - 唯一能解释「原任务不派发」的是 Stream 里根本没消息了
+  - Stream 没消息的最大嫌疑是 dispatchOne 失败时无条件 XACK
+
+最强嫌疑：**路径 #1（XACK 提前丢失消息）**
+位置：src/services/codeswarm-dispatcher.ts:517
+
+实锤条件：Step 1 中 Stream XLEN=0 但 DB 有 queued 任务
+
+
+------------------------------------------------------------
+六、修复方向（待根因确认后实施）
+------------------------------------------------------------
+
+【方案 A：最小止血（2 处改动）】
+  1. dispatchOne 失败时不 XACK，让消息留在 PEL，
+     30 秒后 recoverPendingMessages 自动重投
+     位置：src/services/codeswarm-dispatcher.ts:517
+  2. scheduleRetry SET NX 失败时记日志 + 延长 setTimeout 重排，
+     不再静默 return
+     位置：src/services/codeswarm-dispatcher.ts:140
+
+【方案 B：中等修复（解决根因）】
+  3. scanDbQueuedTasks 直接调 submitTask 而非 scheduleRetry，
+     绕过 NX 锁
+     位置：src/services/codeswarm-dispatcher.ts:891
+  4. 取消 take: 50 限制，避免大批 queued 任务排队等扫
+     位置：src/services/codeswarm-dispatcher.ts:884
+
+【方案 C：架构性修复（长期）】
+  5. 统一派发入口：让 retry API 也走 dispatcher，
+     或让 dispatcher 失败时也走 retry API 的同步直发路径。
+     当前两条路径并存是 BUG 温床。
+
+
+------------------------------------------------------------
+七、关键文件清单
+------------------------------------------------------------
+- src/services/codeswarm-dispatcher.ts
+    :5       Redis Stream key 常量
+    :121     submitTask 入口
+    :133-148 scheduleRetry（NX 锁卡死点 #2）
+    :189-202 sendTaskToWorker 内事务抢占
+    :297-313 503/网络失败回滚路径
+    :328-350 onHeartbeat（内存虚高点 #3）
+    :337-338 Math.min 截断上报值
+    :450-492 recoverPendingMessages（30 秒兜底）
+    :495-544 dispatchLoop（XREADGROUP）
+    :547-604 dispatchOne（XACK 提前丢消息 #1，关键 :517）
+    :607-632 selectWorker（容量判断）
+    :877-900 scanDbQueuedTasks（30 秒兜底，:884 take:50 限制）
+    :903-944 checkStuckDispatchedTasks（30 分钟阈值）
+    :1135-1147 所有定时器注册点
+
+- src/app/api/codeswarm/tasks/[taskId]/dispatch/route.ts
+    :23-208  同步直发 API（retry 按钮走的路径）
+    :66-72   SQL 抢占 Worker 槽位
+    :76-84   state: queued → dispatched
+    :137-148 HTTP POST /task
+    :211-225 rollbackDispatch（失败回滚）
+
+- src/app/api/codeswarm/tasks/[taskId]/route.ts
+    :69-149  DELETE（stop 按钮走的路径）
+    :112-121 currentTasks 递减 + tryDispatchNext()
+
+- src/app/api/codeswarm/worker/heartbeat/route.ts
+    :67-81   LEAST/GREATEST 心跳棘轮（虚假容量窗口）
+
+- codeswarm/packages/worker/src/daemon.ts
+    :425     心跳上报公式 currentMax - semaphore.available
+    :740-744 postResult 后 semaphore.release()
+
+- codeswarm/packages/worker/src/semaphore.ts
+    :16-22   resize() clamp 逻辑
+    :29-30   release() 不参考真实 running
+
+- src/components/codeswarm/WorkerNodesTable.tsx
+    :284-296 UI 用 DB currentTasks 渲染进度条（非真实 running）
+
+
+------------------------------------------------------------
+八、执行建议
+------------------------------------------------------------
+1. 先跑 Step 1 三条命令，把 Stream 内容和 DB queued 任务列表对比
+2. 根据结果走向 Step 2 或 Step 3，按判决矩阵锁定根因
+3. 实在判定不了再走 Step 4 主动复现
+4. 根因锁定后开 Team 拆 A/B 方案修复
+============================================================
