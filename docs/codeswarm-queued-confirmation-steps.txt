@@ -178,6 +178,71 @@ redis-cli KEYS 'codeswarm:task:retrying:*'
 - 40 秒内 retrying 短暂出现但 Stream 仍为空：scheduleRetry 被触发但 XADD 失败或定时器/进程生命周期中断。
 - Stream 出现消息后又归零，DB queued 不变：dispatchLoop 消费失败后 XACK，且重试补偿没有稳定恢复。
 
+确证步骤四：异常环境只查两个关键点
+====================================
+适用场景：
+- 两套环境代码完全一样，一套正常，一套异常。
+- 异常环境执行以下命令一直为空：
+
+redis-cli XLEN codeswarm:task:queue
+redis-cli XINFO GROUPS codeswarm:task:queue
+redis-cli KEYS 'codeswarm:task:retrying:*'
+
+此时不要继续泛查日志，优先确认 UI queued 是否真等于 DB queued，以及管理员手工重试是否真的触发 submitTask/XADD。
+
+关键点一：确认 UI queued 是否真等于 CodeswarmTask.state='queued'
+-------------------------------------------------------------
+在异常环境执行：
+
+psql "$DATABASE_URL" -c '
+SELECT
+  ti.id AS "taskInstanceId",
+  ti.status AS "taskInstanceStatus",
+  ti."codeswarmTaskId",
+  ct.id AS "codeswarmDbId",
+  ct."taskId",
+  ct.state AS "codeswarmState",
+  ct."workerId",
+  ct."createdAt",
+  ct."updatedAt"
+FROM "TaskInstance" ti
+LEFT JOIN "CodeswarmTask" ct ON ti."codeswarmTaskId" = ct."taskId"
+WHERE ti."codeswarmTaskId" IS NOT NULL
+ORDER BY ti."updatedAt" DESC
+LIMIT 30;
+'
+
+判读：
+- 如果 UI 排队任务对应 ct.state = 'queued'，且 ct.id 有值：它确实是 DB queued，但没入 Redis Stream。
+- 如果 UI 排队任务对应 ct.state 不是 'queued'，或 ct 为空：优先查列表 displayStatus 映射或 TaskInstance/CodeswarmTask 关联字段，不要先按调度队列问题处理。
+
+关键点二：对比管理员手工重试是否调用 submitTask/XADD
+---------------------------------------------------
+在异常环境选一个失败任务，管理员界面点“重试”前后立即查。
+
+重试前：
+
+redis-cli XLEN codeswarm:task:queue
+
+点管理员重试后立刻查：
+
+redis-cli XLEN codeswarm:task:queue
+redis-cli XRANGE codeswarm:task:queue - + COUNT 10
+
+同时查最近更新的 CodeswarmTask：
+
+psql "$DATABASE_URL" -c '
+SELECT id, "taskId", state, "workerId", "createdAt", "updatedAt"
+FROM "CodeswarmTask"
+ORDER BY "updatedAt" DESC
+LIMIT 10;
+'
+
+判决：
+- 点管理员重试后 DB 变 queued，但 XLEN 仍为 0：管理员重试接口只改 DB，没有 XADD，根因基本实锤。
+- 点管理员重试后 XLEN 短暂大于 0，然后又变 0，DB 仍 queued：有 XADD，但 dispatcher 消费失败后 XACK，后续补偿没生效。
+- 点管理员重试后生成新任务并 running：管理员重试不是这批旧 queued 的来源，需要回看当时 worker 重启恢复脚本或接口。
+
 最终结论模板
 ============
 
