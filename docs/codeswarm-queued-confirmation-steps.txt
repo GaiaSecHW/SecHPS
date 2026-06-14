@@ -1,0 +1,194 @@
+CodeSwarm queued 任务卡住现网确证步骤
+
+目标
+====
+用现网 DB + Redis 的客观状态确认：排队任务卡住是因为 dispatcher 没消费、消费后失败并 XACK，还是 scanDbQueuedTasks/scheduleRetry 自动补偿链路没有把 DB queued 任务重新 XADD 回 Stream。
+
+已知现象
+========
+1. 现网 DB 中 CodeswarmTask.state='queued' 有积压。
+2. Redis Stream codeswarm:task:queue 为空。
+3. Redis retrying 锁 codeswarm:task:retrying:* 为空。
+4. 把当前排队中的任务停止后，在失败页面点击重试，任务会重新进入队列。
+
+代码链路判断
+============
+1. 手动重试/执行路径大概率走 /api/task-builder/tasks/[id]/execute，最终直接调用 codeswarmDispatcher.submitTask(...)。
+   - submitTask 直接 XADD codeswarm:task:queue。
+   - 如果重试后能继续 dispatched/running，说明 Redis Stream、dispatcher 消费、worker 派发基础链路可用。
+
+2. 已存在 DB queued 任务的自动补偿路径依赖 scanDbQueuedTasks -> scheduleRetry。
+   - scanDbQueuedTasks 和 scheduleRetry 都依赖 dispatcher 内部 this.redis && this.running。
+   - scheduleRetry 先设置 codeswarm:task:retrying:* NX 短锁，再 XADD。
+   - dispatchLoop 中 dispatchOne 返回 false 后仍会 XACK，然后再 scheduleRetry。
+
+核心假设
+========
+当前更强嫌疑不是 Redis/worker 完全不可用，而是：
+
+DB 中已有 queued 任务的 Stream 消息已经丢失或被 XACK；
+但 scanDbQueuedTasks/scheduleRetry 没有稳定把这些 DB queued 任务补回 Redis Stream；
+手动重试因为走 submitTask 直接 XADD，所以能重新进入队列。
+
+确证步骤一：记录当前卡住的 queued 任务
+=====================================
+在现网执行：
+
+psql "$DATABASE_URL" -c '
+SELECT id, "taskId", state, "workerId", "createdAt", "updatedAt"
+FROM "CodeswarmTask"
+WHERE state = '\''queued'\''
+ORDER BY "createdAt"
+LIMIT 5;
+'
+
+记录其中一个卡住任务的：
+- id
+- taskId
+- state
+- workerId
+- updatedAt
+
+同时确认 Redis 状态：
+
+redis-cli XLEN codeswarm:task:queue
+redis-cli XRANGE codeswarm:task:queue - + COUNT 10
+redis-cli KEYS 'codeswarm:task:retrying:*'
+
+判读：
+- DB 有 queued，Stream 为空，retrying 为空：说明 queued 任务当前没有可消费消息，也没有等待中的 scheduleRetry 锁。
+
+确证步骤二：停止该 queued 任务并在失败页点击重试
+==============================================
+前端操作步骤：
+1. 打开任务列表页面。
+2. 找到步骤一记录的 queued 任务。
+3. 点击停止，等待任务进入失败状态或失败页面。
+4. 在失败页面点击重试。
+5. 观察该任务是否显示 queued、dispatched 或 running。
+
+点重试后立即执行：
+
+psql "$DATABASE_URL" -c '
+SELECT id, "taskId", state, "workerId", "createdAt", "updatedAt"
+FROM "CodeswarmTask"
+ORDER BY "updatedAt" DESC
+LIMIT 10;
+'
+
+同时执行：
+
+redis-cli XLEN codeswarm:task:queue
+redis-cli XRANGE codeswarm:task:queue - + COUNT 10
+redis-cli KEYS 'codeswarm:task:retrying:*'
+
+判决矩阵
+========
+
+情况 A：重试生成了新的 CodeswarmTask，并且新任务进入 Stream
+----------------------------------------------------------
+现象：
+- updatedAt 最新记录中出现新的 CodeswarmTask.id，或同 taskId 关联了新调度记录。
+- Redis Stream 中出现 dbTaskId 为新 CodeswarmTask.id 的消息。
+
+结论：
+- retry/execute 直提交链路正常。
+- 原 queued 任务的问题集中在 scanDbQueuedTasks/scheduleRetry 自动补偿链路。
+
+情况 B：重试没有新 CodeswarmTask，只是原任务从 failed/queued 再次进入 queued
+-----------------------------------------------------------------------
+现象：
+- CodeswarmTask.id 仍是原记录。
+- 但点击重试后 Redis Stream 出现该 id 的消息。
+
+结论：
+- execute 路由显式 submitTask 成功。
+- direct submitTask 可用。
+- scanDbQueuedTasks 是否可用仍未被证明，需继续执行步骤三。
+
+情况 C：重试任务进入 dispatched/running
+--------------------------------------
+现象：
+- 点击重试后 state 从 queued 变为 dispatched 或 running。
+- workerId 被填充或更新。
+
+结论：
+- Redis Stream -> dispatcher 消费 -> selectWorker -> sendTaskToWorker 链路可用。
+- 卡死根因基本锁定为：已有 DB queued 任务没有被自动补偿重新 XADD 回 Stream。
+
+情况 D：重试后 Stream 从 1 变 0，但 DB 仍是 queued
+-------------------------------------------------
+现象：
+- XLEN 短暂变为 1，随后回到 0。
+- CodeswarmTask.state 仍为 queued。
+
+结论：
+- dispatcher 正在消费。
+- dispatchOne 很可能返回 false。
+- dispatchLoop 仍 XACK 清掉消息。
+- 后续 scheduleRetry 没有稳定重新 XADD。
+
+继续查 worker 可用性：
+
+psql "$DATABASE_URL" -c '
+SELECT id, "nodeId", status, "currentTasks", "maxConcurrentTasks", "lastHeartbeat"
+FROM "CodeswarmWorker"
+ORDER BY "lastHeartbeat" DESC;
+'
+
+重点看：
+- 是否没有 online worker。
+- currentTasks 是否大于等于 maxConcurrentTasks。
+- lastHeartbeat 是否过期。
+- worker 是否不满足 selectWorker 条件。
+
+情况 E：重试后 Stream 保持 1，不被消费
+------------------------------------
+现象：
+- XLEN 保持 1。
+- XRANGE 还能看到刚注入或重试产生的消息。
+- DB 仍 queued。
+
+结论：
+- dispatcher 没有消费 Stream。
+- 更像 dispatcher 进程未启动、running=false、Redis consumer/group 异常，或连接的 Redis/STREAM_KEY 不一致。
+
+继续查 Redis group：
+
+redis-cli XINFO STREAM codeswarm:task:queue
+redis-cli XINFO GROUPS codeswarm:task:queue
+redis-cli XINFO CONSUMERS codeswarm:task:queue codeswarm-dispatcher
+
+确证步骤三：观察自动补偿扫描是否工作
+====================================
+如果重试任务能正常 dispatched/running，但原 DB queued 仍有积压，则观察 40 秒：
+
+psql "$DATABASE_URL" -c 'SELECT COUNT(*) FROM "CodeswarmTask" WHERE state = '\''queued'\'';'
+redis-cli XLEN codeswarm:task:queue
+redis-cli KEYS 'codeswarm:task:retrying:*'
+
+sleep 40
+
+psql "$DATABASE_URL" -c 'SELECT COUNT(*) FROM "CodeswarmTask" WHERE state = '\''queued'\'';'
+redis-cli XLEN codeswarm:task:queue
+redis-cli KEYS 'codeswarm:task:retrying:*'
+
+判读：
+- 40 秒后 DB queued 仍有积压，Stream 仍为空，retrying 仍为空：scanDbQueuedTasks 没跑，或 this.redis/this.running 条件不满足。
+- 40 秒内 retrying 短暂出现但 Stream 仍为空：scheduleRetry 被触发但 XADD 失败或定时器/进程生命周期中断。
+- Stream 出现消息后又归零，DB queued 不变：dispatchLoop 消费失败后 XACK，且重试补偿没有稳定恢复。
+
+最终结论模板
+============
+
+1. 如果手动重试可 dispatched/running，而原 queued 40 秒不自动回 Stream：
+   根因方向：scanDbQueuedTasks/scheduleRetry 自动补偿链路失效。
+
+2. 如果手动重试消息也不被消费：
+   根因方向：dispatcher 消费循环、consumer group、进程 running 状态或 Redis 连接配置问题。
+
+3. 如果手动重试消息被消费但 DB 仍 queued：
+   根因方向：dispatchOne 返回 false 后 XACK 导致消息丢失，需继续查 selectWorker、worker 容量、heartbeat、sendTaskToWorker 返回。
+
+4. 如果重试生成新 CodeswarmTask 而原 queued 永远不动：
+   根因方向：重试创建了新调度记录，不能修复旧 queued；旧 queued 依赖补偿扫描，但补偿扫描未生效。
