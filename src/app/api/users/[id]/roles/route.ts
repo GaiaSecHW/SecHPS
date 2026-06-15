@@ -5,19 +5,20 @@ import { PERMISSIONS } from '@/types/permissions';
 import { invalidateUserCaches } from '@/lib/cache';
 import { generateIndexedId, generateId } from '@/lib/id-generator';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { getTenantContext } from '@/lib/tenant';
 
-// 为用户分配角色
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token 和权限
     const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_ASSIGN_ROLE });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
     const payload = auth.payload;
+    const tenant = getTenantContext(payload);
+    const { id } = await params;
 
     const body = await request.json();
     const { roleIds } = body;
@@ -27,6 +28,41 @@ export async function POST(
         { error: 'roleIds 必须是数组' },
         { status: 400 }
       );
+    }
+
+    // 获取目标用户信息
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true, UserRole: { include: { Role: true } } },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json(
+        { error: '用户未找到' },
+        { status: 404 }
+      );
+    }
+
+    // 检查目标用户是否是平台管理员（admin角色 + 无租户）
+    const isTargetPlatformAdmin = targetUser.UserRole.some(ur => ur.Role.name === 'admin') && !targetUser.tenantId;
+
+    // 规则1：平台管理员的权限不允许任何人更改
+    if (isTargetPlatformAdmin) {
+      return NextResponse.json(
+        { error: '禁止修改平台管理员的角色' },
+        { status: 403 }
+      );
+    }
+
+    // 规则2：拥有admin权限的用户，仅允许修改与该用户相同租户的用户的权限
+    if (!tenant.isPlatformAdmin) {
+      // 非平台管理员，必须与目标用户同租户
+      if (tenant.tenantId !== targetUser.tenantId) {
+        return NextResponse.json(
+          { error: '只能修改同租户用户的角色' },
+          { status: 403 }
+        );
+      }
     }
 
     // 验证所有角色存在
@@ -44,14 +80,11 @@ export async function POST(
     }
 
     // 使用事务保证角色分配原子性
-    const { id } = await params;
     await prisma.$transaction(async (tx) => {
-      // 删除现有角色分配
       await tx.userRole.deleteMany({
         where: { userId: id },
       });
 
-      // 分配新角色
       if (roleIds.length > 0) {
         await tx.userRole.createMany({
           data: roleIds.map((roleId, index) => ({
@@ -63,19 +96,17 @@ export async function POST(
       }
     });
 
-    // 清除用户缓存，确保权限实时更新
     invalidateUserCaches(id);
 
-    // 记录审计日志
     await prisma.auditLog.create({
-          data: {
-            id: generateId('audit'),
-            userId: payload.userId,
-            action: 'user_assign_role',
-            resource: id,
-            details: JSON.stringify({ roleIds }),
-          },
-        });
+      data: {
+        id: generateId('audit'),
+        userId: payload.userId,
+        action: 'user_assign_role',
+        resource: id,
+        details: JSON.stringify({ roleIds }),
+      },
+    });
 
     return NextResponse.json({
       message: '角色分配成功',

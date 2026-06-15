@@ -157,15 +157,41 @@ export async function POST(request: Request) {
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const body = await request.json();
-    const { username, name, roles: roleIds, tenantId } = body;
+    const { username, name, roles: roleIds, tenantId: targetTenantId } = body;
     const email = body.email || `${username}@sechps.local`;
 
-    // 根据 ID 查找角色，过滤掉 admin
+    // 权限保护规则：
+    // - 平台管理员(admin+无租户)的admin角色不可被任何人分配（新建用户不能成为平台管理员）
+    // - 租户admin可以给同租户用户分配admin角色
+    // - 非平台管理员只能在自己租户内创建用户
+    if (!tenant.isPlatformAdmin) {
+      if (tenant.tenantId !== (targetTenantId || tenant.tenantId)) {
+        return NextResponse.json(
+          { details: { error: '只能在本租户内创建用户' } },
+          { status: 403 }
+        );
+      }
+    }
+
     const adminRole = await prisma.role.findUnique({ where: { name: 'admin' } });
-    const safeRoleIds = (roleIds || []).filter((id: string) => id !== adminRole?.id);
+    // 禁止创建无租户的admin用户（平台管理员）
+    if (adminRole && (roleIds || []).includes(adminRole.id) && !targetTenantId) {
+      return NextResponse.json(
+        { details: { error: '禁止创建平台管理员用户' } },
+        { status: 403 }
+      );
+    }
+    // 租户admin只能给同租户用户分配admin角色
+    if (adminRole && (roleIds || []).includes(adminRole.id) && targetTenantId && targetTenantId !== tenant.tenantId && !tenant.isPlatformAdmin) {
+      return NextResponse.json(
+        { details: { error: '只能给同租户用户分配管理员角色' } },
+        { status: 403 }
+      );
+    }
+    const safeRoleIds = roleIds || [];
 
     // 验证输入
     if (!username) {
@@ -217,7 +243,7 @@ export async function POST(request: Request) {
           username,
           passwordHash,
           name: name || username,
-          tenantId: tenantId || null,
+          tenantId: targetTenantId || null,
           mustChangePassword: true,
           updatedAt: new Date(),
         },
@@ -265,12 +291,12 @@ export async function POST(request: Request) {
             userId: payload.userId,
             action: 'user_create',
             resource: user.id,
-            details: JSON.stringify({ email, username, roleIds }),
+                details: JSON.stringify({ email, username, roleIds: safeRoleIds }),
           },
         });
 
     // 记录创建日志 - 管理员创建新用户（跨用户操作）
-    logger.create(LOG_MODULES.USER, payload, user.id, { targetEmail: email, targetUsername: username, roleIds });
+    logger.create(LOG_MODULES.USER, payload, user.id, { targetEmail: email, targetUsername: username, roleIds: safeRoleIds });
 
     return NextResponse.json(
       {

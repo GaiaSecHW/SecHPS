@@ -391,6 +391,7 @@ function UserRow({
   onAssignRoles: () => void;
   onResetPassword: () => void;
 }) {
+  const isPlatformAdmin = user.roles?.some((r: any) => r.name === 'admin') && !user.tenantId;
   return (
     <tr className="hover:bg-dark-surface-hover">
       <td className="px-6 py-4 whitespace-nowrap">
@@ -457,6 +458,7 @@ function UserRow({
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
         <div className="flex items-center justify-end space-x-2">
+          {!isPlatformAdmin && (
           <button
             onClick={onAssignRoles}
             className="text-blue-400 hover:text-blue-900"
@@ -464,6 +466,8 @@ function UserRow({
           >
             <UserPlus size={16} />
           </button>
+          )}
+          {!isPlatformAdmin && (
           <button
             onClick={onResetPassword}
             className="text-orange-400 hover:text-orange-900"
@@ -471,6 +475,8 @@ function UserRow({
           >
             <Key size={16} />
           </button>
+          )}
+          {!isPlatformAdmin && (
           <button
             onClick={onEdit}
             className="text-gray-400 hover:text-gray-400"
@@ -478,6 +484,8 @@ function UserRow({
           >
             <Edit size={16} />
           </button>
+          )}
+          {!isPlatformAdmin && (
           <button
             onClick={onDelete}
             className="text-red-400 hover:text-red-400"
@@ -485,6 +493,7 @@ function UserRow({
           >
             <Trash2 size={16} />
           </button>
+          )}
         </div>
       </td>
     </tr>
@@ -932,7 +941,9 @@ function AssignRolesModal({
               选择角色
             </label>
             <div className="space-y-2">
-              {roles.map((role: any) => (
+              {roles.map((role: any) => {
+                const isPlatformAdminRole = role.name === 'admin' && role.isSystem;
+                return (
                 <label
                   key={role.id}
                   className="flex items-center space-x-2 px-3 py-2 border border-gray-600 rounded-md cursor-pointer hover:bg-dark-surface-hover"
@@ -946,6 +957,9 @@ function AssignRolesModal({
                   <div className="flex-1">
                     <div className="text-sm font-medium text-gray-100">
                       {role.name}
+                      {isPlatformAdminRole && (
+                        <span className="ml-2 text-xs text-yellow-400">（平台管理员角色 — 仅可分配给租户内用户）</span>
+                      )}
                     </div>
                     {role.description && (
                       <div className="text-xs text-gray-500">
@@ -954,7 +968,7 @@ function AssignRolesModal({
                     )}
                   </div>
                 </label>
-              ))}
+              )})}
             </div>
           </div>
 

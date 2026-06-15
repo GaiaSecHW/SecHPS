@@ -287,9 +287,11 @@ function DashboardLayoutContent({
                 <NavLink href="/dashboard/models" icon={<Zap size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   模型管理
                 </NavLink>
+                {user?.roles?.includes('admin') && !user?.tenantId && (
                 <NavLink href="/dashboard/admin/tenants" icon={<Layers size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   租户管理
                 </NavLink>
+                )}
                 <NavLink href="/dashboard/admin/api-keys" icon={<Key size={18} />} collapsed={sidebarCollapsed} pathname={pathname}>
                   API Key 管理
                 </NavLink>

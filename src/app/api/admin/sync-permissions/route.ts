@@ -71,13 +71,18 @@ export async function POST(request: Request) {
         continue;
       }
 
+      // admin 角色始终拥有所有权限：使用数据库中全部权限而非 DEFAULT_ROLE_PERMISSIONS
+      const effectivePermNames = roleName === ROLES.ADMIN
+        ? await prisma.permission.findMany({ select: { name: true } }).then(ps => ps.map(p => p.name))
+        : permissionNames;
+
       // 获取当前角色的权限 (paginated raw SQL to avoid MTU black hole)
       const currentPermRows = await fetchPermissionsPaginated<{ id: string; name: string }>([role.id], 'p.id, p.name');
 
       const currentPermIds = new Set(currentPermRows.map(p => p.id));
 
       // 添加新权限
-      for (const permissionName of permissionNames) {
+      for (const permissionName of effectivePermNames) {
         const permission = await prisma.permission.findUnique({
           where: { name: permissionName },
         });
@@ -93,16 +98,18 @@ export async function POST(request: Request) {
         }
       }
 
-      // 删除不再需要的权限
-      const newPermNames = new Set<string>(permissionNames);
-      for (const perm of currentPermRows) {
-        if (!newPermNames.has(perm.name)) {
-          await prisma.role.update({
-            where: { id: role.id },
-            data: {
-              Permission: { disconnect: { id: perm.id } },
-            },
-          });
+      // admin 角色始终保留所有权限，不允许删除
+      if (roleName !== ROLES.ADMIN) {
+        const newPermNames = new Set<string>(permissionNames);
+        for (const perm of currentPermRows) {
+          if (!newPermNames.has(perm.name)) {
+            await prisma.role.update({
+              where: { id: role.id },
+              data: {
+                Permission: { disconnect: { id: perm.id } },
+              },
+            });
+          }
         }
       }
     }

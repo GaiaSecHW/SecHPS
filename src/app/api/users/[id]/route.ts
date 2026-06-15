@@ -118,6 +118,20 @@ export async function PATCH(
     const body = await request.json();
     const { name, avatar, isActive } = body;
 
+    // 平台管理员的所有信息不允许任何人更改（仅允许自己修改自己的 name/avatar）
+    if (!isSelf) {
+      const targetUserCheck = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, tenantId: true, UserRole: { include: { Role: true } } },
+      });
+      if (targetUserCheck) {
+        const isTargetPlatformAdmin = targetUserCheck.UserRole.some(ur => ur.Role.name === 'admin') && !targetUserCheck.tenantId;
+        if (isTargetPlatformAdmin) {
+          return NextResponse.json({ error: '禁止修改平台管理员信息' }, { status: 403 });
+        }
+      }
+    }
+
     // 更新用户
     const user = await prisma.user.update({
       where: { id },
@@ -180,6 +194,18 @@ export async function DELETE(
     const { id } = await params;
     if (payload.userId === id) {
       return NextResponse.json({ error: '无法删除自己' }, { status: 400 });
+    }
+
+    // 禁止删除平台管理员用户
+    const targetUserForCheck = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, tenantId: true, UserRole: { include: { Role: true } } },
+    });
+    if (targetUserForCheck) {
+      const isTargetPlatformAdmin = targetUserForCheck.UserRole.some(ur => ur.Role.name === 'admin') && !targetUserForCheck.tenantId;
+      if (isTargetPlatformAdmin) {
+        return NextResponse.json({ error: '禁止删除平台管理员用户' }, { status: 403 });
+      }
     }
 
     // 获取被删除用户信息（用于日志）

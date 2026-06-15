@@ -107,6 +107,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '角色名称是必需的' } }, { status: 400 });
     }
 
+    // 禁止创建与系统角色同名的角色
+    const systemRoles = await prisma.role.findMany({ where: { isSystem: true } });
+    if (systemRoles.some(r => r.name === name)) {
+      return NextResponse.json({ details: { error: '禁止创建与系统角色同名的角色' } }, { status: 403 });
+    }
+
     // 检查角色名是否已存在
     const existingRole = await prisma.role.findUnique({
       where: { name },
