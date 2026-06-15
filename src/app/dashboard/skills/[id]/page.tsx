@@ -148,6 +148,8 @@ interface Skill {
   patternName: string | null;
   languageName: string | null;
   productTags: Array<{ id: string; name: string; displayName: string }>;
+  SkillCategory?: { id: string; name: string; displayName: string; icon: string; hasSubDimension: boolean } | null;
+  AttackPattern?: { id: number; name: string; level: number; parent_id: number | null; library_id: number } | null;
 }
 
 export default function SkillDetailPage() {
@@ -1484,36 +1486,31 @@ export default function SkillDetailPage() {
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">SKILL类型</h3>
                 <p className="text-gray-100">
-                  {skill.categoryName ? (() => {
+                  {skill.SkillCategory ? (() => {
                     const iconMap: Record<string, any> = { Bug, Search, Shield, Code, LayoutDashboard, TrendingUp };
-                    const Icon = skill.categoryIcon ? iconMap[skill.categoryIcon] : null;
+                    const Icon = skill.SkillCategory.icon ? iconMap[skill.SkillCategory.icon] : null;
                     return (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm bg-purple-900/20 text-purple-400 rounded-md">
                         {Icon && <Icon size={14} />}
-                        {skill.categoryName}
+                        {skill.SkillCategory.displayName}
                       </span>
                     );
                   })() : '无'}
                 </p>
               </div>
-              {skill.hasSubDimension && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">攻击模式</h3>
-                  <div className="text-gray-100 flex items-center gap-1">
-                    {skill.languageName && (
-                      <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-400 rounded">
-                        {skill.languageName}
-                      </span>
-                    )}
-                    {skill.patternName && (
-                      <span className="px-2 py-0.5 text-xs bg-orange-900/20 text-orange-400 rounded">
-                        {skill.patternName}
-                      </span>
-                    )}
-                    {!skill.languageName && !skill.patternName && <span>无</span>}
-                  </div>
-                </div>
-              )}
+              {skill.SkillCategory?.hasSubDimension && (
+                 <div>
+                   <h3 className="text-sm font-medium text-gray-500 mb-1">攻击模式</h3>
+                   <div className="text-gray-100 flex items-center gap-1">
+                     {skill.AttackPattern?.name && (
+                       <span className="px-2 py-0.5 text-xs bg-orange-900/20 text-orange-400 rounded">
+                         {skill.AttackPattern.name}
+                       </span>
+                     )}
+                     {!skill.AttackPattern?.name && <span>无</span>}
+                   </div>
+                 </div>
+               )}
 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">适用产品</h3>
                   <div className="text-gray-100">

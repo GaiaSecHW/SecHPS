@@ -39,6 +39,7 @@ function UsersPageContent() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [showNoTenantAlert, setShowNoTenantAlert] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -159,7 +160,24 @@ function UsersPageContent() {
         </div>
         
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={async () => {
+            try {
+              const token = localStorage.getItem('token');
+              const response = await fetch('/api/admin/tenants', {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (response.ok) {
+                const data = await response.json();
+                if ((data.tenants || []).length === 0) {
+                  setShowNoTenantAlert(true);
+                  return;
+                }
+              }
+              setShowCreateModal(true);
+            } catch {
+              setShowCreateModal(true);
+            }
+          }}
           className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
           <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
@@ -277,6 +295,24 @@ function UsersPageContent() {
           </div>
         )}
       </div>
+
+      {/* 无租户提示弹窗 */}
+      {showNoTenantAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-700/50">
+              <h3 className="text-lg font-semibold text-gray-100">提示</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-amber-400 text-sm">请先创建租户</p>
+            </div>
+            <div className="px-6 py-4 flex justify-end space-x-3">
+              <button onClick={() => setShowNoTenantAlert(false)} className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]">关闭</button>
+              <a href="/dashboard/admin/tenants" className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-400">前往创建租户</a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 创建用户模态框 */}
       {showCreateModal && (
@@ -571,16 +607,12 @@ function CreateUserModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-300">所属租户 <span className="text-red-400">*</span></label>
-            {tenants.length === 0 ? (
-              <p className="mt-1 text-sm text-amber-400">暂无可用租户，请先 <a href="/dashboard/admin/tenants" className="underline hover:text-amber-300">创建租户</a></p>
-            ) : (
               <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-dark-bg text-gray-100">
                 <option value="">请选择租户</option>
                 {tenants.map((t: any) => (
                   <option key={t.id} value={t.id}>{t.name}{t.isIcsTenant ? ' (ICSL)' : ''}</option>
                 ))}
               </select>
-            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">

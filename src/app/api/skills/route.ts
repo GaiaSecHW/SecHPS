@@ -231,7 +231,7 @@ export async function POST(request: Request) {
     });
     if (existing) {
       return NextResponse.json(
-        { details: { error: isPublic ? '公共 Skill 名称已存在' : '您的私有 Skill 名称已存在' } },
+        { details: { error: isPublic ? '公共 Skill 名称已存在' : '该 Skill 名称在平台已被注册' } },
         { status: 400 }
       );
     }
