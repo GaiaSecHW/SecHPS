@@ -36,16 +36,6 @@ interface ModelStat {
   callCount: number;
 }
 
-interface ProjectStat {
-  projectId: string;
-  projectName: string;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalTokens: number;
-  estimatedCost: number;
-  evaluationCount: number;
-}
-
 interface TrendData {
   date: string;
   inputTokens: number;
@@ -72,7 +62,6 @@ export default function TokenStatsPage() {
 
   // 详细统计
   const [modelStats, setModelStats] = useState<ModelStat[]>([]);
-  const [projectStats, setProjectStats] = useState<ProjectStat[]>([]);
   const [trendData, setTrendData] = useState<TrendData[]>([]);
 
   useEffect(() => {
@@ -136,7 +125,6 @@ export default function TokenStatsPage() {
 
   const updateDetailStats = (data: any) => {
     setModelStats(data.modelStats || []);
-    setProjectStats(data.projectStats || []);
     setTrendData(data.trendData || []);
   };
 
@@ -384,55 +372,8 @@ export default function TokenStatsPage() {
           </div>
         )}
 
-        {/* 项目消耗统计 */}
-        {projectStats.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-3">项目消耗明细</h3>
-            <div className="space-y-2">
-              {projectStats.map((stat) => {
-                  const isSystem = stat.projectId === '__system__';
-                  const content = (
-                    <>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                          <span className="text-xs font-medium text-purple-700">
-                            {stat.projectName.substring(0, 2).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-100">{stat.projectName}</p>
-                          <p className="text-xs text-gray-500">
-                            {stat.evaluationCount} 次调用
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          {formatTokensWithColor(stat.totalInputTokens, stat.totalOutputTokens)}
-                          <p className="text-xs text-gray-500 mt-1">
-                            <CostWithTooltip cost={stat.estimatedCost || 0} />
-                          </p>
-                        </div>
-                        {!isSystem && <ChevronRight className="text-gray-400" size={20} />}
-                      </div>
-                    </>
-                  );
-                  return isSystem ? (
-                    <div key={stat.projectId} className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50">
-                      {content}
-                    </div>
-                  ) : (
-                    <Link key={stat.projectId} href={`/dashboard/token-stats/project/${stat.projectId}`} className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50 hover:bg-blue-600/10 hover:border-blue-500/20 transition-colors cursor-pointer">
-                      {content}
-                    </Link>
-                  );
-                })}
-            </div>
-          </div>
-        )}
-
         {/* 无数据提示 */}
-        {modelStats.length === 0 && projectStats.length === 0 && (
+        {modelStats.length === 0 && (
           <div className="text-center py-8 bg-[#0F172A] rounded-lg">
             <Coins className="mx-auto h-12 w-12 text-gray-400" />
             <p className="mt-4 text-sm text-gray-500">

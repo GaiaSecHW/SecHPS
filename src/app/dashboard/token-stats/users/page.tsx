@@ -378,9 +378,6 @@ export default function UserTokenStatsPage() {
                       )}
                     </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    操作
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700/50">
@@ -428,15 +425,6 @@ export default function UserTokenStatsPage() {
                       <span className="text-sm text-gray-400">
                         {user.evaluationCount}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => router.push(`/dashboard/users/${user.userId}`)}
-                        className="text-blue-400 hover:text-blue-800 flex items-center"
-                      >
-                        查看详情
-                        <ChevronRight size={16} className="ml-1" />
-                      </button>
                     </td>
                   </tr>
                 ))}

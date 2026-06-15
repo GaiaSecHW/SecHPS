@@ -12,9 +12,6 @@ import {
   Activity,
   Loader2,
   AlertCircle,
-  ChevronRight,
-  CheckCircle2,
-  XCircle,
   Clock,
   Info,
 } from 'lucide-react';
@@ -24,13 +21,6 @@ interface UserProject {
   name: string;
   status: string;
   createdAt: string;
-  tokenStats: {
-    totalInputTokens: number;
-    totalOutputTokens: number;
-    totalTokens: number;
-    estimatedCost: number;
-    evaluationCount: number;
-  };
 }
 
 interface UserInfo {
@@ -38,6 +28,14 @@ interface UserInfo {
   username: string;
   name: string;
   email: string;
+}
+
+interface UserTokenStats {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  evaluationCount: number;
 }
 
 function LoadingSpinner() {
@@ -67,17 +65,14 @@ function UserDetailContent({
 }) {
   const router = useRouter();
   const userId = use(params).id;
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [user, setUser] = useState<UserInfo | null>(null);
   const [projects, setProjects] = useState<UserProject[]>([]);
-  
-  // 汇总统计
-  const totalInputTokens = projects.reduce((sum, p) => sum + p.tokenStats.totalInputTokens, 0);
-  const totalOutputTokens = projects.reduce((sum, p) => sum + p.tokenStats.totalOutputTokens, 0);
-  const totalCost = projects.reduce((sum, p) => sum + p.tokenStats.estimatedCost, 0);
-  const totalEvaluations = projects.reduce((sum, p) => sum + p.tokenStats.evaluationCount, 0);
+  const [tokenStats, setTokenStats] = useState<UserTokenStats>({
+    inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0, evaluationCount: 0,
+  });
 
   useEffect(() => {
     fetchUserAndProjects();
@@ -89,18 +84,16 @@ function UserDetailContent({
 
     try {
       const token = localStorage.getItem('token');
-      
-      // 获取用户信息
+
       const userRes = await fetch(`/api/users/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (userRes.ok) {
         const userData = await userRes.json();
         setUser(userData.user);
       }
 
-      // 获取用户的项目
       const projectsRes = await fetch(`/api/projects?userId=${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -112,42 +105,26 @@ function UserDetailContent({
       }
 
       const projectsData = await projectsRes.json();
-      
-      // 获取每个项目的 token 统计
-      const projectsWithStats = await Promise.all(
-        (projectsData.projects || []).map(async (project: any) => {
-          const statsRes = await fetch(`/api/token-stats?projectId=${project.id}&period=year`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          
-          if (statsRes.ok) {
-            const statsData = await statsRes.json();
-            return {
-              ...project,
-              tokenStats: statsData.summary || {
-                totalInputTokens: 0,
-                totalOutputTokens: 0,
-                totalTokens: 0,
-                estimatedCost: 0,
-                evaluationCount: 0,
-              },
-            };
-          }
-          
-          return {
-            ...project,
-            tokenStats: {
-              totalInputTokens: 0,
-              totalOutputTokens: 0,
-              totalTokens: 0,
-              estimatedCost: 0,
-              evaluationCount: 0,
-            },
-          };
-        })
-      );
+      setProjects(projectsData.projects || []);
 
-      setProjects(projectsWithStats);
+      const statsRes = await fetch(`/api/token-stats?period=year`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        const matchedUser = (statsData.userStats || []).find((u: any) => u.userId === userId);
+        if (matchedUser) {
+          setTokenStats({
+            inputTokens: matchedUser.inputTokens || 0,
+            outputTokens: matchedUser.outputTokens || 0,
+            totalTokens: matchedUser.totalTokens || 0,
+            estimatedCost: matchedUser.estimatedCost || 0,
+            evaluationCount: matchedUser.evaluationCount || 0,
+          });
+        }
+      }
+
       setLoading(false);
     } catch (err) {
       setError('网络错误');
@@ -198,7 +175,7 @@ function UserDetailContent({
           <ArrowLeft size={20} className="mr-2" />
           返回用户统计
         </Link>
-        
+
         <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
           <div className="flex items-center">
             <div className="bg-blue-100 p-4 rounded-full mr-4">
@@ -222,7 +199,7 @@ function UserDetailContent({
               <TrendingUp size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalInputTokens)}</p>
+              <p className="text-2xl font-bold text-gray-100">{formatNumber(tokenStats.inputTokens)}</p>
               <p className="text-xs text-gray-500">总输入 Token</p>
             </div>
           </div>
@@ -233,7 +210,7 @@ function UserDetailContent({
               <Activity size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalOutputTokens)}</p>
+              <p className="text-2xl font-bold text-gray-100">{formatNumber(tokenStats.outputTokens)}</p>
               <p className="text-xs text-gray-500">总输出 Token</p>
             </div>
           </div>
@@ -245,7 +222,7 @@ function UserDetailContent({
             </div>
             <div className="text-right">
               <p className="text-xl font-bold text-orange-400 flex items-center">
-                {formatCost(totalCost)}
+                {formatCost(tokenStats.estimatedCost)}
                 <span className="ml-1 cursor-help relative group">
                   <Info size={12} className="text-orange-400 hover:text-orange-400" />
                   <span className="absolute right-0 bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-1.5 whitespace-nowrap z-10 shadow-lg">
@@ -278,7 +255,7 @@ function UserDetailContent({
             项目列表 ({projects.length})
           </h2>
         </div>
-        
+
         {projects.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
             该用户暂无项目
@@ -288,8 +265,7 @@ function UserDetailContent({
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="px-6 py-4 hover:bg-[#0F172A] cursor-pointer"
-                onClick={() => router.push(`/dashboard/projects/${project.id}`)}
+                className="px-6 py-4 hover:bg-[#0F172A]"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -309,18 +285,6 @@ function UserDetailContent({
                       创建于 {new Date(project.createdAt).toLocaleDateString('zh-CN')}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="flex items-center space-x-3 text-xs">
-                      <span className="text-blue-400">↑{formatNumber(project.tokenStats.totalInputTokens)}</span>
-                      <span className="text-green-400">↓{formatNumber(project.tokenStats.totalOutputTokens)}</span>
-                    </div>
-                    <div className="flex items-center text-xs text-gray-500 mt-1">
-                      <span className="text-orange-400">{formatCost(project.tokenStats.estimatedCost)}</span>
-                      <span className="mx-1">·</span>
-                      <span>{project.tokenStats.evaluationCount} 次评估</span>
-                    </div>
-                  </div>
-                  <ChevronRight className="text-gray-400 ml-4" size={20} />
                 </div>
               </div>
             ))}

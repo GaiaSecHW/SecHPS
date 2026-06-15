@@ -26,7 +26,6 @@ export async function GET(request: Request) {
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'day'; // day, week, month, year
-    const projectId = searchParams.get('projectId');
 
     // 使用北京时间计算起始时间
     const startDate = getBeijingPeriodStart(period as 'day' | 'week' | 'month' | 'year');
@@ -46,33 +45,21 @@ export async function GET(request: Request) {
       },
     };
 
-    // 如果指定了项目，添加项目过滤
-    if (projectId) {
-      evalWhereClause.projectId = projectId;
-      tokenWhereClause.projectId = projectId;
-    } else {
-      if (userIsAdmin) {
-        // 管理员：查询所有数据（不过滤用户）
-        // evalWhereClause 保持不变（查询所有项目）
-        // tokenWhereClause 也不需要额外过滤
+    // 权限过滤：管理员看全部，普通用户只看自己的数据
+    if (!userIsAdmin) {
+      const userProjects = await prisma.project.findMany({
+        where: { userId: payload.userId },
+        select: { id: true },
+      });
+      const projectIds = userProjects.map(p => p.id);
+
+      if (projectIds.length > 0) {
+        evalWhereClause.projectId = { in: projectIds };
       } else {
-        // 普通用户：查询自己项目的评估 + 自己的 Token 使用记录
-        const userProjects = await prisma.project.findMany({
-          where: { userId: payload.userId },
-          select: { id: true },
-        });
-        const projectIds = userProjects.map(p => p.id);
-        
-        // 评估会话按项目过滤
-        if (projectIds.length > 0) {
-          evalWhereClause.projectId = { in: projectIds };
-        } else {
-          evalWhereClause.projectId = 'no-projects'; // 强制返回空
-        }
-        
-        // TokenUsage 按 userId 过滤（这样能捕获 Skill 优化等无项目的调用）
-        tokenWhereClause.userId = payload.userId;
+        evalWhereClause.projectId = 'no-projects';
       }
+
+      tokenWhereClause.userId = payload.userId;
     }
 
     // 查询评估会话的 token 汇总（用于跨时段统计）
@@ -177,84 +164,6 @@ export async function GET(request: Request) {
         callCount: stat._count.id || 0,
       };
     });
-
-    // 查询每个项目的统计（仅当没有指定项目时）
-    let projectStats: any[] = [];
-    if (!projectId) {
-      const evaluations = await prisma.evaluationSession.findMany({
-        where: evalWhereClause,
-        take: 500,
-        select: {
-          projectId: true,
-          totalInputTokens: true,
-          totalOutputTokens: true,
-          totalTokens: true,
-          estimatedCost: true,
-        },
-      });
-
-      const projectMap = new Map<string, any>();
-      for (const evaluation of evaluations) {
-        const existing = projectMap.get(evaluation.projectId) || {
-          projectId: evaluation.projectId,
-          totalInputTokens: 0,
-          totalOutputTokens: 0,
-          totalTokens: 0,
-          estimatedCost: 0,
-          evaluationCount: 0,
-        };
-        existing.totalInputTokens += evaluation.totalInputTokens || 0;
-        existing.totalOutputTokens += evaluation.totalOutputTokens || 0;
-        existing.totalTokens += evaluation.totalTokens || 0;
-        existing.estimatedCost += evaluation.estimatedCost || 0;
-        existing.evaluationCount += 1;
-        projectMap.set(evaluation.projectId, existing);
-      }
-
-      // EvaluationSession 无数据时，从 TokenUsage 按 projectId 聚合
-      if (projectMap.size === 0 && tokenUsageStats._count.id > 0) {
-        const tokenProjectStats = await prisma.tokenUsage.groupBy({
-          by: ['projectId'],
-          where: tokenWhereClause,
-          _sum: {
-            outputTokens: true,
-            estimatedCost: true,
-          },
-          _max: {
-            inputTokens: true,
-          },
-          _count: {
-            id: true,
-          },
-        });
-
-        for (const stat of tokenProjectStats) {
-          const pid = stat.projectId || '__system__';
-          projectMap.set(pid, {
-            projectId: pid,
-            totalInputTokens: stat._max.inputTokens || 0,
-            totalOutputTokens: stat._sum.outputTokens || 0,
-            totalTokens: (stat._max.inputTokens || 0) + (stat._sum.outputTokens || 0),
-            estimatedCost: stat._sum.estimatedCost || 0,
-            evaluationCount: stat._count.id,
-          });
-        }
-      }
-
-      const projectIds = Array.from(projectMap.keys()).filter(id => id !== '__system__');
-      const projects = projectIds.length > 0 ? await prisma.project.findMany({
-        where: { id: { in: projectIds } },
-        select: { id: true, name: true },
-      }) : [];
-
-      projectStats = Array.from(projectMap.values()).map(stat => {
-        const project = projects.find(p => p.id === stat.projectId);
-        return {
-          ...stat,
-          projectName: stat.projectId === '__system__' ? '系统/其他' : (project?.name || '未知项目'),
-        };
-      });
-    }
 
     // 查询趋势数据（按日期分组）
     const trendData = await getTrendData(tokenWhereClause, period);
@@ -368,7 +277,6 @@ export async function GET(request: Request) {
         callCount: tokenUsageStats._count.id || 0,
       },
       modelStats,
-      projectStats,
       trendData,
       userStats, // 仅管理员可见
     });
@@ -411,13 +319,6 @@ async function getTrendData(tokenWhereClause: any, period: string) {
 
   const conditions: Prisma.Sql[] = [Prisma.sql`"createdAt" >= ${startDate}`];
 
-  if (tokenWhereClause.projectId) {
-    if (typeof tokenWhereClause.projectId === 'string') {
-      conditions.push(Prisma.sql`"projectId" = ${tokenWhereClause.projectId}`);
-    } else if (Array.isArray(tokenWhereClause.projectId?.in)) {
-      conditions.push(Prisma.sql`"projectId" = ANY(${tokenWhereClause.projectId.in})`);
-    }
-  }
   if (tokenWhereClause.userId) {
     conditions.push(Prisma.sql`"userId" = ${tokenWhereClause.userId}`);
   }
