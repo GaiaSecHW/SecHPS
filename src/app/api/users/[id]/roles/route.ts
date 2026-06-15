@@ -55,8 +55,12 @@ export async function POST(
     }
 
     // 规则2：拥有admin权限的用户，仅允许修改与该用户相同租户的用户的权限
-    if (!tenant.isPlatformAdmin) {
-      // 非平台管理员，必须与目标用户同租户
+    // ICSL租户admin和平台admin可以修改任意租户用户的角色
+    // 动态从数据库查 Tenant 表，确保 isIcsTenant 准确（JWT 中该字段可能过期）
+    const dbTenant = tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+    const isIcsTenantAdmin = (dbTenant?.isIcsTenant ?? false) && (payload.roles ?? []).includes('admin');
+    if (!tenant.isPlatformAdmin && !isIcsTenantAdmin) {
+      // 非平台管理员 + 非ICSL租户admin，必须与目标用户同租户
       if (tenant.tenantId !== targetUser.tenantId) {
         return NextResponse.json(
           { error: '只能修改同租户用户的角色' },

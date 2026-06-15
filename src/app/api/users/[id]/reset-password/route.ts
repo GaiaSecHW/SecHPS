@@ -5,6 +5,7 @@ import { hashPassword } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
+import { getTenantContext } from '@/lib/tenant';
 
 // 密码复杂度验证
 function validatePassword(password: string): { valid: boolean; error?: string } {
@@ -68,6 +69,27 @@ export async function POST(
         { error: '不能通过此接口重置自己的密码，请使用修改密码功能' },
         { status: 400 }
       );
+    }
+
+    // 禁止重置平台管理员密码
+    const targetUserRoles = await prisma.userRole.findMany({
+      where: { userId: id },
+      include: { Role: true },
+    });
+    const isTargetPlatformAdmin = targetUserRoles.some(ur => ur.Role.name === 'admin') && !targetUser.tenantId;
+    if (isTargetPlatformAdmin) {
+      return NextResponse.json({ error: '禁止重置平台管理员密码' }, { status: 403 });
+    }
+
+    // 租户操作权限限制：非平台admin + 非ICSL租户admin只能重置同租户用户密码
+    // 动态从数据库查 Tenant 表，确保 isIcsTenant 准确（JWT 中该字段可能过期）
+    const tenant = getTenantContext(payload);
+    const dbTenant = tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+    const isIcsTenantAdmin = (dbTenant?.isIcsTenant ?? false) && (payload.roles ?? []).includes('admin');
+    if (!tenant.isPlatformAdmin && !isIcsTenantAdmin) {
+      if (targetUser.tenantId !== tenant.tenantId) {
+        return NextResponse.json({ error: '只能重置本租户内用户的密码' }, { status: 403 });
+      }
     }
 
     // 哈希新密码

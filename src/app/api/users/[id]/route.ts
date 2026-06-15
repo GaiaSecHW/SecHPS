@@ -5,6 +5,7 @@ import { hasPermission, fetchPermissionsPaginated } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
+import { getTenantContext } from '@/lib/tenant';
 
 // 获取单个用户
 export async function GET(
@@ -129,6 +130,15 @@ export async function PATCH(
         if (isTargetPlatformAdmin) {
           return NextResponse.json({ error: '禁止修改平台管理员信息' }, { status: 403 });
         }
+        // 租户操作权限限制：非平台admin + 非ICSL租户admin只能操作同租户用户
+        const tenant = getTenantContext(payload);
+        const dbTenant = tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+        const isIcsTenantAdmin = (dbTenant?.isIcsTenant ?? false) && (payload.roles ?? []).includes('admin');
+        if (!tenant.isPlatformAdmin && !isIcsTenantAdmin) {
+          if (targetUserCheck.tenantId !== tenant.tenantId) {
+            return NextResponse.json({ error: '只能修改本租户内的用户信息' }, { status: 403 });
+          }
+        }
       }
     }
 
@@ -205,6 +215,15 @@ export async function DELETE(
       const isTargetPlatformAdmin = targetUserForCheck.UserRole.some(ur => ur.Role.name === 'admin') && !targetUserForCheck.tenantId;
       if (isTargetPlatformAdmin) {
         return NextResponse.json({ error: '禁止删除平台管理员用户' }, { status: 403 });
+      }
+      // 租户操作权限限制：非平台admin + 非ICSL租户admin只能删除同租户用户
+      const tenant = getTenantContext(payload);
+      const dbTenant = tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+      const isIcsTenantAdmin = (dbTenant?.isIcsTenant ?? false) && (payload.roles ?? []).includes('admin');
+      if (!tenant.isPlatformAdmin && !isIcsTenantAdmin) {
+        if (targetUserForCheck.tenantId !== tenant.tenantId) {
+          return NextResponse.json({ error: '只能删除本租户内的用户' }, { status: 403 });
+        }
       }
     }
 

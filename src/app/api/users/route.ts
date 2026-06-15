@@ -44,14 +44,23 @@ export async function GET(request: Request) {
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
 
     // 构建租户过滤条件
+    // 平台管理员（admin+无租户）和 ICSL 租户 admin：可查看所有用户
+    // 其他租户 admin：只能查看自己租户下的用户
+    // 无租户非admin用户：只能看到无租户用户
     let where: any = {};
-    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
-      if (tenant.tenantId) {
-        // 租户用户：看到同租户用户 + 无租户用户
+    // 动态从数据库查 Tenant 表，确保 isIcsTenant 准确（JWT 中该字段可能过期）
+    const dbTenant = tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+    const isIcsTenantAdmin = (dbTenant?.isIcsTenant ?? false) && (payload.roles ?? []).includes('admin');
+    if (!tenant.isPlatformAdmin && !isIcsTenantAdmin) {
+      if (dbTenant?.isIcsTenant) {
+        // ICSL 租户普通用户：看同租户 + 无租户
         where.OR = [
           { tenantId: tenant.tenantId },
           { tenantId: null },
         ];
+      } else if (tenant.tenantId) {
+        // 其他租户用户（含 admin）：只能看自己租户下的用户
+        where.tenantId = tenant.tenantId;
       } else {
         // 无租户用户：只看到无租户用户
         where.tenantId = null;
@@ -164,10 +173,12 @@ export async function POST(request: Request) {
     const email = body.email || `${username}@sechps.local`;
 
     // 权限保护规则：
-    // - 平台管理员(admin+无租户)的admin角色不可被任何人分配（新建用户不能成为平台管理员）
-    // - 租户admin可以给同租户用户分配admin角色
-    // - 非平台管理员只能在自己租户内创建用户
-    if (!tenant.isPlatformAdmin) {
+    // - 平台管理员(admin+无租户)和 ICSL 租户 admin：可在任意租户内创建用户
+    // - 其他租户admin只能在自己租户内创建用户
+    // 动态从数据库查 Tenant 表，确保 isIcsTenant 准确（JWT 中该字段可能过期）
+    const dbTenant2 = tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+    const isIcsTenantAdmin2 = (dbTenant2?.isIcsTenant ?? false) && (payload.roles ?? []).includes('admin');
+    if (!tenant.isPlatformAdmin && !isIcsTenantAdmin2) {
       if (tenant.tenantId !== (targetTenantId || tenant.tenantId)) {
         return NextResponse.json(
           { details: { error: '只能在本租户内创建用户' } },
@@ -184,8 +195,8 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
-    // 租户admin只能给同租户用户分配admin角色
-    if (adminRole && (roleIds || []).includes(adminRole.id) && targetTenantId && targetTenantId !== tenant.tenantId && !tenant.isPlatformAdmin) {
+    // 租户admin只能给同租户用户分配admin角色（ICSL租户admin除外）
+    if (adminRole && (roleIds || []).includes(adminRole.id) && targetTenantId && targetTenantId !== tenant.tenantId && !tenant.isPlatformAdmin && !isIcsTenantAdmin2) {
       return NextResponse.json(
         { details: { error: '只能给同租户用户分配管理员角色' } },
         { status: 403 }

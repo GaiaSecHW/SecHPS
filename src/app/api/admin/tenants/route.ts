@@ -10,8 +10,10 @@ export async function GET(request: NextRequest) {
   if (!auth.success) return authErrorResponse(auth);
 
   const successAuth = auth as AuthSuccessResult;
-  // 只有平台管理员可以访问
-  if (!successAuth.tenant.isPlatformAdmin) {
+  // 平台管理员和 ICSL 租户 admin 可以访问
+  const dbTenant = successAuth.tenant.tenantId ? await prisma.tenant.findUnique({ where: { id: successAuth.tenant.tenantId }, select: { isIcsTenant: true } }) : null;
+  const isIcsTenantAdmin = (dbTenant?.isIcsTenant ?? false) && (successAuth.payload.roles ?? []).includes('admin');
+  if (!successAuth.tenant.isPlatformAdmin && !isIcsTenantAdmin) {
     return NextResponse.json({ error: '禁止访问' }, { status: 403 });
   }
 

@@ -44,6 +44,16 @@ function UsersPageContent() {
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
 
+  // 当前用户的租户和角色信息
+  const currentUser = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
+  const currentTenantId = currentUser.tenantId ?? null;
+  const currentRoles = currentUser.roles ?? [];
+  const currentIsIcsTenant = currentUser.isIcsTenant ?? false;
+  const isPlatformAdmin = currentRoles.includes('admin') && !currentTenantId;
+  const isIcsTenantAdmin = currentIsIcsTenant && currentRoles.includes('admin');
+  // 特权用户：平台admin 或 ICSL租户admin，可以查看和操作所有用户
+  const isPrivileged = isPlatformAdmin || isIcsTenantAdmin;
+
   useEffect(() => {
     fetchUsers();
     fetchRoles();
@@ -161,22 +171,26 @@ function UsersPageContent() {
         
         <button
           onClick={async () => {
-            try {
-              const token = localStorage.getItem('token');
-              const response = await fetch('/api/admin/tenants', {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (response.ok) {
-                const data = await response.json();
-                if ((data.tenants || []).length === 0) {
-                  setShowNoTenantAlert(true);
-                  return;
-                }
-              }
-              setShowCreateModal(true);
-            } catch {
-              setShowCreateModal(true);
+            if (!isPrivileged && !currentTenantId) {
+              setShowNoTenantAlert(true);
+              return;
             }
+            if (isPrivileged) {
+              try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/admin/tenants', {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (response.ok) {
+                  const data = await response.json();
+                  if ((data.tenants || []).length === 0) {
+                    setShowNoTenantAlert(true);
+                    return;
+                  }
+                }
+              } catch {}
+            }
+            setShowCreateModal(true);
           }}
           className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
@@ -260,6 +274,8 @@ function UsersPageContent() {
                 <UserRow
                   key={user.id}
                   user={user}
+                  isPrivileged={isPrivileged}
+                  currentTenantId={currentTenantId}
                   onEdit={() => handleOpenEditModal(user)}
                   onDelete={() => handleDeleteUser(user.id, user.username)}
                   onAssignRoles={() => handleOpenRoleModal(user)}
@@ -323,6 +339,9 @@ function UsersPageContent() {
             fetchUsers();
           }}
           roles={roles}
+          isPrivileged={isPrivileged}
+          currentTenantId={currentTenantId}
+          currentTenantName={currentUser.tenantName || ''}
         />
       )}
 
@@ -380,18 +399,25 @@ function UsersPageContent() {
 
 function UserRow({
   user,
+  isPrivileged,
+  currentTenantId,
   onEdit,
   onDelete,
   onAssignRoles,
   onResetPassword,
 }: {
   user: any;
+  isPrivileged: boolean;
+  currentTenantId: string | null;
   onEdit: () => void;
   onDelete: () => void;
   onAssignRoles: () => void;
   onResetPassword: () => void;
 }) {
   const isPlatformAdmin = user.roles?.some((r: any) => r.name === 'admin') && !user.tenantId;
+  const isTargetPlatformAdmin = user.roles?.some((r: any) => r.name === 'admin') && !user.tenantId;
+  // 非特权用户只能操作自己租户内的用户（且不能操作平台管理员）
+  const canOperate = isPrivileged || (user.tenantId === currentTenantId && !isTargetPlatformAdmin);
   return (
     <tr className="hover:bg-dark-surface-hover">
       <td className="px-6 py-4 whitespace-nowrap">
@@ -504,20 +530,27 @@ function CreateUserModal({
   onClose,
   onSuccess,
   roles,
+  isPrivileged,
+  currentTenantId,
+  currentTenantName,
 }: {
   onClose: () => void;
   onSuccess: (initialPassword: string) => void;
   roles: any[];
+  isPrivileged: boolean;
+  currentTenantId: string | null;
+  currentTenantName: string;
 }) {
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [selectedTenantId, setSelectedTenantId] = useState(isPrivileged ? '' : (currentTenantId || ''));
   const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isPrivileged) return;
     const fetchTenants = async () => {
       try {
         const token = localStorage.getItem('token');
@@ -531,7 +564,7 @@ function CreateUserModal({
       } catch {}
     };
     fetchTenants();
-  }, []);
+  }, [isPrivileged]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -550,7 +583,7 @@ function CreateUserModal({
           username,
           name,
           roles: selectedRoles,
-          tenantId: selectedTenantId || null,
+          tenantId: isPrivileged ? (selectedTenantId || null) : (currentTenantId || null),
         }),
       });
 
@@ -614,15 +647,24 @@ function CreateUserModal({
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300">所属租户 <span className="text-red-400">*</span></label>
-              <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-dark-bg text-gray-100">
-                <option value="">请选择租户</option>
-                {tenants.map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.name}{t.isIcsTenant ? ' (ICSL)' : ''}</option>
-                ))}
-              </select>
-          </div>
+          {isPrivileged ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-300">所属租户 <span className="text-red-400">*</span></label>
+                <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 bg-dark-bg text-gray-100">
+                  <option value="">请选择租户</option>
+                  {tenants.map((t: any) => (
+                    <option key={t.id} value={t.id}>{t.name}{t.isIcsTenant ? ' (ICSL)' : ''}</option>
+                  ))}
+                </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-300">所属租户</label>
+              <div className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-surface text-gray-300">
+                {currentTenantName || '（当前租户）'}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end space-x-3 pt-4">
             <button type="button" onClick={onClose} disabled={loading} className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50">取消</button>
