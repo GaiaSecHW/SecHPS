@@ -117,7 +117,7 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
   const [rerunModal, setRerunModal] = useState<{ isOpen: boolean; taskId: string | null; taskName: string; modelId: string; modelName: string }>({
     isOpen: false, taskId: null, taskName: '', modelId: '', modelName: '',
   });
-  const [rerunModels, setRerunModels] = useState<{ modelId: string; modelName: string; key: string }[]>([]);
+  const [rerunModels, setRerunModels] = useState<{ modelId: string; modelName: string; configName: string; modelsList: string[]; key: string }[]>([]);
   const [rerunSelectedKey, setRerunSelectedKey] = useState('');
   const [rerunDropdownOpen, setRerunDropdownOpen] = useState(false);
   const rerunDropdownRef = useRef<HTMLDivElement>(null);
@@ -617,16 +617,20 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
                               const compatibleTypes = ENGINE_PROVIDER_MAP[engine] || ['openai', 'claude'];
 
                               const models = (modelsData.models || modelsData || [])
-                                .filter((m: any) => compatibleTypes.includes(m.providerType))
+                                .filter((m: any) => compatibleTypes.includes(m.providerType) && m.isActive)
                                 .flatMap((m: any) => {
                                   try {
                                     return (Array.isArray(m.models) ? m.models : []).map((name: string) => ({
-                                      modelId: m.id, modelName: name, key: `${m.id}:${name}`,
+                                      modelId: m.id, modelName: name, configName: m.name, modelsList: m.models, key: `${m.id}:${name}`,
                                     }));
                                   } catch {
                                     return [];
                                   }
                                 });
+                              if (models.length === 0) {
+                                toast.error('没有可用的模型配置');
+                                return;
+                              }
                               setRerunModels(models);
                               const defaultKey = task.modelId && task.modelName ? `${task.modelId}:${task.modelName}` : '';
                               setRerunSelectedKey(models.find((m: { key: string }) => m.key === defaultKey)?.key || models[0]?.key || '');
@@ -767,7 +771,7 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
                     onClick={() => setRerunDropdownOpen(!rerunDropdownOpen)}
                     className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-bg text-left text-sm text-white flex items-center justify-between hover:border-gray-500"
                   >
-                    <span className="truncate">{rerunModels.find(m => m.key === rerunSelectedKey)?.modelName || '选择模型'}</span>
+                    <span className="truncate">{rerunModels.find(m => m.key === rerunSelectedKey)?.configName || '选择模型'}</span>
                     <ChevronDown size={14} className="text-gray-400 flex-shrink-0 ml-2" />
                   </button>
                   {rerunDropdownOpen && rerunModels.length > 0 && (
@@ -779,7 +783,7 @@ const validStatusFilters = ['all', 'pending', 'queued', 'dispatched', 'running',
                           onClick={() => { setRerunSelectedKey(m.key); setRerunDropdownOpen(false); }}
                           className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center justify-between"
                         >
-                          <span className={m.key === rerunSelectedKey ? 'text-blue-400' : 'text-white'}>{m.modelName}</span>
+                          <span className={m.key === rerunSelectedKey ? 'text-blue-400' : 'text-white'}>{m.configName}</span>
                           {m.key === rerunSelectedKey && <Check size={14} className="text-blue-400 flex-shrink-0" />}
                         </button>
                       ))}
