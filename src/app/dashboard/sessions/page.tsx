@@ -4,6 +4,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+
+const MAX_UPLOAD_MB = parseInt(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB || '500', 10);
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, AlertTriangle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy, XCircle, User } from 'lucide-react';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -343,14 +346,12 @@ export default function SessionsPage() {
     if (!files) return;
 
     const newFiles: UploadedFile[] = [];
-    const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
-
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
 
       // 检查文件大小
-      if (file.size > maxSize) {
-        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(`文件 ${file.name} 超过 ${MAX_UPLOAD_MB}MB 限制，无法上传`);
         continue;
       }
 
@@ -389,14 +390,13 @@ export default function SessionsPage() {
   // 处理拖拽上传
   const handleFileDrop = (files: File[]) => {
     const newFiles: UploadedFile[] = [];
-    const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
 
       // 检查文件大小
-      if (file.size > maxSize) {
-        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(`文件 ${file.name} 超过 ${MAX_UPLOAD_MB}MB 限制，无法上传`);
         continue;
       }
 
@@ -429,13 +429,12 @@ export default function SessionsPage() {
     if (!files) return;
 
     const newFiles: UploadedFile[] = [];
-    const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
 
-      if (file.size > maxSize) {
-        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(`文件 ${file.name} 超过 ${MAX_UPLOAD_MB}MB 限制，无法上传`);
         continue;
       }
 
@@ -1652,7 +1651,7 @@ if (loading) {
                     <p className="text-xs text-gray-500 mt-2">
                       支持多种格式：压缩包（ZIP、JAR、WAR、EAR、TAR、GZ、RAR、7Z）、
                       文档（PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX、TXT、MD）、
-                      数据（CSV、JSON、XML、YAML），单个文件最大 5GB
+                       数据（CSV、JSON、XML、YAML），单个文件最大 {MAX_UPLOAD_MB}MB
                     </p>
                   </div>
                 </div>
@@ -1900,7 +1899,7 @@ if (loading) {
                       </label>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      支持多种格式，单个文件最大 5GB
+                       支持多种格式，单个文件最大 {MAX_UPLOAD_MB}MB
                     </p>
                   </div>
 

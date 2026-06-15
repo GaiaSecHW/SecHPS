@@ -521,7 +521,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                   />
                 </div>
                 <p className="text-xs text-gray-500 text-center mt-1">
-                  仅支持 ZIP、JAR、TAR 格式，最大 5GB
+                   仅支持 ZIP、JAR、TAR 格式，最大 {MAX_UPLOAD_MB}MB
                 </p>
               </div>
             )}
