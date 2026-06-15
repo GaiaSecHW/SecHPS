@@ -386,10 +386,12 @@ function DashboardLayoutContent({
                   {showUserMenu && (
                     <>
                       <div className="fixed inset-0 z-[60]" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-[70] py-1">
+                      <div
+                        className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-[70] py-1"
+                        onClick={() => setShowUserMenu(false)}
+                      >
                         <Link
                           href="/dashboard/profile"
-                          onClick={() => setShowUserMenu(false)}
                           className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
                         >
                           <User size={15} />
@@ -397,7 +399,6 @@ function DashboardLayoutContent({
                         </Link>
                         <Link
                           href="/dashboard/models"
-                          onClick={() => setShowUserMenu(false)}
                           className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
                         >
                           <Brain size={15} />
@@ -405,7 +406,6 @@ function DashboardLayoutContent({
                         </Link>
                         <Link
                           href="/dashboard/token-stats"
-                          onClick={() => setShowUserMenu(false)}
                           className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
                         >
                           <Coins size={15} />
@@ -413,7 +413,7 @@ function DashboardLayoutContent({
                         </Link>
                         <div className="my-1 border-t border-zinc-800" />
                         <button
-                          onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                          onClick={(e) => { e.stopPropagation(); handleLogout(); }}
                           className="flex items-center gap-2 px-4 py-2 text-sm text-zinc-400 hover:bg-red-500/10 hover:text-red-400 transition-colors w-full"
                         >
                           <LogOut size={15} />
