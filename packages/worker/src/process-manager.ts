@@ -50,6 +50,7 @@ export type AgentEventType =
   | 'phase_error'
   | 'phase_start'
   | 'phase_complete'
+  | 'task_started'
   | 'log_chunk'
   | 'session_created'
   | 'skill_start'

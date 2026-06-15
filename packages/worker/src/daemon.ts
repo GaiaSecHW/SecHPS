@@ -593,6 +593,12 @@ this.server.get('/health', async () => ({
         });
       };
 
+      onEvent({
+        type: 'task_started',
+        message: 'Worker started task execution',
+        timestamp: new Date().toISOString(),
+      });
+
       // ========== PHASE 0.5: 动态获取虚拟 API Key（在构建环境之前，确保 secret 写入 opencode.json） ==========
       if (apiKey) {
         onEvent({
