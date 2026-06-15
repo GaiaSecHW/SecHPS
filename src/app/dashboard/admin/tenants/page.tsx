@@ -428,7 +428,6 @@ function TenantUserModal({ tenantId, tenantName, isOpen, onClose, onRefresh }: T
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editTenant, setEditTenant] = useState<Tenant | null>(null);
@@ -439,10 +438,11 @@ export default function TenantsPage() {
     loadTenants();
   }, []);
 
-  const loadTenants = async () => {
+  const loadTenants = async (searchTerm?: string) => {
     try {
       setLoading(true);
-      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+      const term = searchTerm ?? searchInput;
+      const params = term ? `?search=${encodeURIComponent(term)}` : '';
       const { data, error: apiError } = await apiGet<{ tenants: Tenant[] }>(`/api/admin/tenants${params}`);
       if (apiError) {
         setAlert({ type: 'error', message: apiError });
@@ -458,7 +458,7 @@ export default function TenantsPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    loadTenants();
+    loadTenants(searchInput);
   };
 
   const handleDelete = async (tenant: Tenant) => {
@@ -533,18 +533,16 @@ export default function TenantsPage() {
                 placeholder="搜索租户..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setSearch(searchInput); loadTenants(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') loadTenants(searchInput); }}
                 className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
               />
             </div>
-            <button onClick={() => { setSearch(searchInput); loadTenants(); }} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
+            <button onClick={() => loadTenants(searchInput)} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
               搜索
             </button>
-            {search && (
-              <button onClick={() => { setSearchInput(''); setSearch(''); loadTenants(); }} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
-                清除
-              </button>
-            )}
+            <button onClick={() => { setSearchInput(''); loadTenants(''); }} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
+              清除
+            </button>
           </div>
         </div>
 
