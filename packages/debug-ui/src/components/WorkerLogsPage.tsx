@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApiFetch } from '@/lib/use-api-fetch';
+import { getEventBadge, getEventContent } from './event-display';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import {
   Terminal, RefreshCw, Clock, CheckCircle, Activity, Play, Send,
@@ -124,35 +125,7 @@ export default function WorkerLogsPage() {
     setExpandedLogs(prev => { const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s; });
   };
 
-  const cleanText = (t: string, max = 150): string => {
-    if (!t) return '';
-    try { t = JSON.parse(`"${t}"`); } catch {}
-    t = t.replace(/\\n/g, ' ').replace(/\\t/g, ' ').replace(/\\"/g, '"').replace(/  +/g, ' ').trim();
-    return t.length > max ? t.slice(0, max) + '...' : t;
-  };
-
   const formatTime = (timestamp: string) => new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  const getEventContent = (event: any): string => {
-    const data = event.data;
-    if (typeof data === 'string') { try { const p = JSON.parse(data); if (p.content) return p.content; if (p.message) return p.message; return data; } catch { return data; } }
-    if (typeof data === 'object' && data !== null) {
-      if (data.content) return data.content;
-      if (data.message) return data.message;
-      if (data.output) return cleanText(data.output, 150);
-    }
-    return event.content || '';
-  };
-
-  const getEventBadge = (event: any): { badge: string; color: string } => {
-    const t = event.type;
-    if (t === 'tool_call') return { badge: 'Tool', color: 'bg-yellow-900/50 text-yellow-400' };
-    if (t === 'error') return { badge: 'Error', color: 'bg-red-900/50 text-red-400' };
-    if (t === 'skill_start') return { badge: 'Skill', color: 'bg-purple-900/50 text-purple-400' };
-    if (t === 'skill_complete') return { badge: 'Skill✓', color: 'bg-purple-900/40 text-purple-300' };
-    if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', color: 'bg-cyan-900/50 text-cyan-400' };
-    return { badge: t, color: 'bg-gray-700 text-gray-300' };
-  };
 
   const buildTimeline = (): TimelineGroup[] => {
     const pre = PRE_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));

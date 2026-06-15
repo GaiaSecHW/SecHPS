@@ -4,6 +4,21 @@
 
 > 注意：当前 `k8s/scheduler-deployment.yaml` / `k8s/worker-deployment.yaml` 中写的是 `imagePullPolicy: Always`，因此执行 `rollout restart` 会让新 Pod 重新拉取同 tag 镜像。
 
+## 本次实际部署命令（2026-06-13）
+
+```bash
+kubectl config current-context
+kubectl get deploy -n secflow-ns scheduler worker -o wide
+
+kubectl rollout restart deployment/scheduler deployment/worker -n secflow-ns && \
+  kubectl rollout status deployment/scheduler -n secflow-ns --timeout=300s && \
+  kubectl rollout status deployment/worker -n secflow-ns --timeout=300s && \
+  kubectl get pods -n secflow-ns -l 'app in (scheduler,worker)' -o wide
+
+kubectl get deploy -n secflow-ns scheduler worker \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.readyReplicas}{"/"}{.status.replicas}{" ready\t"}{range .spec.template.spec.containers[*]}{.image}{" "}{end}{"\n"}{end}'
+```
+
 ## 1. 查看当前 Kubernetes Context
 
 ```bash

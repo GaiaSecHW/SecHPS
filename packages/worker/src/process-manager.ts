@@ -105,6 +105,18 @@ interface OpencodeExportMessage {
   }>;
 }
 
+export function buildOpencodeStreamLogEvent(
+  content: string,
+  stream: 'stdout' | 'stderr',
+): Omit<AgentEvent, 'timestamp'> {
+  return {
+    type: 'log_chunk',
+    content,
+    level: 'agent',
+    stream,
+  };
+}
+
 function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: string): void {
   const prefix = stream === 'stderr' ? '[opencode stderr]' : '[opencode stdout]';
   for (const rawLine of content.split(/\r?\n/)) {
@@ -410,6 +422,12 @@ export class ProcessManager {
         state.stderr += content;
         logStream?.write(data); // mirror `2>&1 | tee` behavior
         logOpencodeChunk(taskId, 'stderr', content);
+        if (onEvent) {
+          onEvent({
+            ...buildOpencodeStreamLogEvent(content, 'stderr'),
+            timestamp: new Date().toISOString(),
+          });
+        }
       };
 
       childProcess.stdout?.on('data', handleStdout);

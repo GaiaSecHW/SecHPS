@@ -2,6 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as processManager from './process-manager.js';
 
+test('builds opencode stream log event for stderr chunks', () => {
+  assert.deepEqual(
+    processManager.buildOpencodeStreamLogEvent('stderr line', 'stderr'),
+    {
+      type: 'log_chunk',
+      content: 'stderr line',
+      level: 'agent',
+      stream: 'stderr',
+    },
+  );
+});
+
 test('extracts text from the last assistant message in opencode export', () => {
   const messages = [
     {

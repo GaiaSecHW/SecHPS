@@ -78,11 +78,30 @@ async function writeToTaskFile(taskId: string, message: string) {
   } catch {}
 }
 
+function normalizeDetails(details: any): any {
+  if (details instanceof Error) {
+    return {
+      name: details.name,
+      message: details.message,
+      stack: details.stack,
+      ...(details.cause !== undefined ? { cause: normalizeDetails(details.cause) } : {}),
+    };
+  }
+  if (Array.isArray(details)) {
+    return details.map(normalizeDetails);
+  }
+  if (details && typeof details === 'object') {
+    return Object.fromEntries(
+      Object.entries(details).map(([key, value]) => [key, normalizeDetails(value)])
+    );
+  }
+  return details;
+}
+
 function formatDetails(details?: any): string {
   if (details === undefined || details === null) return '';
   if (typeof details === 'string') return ` ${details}`;
-  if (details instanceof Error) return ` ${JSON.stringify({ error: details.message, stack: details.stack })}`;
-  return ` ${JSON.stringify(details)}`;
+  return ` ${JSON.stringify(normalizeDetails(details))}`;
 }
 
 function log(level: LogLevel, module: string, message: string, details?: any, taskId?: string) {

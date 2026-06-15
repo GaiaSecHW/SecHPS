@@ -98,6 +98,18 @@ async function resolveWorkKey(
   return { apiKey: secret, skipped: false };
 }
 
+function serializeError(error: unknown): unknown {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      ...(error.cause !== undefined ? { cause: serializeError(error.cause) } : {}),
+    };
+  }
+  return error;
+}
+
 export class WorkerDaemon {
   private readonly config: WorkerDaemonConfig;
   private readonly server: FastifyInstance;
@@ -108,6 +120,10 @@ export class WorkerDaemon {
   private heartbeatRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatFailCount = 0;
   private heartbeatInProgress = false;
+  private lastHeartbeatLogState: {
+    activeTaskIds: string[];
+    failed: boolean;
+  } | null = null;
   private static readonly HEARTBEAT_RETRY_DELAYS = [1000, 2000, 4000, 8000];
   private static readonly HEARTBEAT_MAX_FAIL_WARN = 5;
   /** Track task IDs currently being executed to prevent duplicate processing. */
@@ -380,10 +396,19 @@ this.server.get('/health', async () => ({
       .then((success) => {
         this.heartbeatInProgress = false;
         if (success) {
+          const hadFailures = this.heartbeatFailCount > 0;
           this.heartbeatFailCount = 0;
           if (this.heartbeatRetryTimer) {
             clearTimeout(this.heartbeatRetryTimer);
             this.heartbeatRetryTimer = null;
+          }
+          if (hadFailures) {
+            const activeTaskIds = [...this.activeTasks.keys()];
+            this.server.log.info(
+              { activeTaskIds, count: activeTaskIds.length },
+              `Heartbeat recovered | nodeId=${this.config.nodeId} | active: [${activeTaskIds.join(', ')}]`
+            );
+            this.lastHeartbeatLogState = { activeTaskIds, failed: false };
           }
         } else {
           this.scheduleHeartbeatRetry();
@@ -398,6 +423,8 @@ this.server.get('/health', async () => ({
   private scheduleHeartbeatRetry(): void {
     this.heartbeatFailCount++;
     
+    this.lastHeartbeatLogState = { activeTaskIds: [...this.activeTasks.keys()], failed: true };
+
     if (this.heartbeatFailCount >= WorkerDaemon.HEARTBEAT_MAX_FAIL_WARN) {
       this.server.log.warn(
         { failCount: this.heartbeatFailCount },
@@ -491,10 +518,18 @@ this.server.get('/health', async () => ({
         } catch { /* non-critical: heartbeat succeeded, response body parsing optional */ }
 
         const activeTaskIds = [...this.activeTasks.keys()];
-        this.server.log.info(
-          { activeTaskIds, count: activeTaskIds.length },
-          `Heartbeat OK | nodeId=${this.config.nodeId} | active: [${activeTaskIds.join(', ')}]`
-        );
+        const activeTasksChanged = !this.lastHeartbeatLogState
+          || this.lastHeartbeatLogState.failed
+          || activeTaskIds.length !== this.lastHeartbeatLogState.activeTaskIds.length
+          || activeTaskIds.some((taskId, index) => taskId !== this.lastHeartbeatLogState?.activeTaskIds[index]);
+
+        if (activeTasksChanged) {
+          this.server.log.info(
+            { activeTaskIds, count: activeTaskIds.length },
+            `Heartbeat OK | nodeId=${this.config.nodeId} | active: [${activeTaskIds.join(', ')}]`
+          );
+          this.lastHeartbeatLogState = { activeTaskIds, failed: false };
+        }
         return true;
       }
       
@@ -746,7 +781,7 @@ this.server.get('/health', async () => ({
     } catch (error) {
       const isCancelled = this.cancelledTasks.has(taskId);
       const errorMsg = isCancelled ? 'Task cancelled by user' : (error instanceof Error ? error.message : String(error));
-      this.server.log.error({ taskId, error, isCancelled }, 'Task failed');
+      this.server.log.error({ taskId, error: serializeError(error), isCancelled }, 'Task failed');
 
       // 推送 error 事件到 Orchestrator（catch 块中 onEvent 不可访问，直接用 postEvent）
       this.postEvent(payload, [{
