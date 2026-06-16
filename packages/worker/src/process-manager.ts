@@ -118,6 +118,21 @@ export function buildOpencodeStreamLogEvent(
   };
 }
 
+export function buildOpencodeLogFilePaths(workspace: string): { stdout: string; stderr: string } {
+  return {
+    stdout: path.join(workspace, 'opencode_stdout.logs'),
+    stderr: path.join(workspace, 'opencode_stderr.logs'),
+  };
+}
+
+export function buildOpencodeRunArgs(agentName: string, instruction: string): string[] {
+  const args = ['run', '--print-logs'];
+  if (agentName) args.push('--agent', agentName);
+  const prompt = instruction?.trim() || agentName || '执行任务';
+  args.push(prompt);
+  return args;
+}
+
 function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: string): void {
   const prefix = stream === 'stderr' ? '[opencode stderr]' : '[opencode stdout]';
   for (const rawLine of content.split(/\r?\n/)) {
@@ -363,8 +378,9 @@ export class ProcessManager {
   ): Promise<RunAgentResult> {
     const state: RunState = { stdout: '', stderr: '', currentSkill: null };
     let childProcess: ChildProcess | null = null;
-    const logFilePath = path.join(workspace, 'opencode_stdout.logs');
-    let logStream: fs.WriteStream | null = null;
+    const logFilePaths = buildOpencodeLogFilePaths(workspace);
+    let stdoutLogStream: fs.WriteStream | null = null;
+    let stderrLogStream: fs.WriteStream | null = null;
 
     logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== OPENCODE RUN START ==========`);
 
@@ -373,18 +389,16 @@ export class ProcessManager {
       // argv element, so shell metacharacters ($, `, ;, etc.) in the instruction
       // cannot be interpreted. This eliminates command-injection risk that the
       // previous `bash -c "... '${escaped}'"` construction carried.
-      const args = ['run', '--print-logs'];
-      if (agentName) args.push('--agent', agentName);
-      const prompt = instruction?.trim() || agentName || '执行任务';
-      args.push(prompt);
+      const args = buildOpencodeRunArgs(agentName, instruction);
+      const prompt = args[args.length - 1] ?? '执行任务';
 
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, `argv: opencode ${args.slice(0, -1).join(' ')} <prompt len=${prompt.length}>`);
 
       const env: Record<string, string> = mergedEnv || process.env as Record<string, string>;
 
-      // tee replacement: Node-side WriteStream mirrors `2>&1 | tee file`.
-      // Both stdout and stderr are appended to the log file AND captured in state.
-      logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
+      // Keep opencode's user-visible stdout and diagnostic stderr in separate files.
+      stdoutLogStream = fs.createWriteStream(logFilePaths.stdout, { flags: 'w' });
+      stderrLogStream = fs.createWriteStream(logFilePaths.stderr, { flags: 'w' });
 
       childProcess = spawn('opencode', args, {
         cwd: workspace,
@@ -407,7 +421,7 @@ export class ProcessManager {
       const handleStdout = (data: Buffer) => {
         const content = data.toString();
         state.stdout += content;
-        logStream?.write(data);
+        stdoutLogStream?.write(data);
         logOpencodeChunk(taskId, 'stdout', content);
         if (onEvent) {
           onEvent({
@@ -421,7 +435,7 @@ export class ProcessManager {
       const handleStderr = (data: Buffer) => {
         const content = data.toString();
         state.stderr += content;
-        logStream?.write(data); // mirror `2>&1 | tee` behavior
+        stderrLogStream?.write(data);
         logOpencodeChunk(taskId, 'stderr', content);
         if (onEvent) {
           onEvent({
@@ -470,7 +484,7 @@ export class ProcessManager {
           state.stdout = recovered;
           result.stdout = recovered;
           logger.taskInfo(taskId, LOG_MODULES.PROCESS, `[opencode recovered stdout] ${recovered}`);
-          logStream?.write(`\n[opencode recovered stdout]\n${recovered}\n`);
+          stdoutLogStream?.write(`\n[opencode recovered stdout]\n${recovered}\n`);
           if (onEvent) {
             onEvent({
               type: 'agent_message_chunk',
@@ -504,8 +518,11 @@ export class ProcessManager {
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
     } finally {
       this.processes.delete(taskId);
-      if (logStream) {
-        try { logStream.end(); } catch { /* non-critical */ }
+      if (stdoutLogStream) {
+        try { stdoutLogStream.end(); } catch { /* non-critical */ }
+      }
+      if (stderrLogStream) {
+        try { stderrLogStream.end(); } catch { /* non-critical */ }
       }
     }
   }

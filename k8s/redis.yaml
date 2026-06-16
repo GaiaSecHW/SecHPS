@@ -4,9 +4,8 @@ metadata:
   name: codeswarm-redis
   namespace: secflow-ns
   labels:
-    app.kubernetes.io/name: redis
-    app.kubernetes.io/component: cache
-    app.kubernetes.io/part-of: codeswarm-service
+    app: codeswarm-redis
+    component: cache
 spec:
   type: NodePort
   selector:
@@ -23,9 +22,8 @@ metadata:
   name: codeswarm-redis
   namespace: secflow-ns
   labels:
-    app.kubernetes.io/name: codeswarm-redis
-    app.kubernetes.io/component: cache
-    app.kubernetes.io/part-of: codeswarm-service
+    app: codeswarm-redis
+    component: cache
 spec:
   replicas: 1
   selector:
@@ -35,14 +33,18 @@ spec:
     metadata:
       labels:
         app: codeswarm-redis
+        component: cache
     spec:
+      terminationGracePeriodSeconds: 60
       securityContext:
         fsGroup: 999
       containers:
         - name: redis
           image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 6379
+              name: redis
           args:
             - redis-server
             - --appendonly
@@ -70,17 +72,16 @@ spec:
       volumes:
         - name: redis-data
           persistentVolumeClaim:
-            claimName: redis-data
+            claimName: codeswarm-redis-data
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: redis-data
+  name: codeswarm-redis-data
   namespace: secflow-ns
   labels:
-    app.kubernetes.io/name: redis
-    app.kubernetes.io/component: cache
-    app.kubernetes.io/part-of: codeswarm-service
+    app: codeswarm-redis
+    component: cache
 spec:
   accessModes:
     - ReadWriteOnce

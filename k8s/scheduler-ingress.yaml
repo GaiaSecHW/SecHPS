@@ -1,12 +1,11 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: scheduler-ingress
+  name: codeswarm-scheduler
   namespace: secflow-ns
   labels:
-    app.kubernetes.io/name: scheduler
-    app.kubernetes.io/component: scheduler
-    app.kubernetes.io/part-of: codeswarm-service
+    app: scheduler
+    component: scheduler
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "512m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"

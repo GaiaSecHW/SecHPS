@@ -585,7 +585,6 @@ export class CodeswarmDispatcher {
     const baseTaskPayload = {
       taskId: task.taskId,
       instruction: task.instruction || undefined,
-      projectPath: task.projectPath || undefined,
       workspacePath: task.workspacePath || undefined,
       skills: task.skills ? safeJsonParse(task.skills) : undefined,
       scripts: task.scripts ? safeJsonParse(task.scripts) : undefined,
@@ -605,7 +604,6 @@ export class CodeswarmDispatcher {
       toolId: task.toolId || undefined,
       toolTaskId: task.toolTaskId || undefined,
       toolPath: task.toolPath || undefined,
-      toolWorkDir: task.toolWorkDir || undefined,
     };
 
     // Phase 2: Try multiple addresses to send HTTP request

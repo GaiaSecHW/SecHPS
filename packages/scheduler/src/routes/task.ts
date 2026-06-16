@@ -14,6 +14,33 @@ import { allocateWorkspacePath, allocateToolWorkspacePath, ensureWorkspaceDir } 
 import { metrics } from '../services/metrics.js';
 import { logger } from '../logger.js';
 
+type SubmitTaskEnvInput = {
+  env?: Record<string, string>;
+  projectPath?: string;
+  toolWorkDir?: string;
+  platformTaskId?: string;
+};
+
+export function normalizeSubmitTaskEnv(input: SubmitTaskEnvInput): {
+  env: Record<string, string>;
+  projectDir: string;
+  toolWorkDir: string | undefined;
+  platformTaskId: string | undefined;
+} {
+  const env = { ...(input.env || {}) };
+  const projectDir = env.INPUT_DIR || input.projectPath || '';
+  const toolWorkDir = env.TOOL_WORK_DIR || input.toolWorkDir || undefined;
+  const platformTaskId = env.PLATFORM_TASK_ID || input.platformTaskId || undefined;
+
+  if (projectDir || Object.prototype.hasOwnProperty.call(env, 'INPUT_DIR')) {
+    env.INPUT_DIR = projectDir;
+  }
+  if (toolWorkDir) env.TOOL_WORK_DIR = toolWorkDir;
+  if (platformTaskId) env.PLATFORM_TASK_ID = platformTaskId;
+
+  return { env, projectDir, toolWorkDir, platformTaskId };
+}
+
 export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): void {
 
   // POST /api/codeswarm/task/submit
@@ -50,24 +77,22 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     // Generate taskId
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+    const normalizedEnv = normalizeSubmitTaskEnv(body);
+
     // Tool 调度模式：生成 toolTaskId 并创建 tool 工作目录
     let toolTaskId: string | undefined;
     let toolWorkspacePath: string | undefined;
-    let toolEnv: Record<string, string> | undefined;
     let resolvedToolWorkDir: string | undefined;
 
     if (body.toolId) {
       const uuidPart = crypto.randomUUID().split('-')[0]; // 8 chars
       toolTaskId = `${body.toolId}-${uuidPart}-${Date.now()}`;
-      resolvedToolWorkDir = body.toolWorkDir || process.env.TOOL_WORK_DIR || '/mnt/tool-workspace';
+      resolvedToolWorkDir = normalizedEnv.toolWorkDir || process.env.TOOL_WORK_DIR || '/mnt/tool-workspace';
       toolWorkspacePath = allocateToolWorkspacePath(resolvedToolWorkDir, toolTaskId);
       ensureWorkspaceDir(toolWorkspacePath);
-      // 构建环境变量
-      toolEnv = {
-        ...(body.env || {}),
-        PROJECT_DIR: body.projectPath || '',
-        TOOL_WORK_DIR: resolvedToolWorkDir,
-      };
+      normalizedEnv.env.TOOL_WORK_DIR = resolvedToolWorkDir;
+      normalizedEnv.env.TOOL_ID = body.toolId;
+      normalizedEnv.env.TOOL_TASK_ID = toolTaskId;
       logger.info(`[Task] Tool mode: toolTaskId=${toolTaskId}, workspace=${toolWorkspacePath}`);
     }
 
@@ -85,7 +110,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             state: 'queued',
             instruction: body.instruction,
             workspacePath,
-            projectPath: body.projectPath || null,
+            projectPath: normalizedEnv.projectDir || null,
             engine: body.engine || null,
             agent: body.agent || null,
             model: body.model || null,
@@ -94,18 +119,18 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             timeoutSec: body.timeoutSec || null,
             skills: body.skills ? JSON.stringify(body.skills) : null,
             mcps: body.mcps ? JSON.stringify(body.mcps) : null,
-            env: toolEnv ? JSON.stringify(toolEnv) : (body.env ? JSON.stringify(body.env) : null),
+            env: Object.keys(normalizedEnv.env).length > 0 ? JSON.stringify(normalizedEnv.env) : null,
             preferredWorkerNodeId: body.preferredWorkerNodeId || null,
             targetProduct: body.targetProduct || null,
             maxTokens: body.maxTokens || null,
             contextWindow: body.contextWindow || null,
-            platformTaskId: body.platformTaskId || null,
+            platformTaskId: normalizedEnv.platformTaskId || null,
             platformCallbackUrl: body.callbackUrl || null,
             // Tool 调度字段
             toolId: body.toolId || null,
             toolTaskId: toolTaskId || null,
             toolPath: body.toolPath || null,
-            toolWorkDir: resolvedToolWorkDir || null,
+            toolWorkDir: resolvedToolWorkDir || normalizedEnv.toolWorkDir || null,
           },
         })
       );

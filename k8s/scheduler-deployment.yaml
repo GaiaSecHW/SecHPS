@@ -4,8 +4,8 @@ metadata:
   name: codeswarm-scheduler
   namespace: secflow-ns
   labels:
-    app.kubernetes.io/name: scheduler
-    app.kubernetes.io/component: scheduler
+    app: scheduler
+    component: scheduler
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,11 @@ spec:
     metadata:
       labels:
         app: scheduler
+        component: scheduler
     spec:
+      imagePullSecrets:
+        - name: ghcr-ict-bin-pull
+      terminationGracePeriodSeconds: 90
       securityContext:
         fsGroup: 1000
       containers:
@@ -24,14 +28,19 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+              name: http
           envFrom:
             - configMapRef:
                 name: codeswarm-config
             - secretRef:
                 name: codeswarm-secrets
           volumeMounts:
-            - name: fileserver
+            - name: shared-data
               mountPath: /data
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
           resources:
             requests:
               cpu: 200m
@@ -52,6 +61,6 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
       volumes:
-        - name: fileserver
+        - name: shared-data
           persistentVolumeClaim:
             claimName: secflow-platform-fileserver-data-nfs-pvc

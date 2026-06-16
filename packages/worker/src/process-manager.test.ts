@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as path from 'node:path';
 import * as processManager from './process-manager.js';
+
+test('builds opencode run args with print logs for session recovery', () => {
+  assert.deepEqual(
+    processManager.buildOpencodeRunArgs('reviewer', '检查代码'),
+    ['run', '--print-logs', '--agent', 'reviewer', '检查代码'],
+  );
+});
+
+test('builds separate opencode stdout and stderr log file paths', () => {
+  assert.deepEqual(
+    processManager.buildOpencodeLogFilePaths('/workspace/task'),
+    {
+      stdout: path.join('/workspace/task', 'opencode_stdout.logs'),
+      stderr: path.join('/workspace/task', 'opencode_stderr.logs'),
+    },
+  );
+});
 
 test('builds opencode stream log event for stderr chunks', () => {
   assert.deepEqual(

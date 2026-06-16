@@ -19,6 +19,27 @@ afterEach(() => {
   }
 });
 
+test('uses INPUT_DIR from env when building a local workspace', async () => {
+  const projectDir = tempDir('codeswarm-project-');
+  const workspaceBasePath = tempDir('codeswarm-base-');
+  fs.writeFileSync(path.join(projectDir, 'README.md'), 'project from env');
+
+  const factory = new EnvironmentFactory({ workspaceBasePath });
+
+  const result = await factory.build({
+    taskId: 'task-project-dir-env',
+    instruction: 'payload instruction',
+    skills: [],
+    scripts: [],
+    mcps: [],
+    env: {
+      INPUT_DIR: projectDir,
+    },
+  });
+
+  assert.equal(result.workspacePath, path.join(workspaceBasePath, 'task-project-dir-env'));
+  assert.equal(fs.readFileSync(path.join(result.workspacePath, 'README.md'), 'utf-8'), 'project from env');
+});
 test('copies toolPath directory into provided workspace before resolving tool config', async () => {
   const workspacePath = tempDir('codeswarm-workspace-');
   const toolPath = tempDir('codeswarm-tool-');

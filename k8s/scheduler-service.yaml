@@ -4,26 +4,32 @@ metadata:
   name: scheduler
   namespace: secflow-ns
   labels:
-    app.kubernetes.io/name: scheduler
+    app: scheduler
+    component: scheduler
 spec:
+  type: ClusterIP
   selector:
     app: scheduler
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080
-      name: http
-  type: ClusterIP
+      protocol: TCP
 ---
-# Headless Service for Pod 直连（Worker → Scheduler 心跳）
 apiVersion: v1
 kind: Service
 metadata:
   name: scheduler-headless
   namespace: secflow-ns
+  labels:
+    app: scheduler
+    component: scheduler
 spec:
+  clusterIP: None
   selector:
     app: scheduler
   ports:
-    - port: 8080
+    - name: http
+      port: 8080
       targetPort: 8080
-  clusterIP: None
+      protocol: TCP

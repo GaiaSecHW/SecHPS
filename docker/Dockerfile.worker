@@ -293,6 +293,14 @@ COPY --from=worker-builder /deploy/worker /opt/worker
 RUN mkdir -p /opt/worker/data/task_workspaces
 
 # ---------------------------------------------------------------------------
+# Copy OpenCode models cache
+# OpenCode uses this file for model/provider metadata in isolated runtime
+# environments where the online model list may be unavailable.
+# ---------------------------------------------------------------------------
+RUN mkdir -p /root/.cache/opencode
+COPY models.json /root/.cache/opencode/models.json
+
+# ---------------------------------------------------------------------------
 # Pre-install opencode runtime dependencies into cache directory
 # opencode Bun auto-installer looks in ~/.cache/opencode/node_modules/ at runtime.
 # In an isolated environment (no internet), these packages must be pre-installed
@@ -357,6 +365,9 @@ RUN echo "=== Verifying critical worker components ===" && \
     echo "10. OpenCode runtime deps..." && \
     test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin && echo "   ✅ @opencode-ai/plugin" || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
     test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible && echo "   ✅ @ai-sdk/openai-compatible" || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
+    \
+    echo "11. OpenCode models cache..." && \
+    test -f /root/.cache/opencode/models.json && echo "   ✅ models.json" || (echo "   ❌ MISSING: models.json" && exit 1) && \
     \
     echo "=== All critical components verified OK ==="
 

@@ -1,7 +1,7 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: worker-hpa
+  name: codeswarm-worker
   namespace: secflow-ns
 spec:
   scaleTargetRef:
@@ -12,20 +12,18 @@ spec:
   maxReplicas: 20
   behavior:
     scaleDown:
-      stabilizationWindowSeconds: 300    # 5min 观察窗口
+      stabilizationWindowSeconds: 300
       policies:
         - type: Pods
-          value: 1                        # 每次最多缩 1 个 Pod
+          value: 1
           periodSeconds: 120
     scaleUp:
       stabilizationWindowSeconds: 60
       policies:
         - type: Pods
-          value: 3                        # 每次最多扩 3 个 Pod
+          value: 3
           periodSeconds: 60
   metrics:
-    # Use CPU because the current cluster does not expose the
-    # codeswarm_queue_depth external metric via external.metrics.k8s.io.
     - type: Resource
       resource:
         name: cpu

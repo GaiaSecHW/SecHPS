@@ -32,7 +32,6 @@ const API_DOCS: { category: string; endpoints: ApiEndpoint[] }[] = [
       { method: 'POST', path: '/api/codeswarm/task/submit', desc: '提交任务', requestBody: [
         { name: 'instruction', type: 'string', required: true, desc: 'AI 执行指令' },
         { name: 'engine', type: 'string', desc: '执行引擎 (opencode/claudecode)' },
-        { name: 'projectPath', type: 'string', desc: '项目路径' },
         { name: 'workspacePath', type: 'string', desc: '工作空间路径' },
         { name: 'model', type: 'string', desc: 'AI 模型名称 (如 MiniMax-M2.7, DeepSeek-V3)' },
         { name: 'apiBaseUrl', type: 'string', desc: '自定义 API endpoint URL (OpenAI-compatible routers)' },
@@ -42,13 +41,12 @@ const API_DOCS: { category: string; endpoints: ApiEndpoint[] }[] = [
         { name: 'contextWindow', type: 'number', desc: '模型上下文窗口大小' },
         { name: 'skills', type: 'string[]', desc: '启用的 Skill 列表' },
         { name: 'mcps', type: 'any[]', desc: 'MCP 配置列表' },
-        { name: 'env', type: 'Record<string,string>', desc: '传递给 Agent 进程的环境变量' },
+        { name: 'env', type: 'Record<string,string>', desc: '环境变量；INPUT_DIR/TOOL_WORK_DIR/PLATFORM_TASK_ID 为保留键' },
         { name: 'scripts', type: 'string[]', desc: '脚本列表' },
         { name: 'preferredWorkerNodeId', type: 'string', desc: '指定 Worker 节点' },
         { name: 'targetProduct', type: 'string', desc: '目标产品名称' },
         { name: 'toolId', type: 'string', desc: 'Tool 标识符（启用 tool 调度模式）' },
         { name: 'toolPath', type: 'string', desc: 'Tool 可执行路径 (toolId 填写时有效)' },
-        { name: 'toolWorkDir', type: 'string', desc: 'Tool 工作根目录 (TOOL_WORK_DIR)' },
       ], response: [
         { name: 'taskId', type: 'string', desc: '任务 ID' },
         { name: 'toolTaskId', type: 'string', desc: 'Tool 任务组合 ID (tool 模式返回)' },

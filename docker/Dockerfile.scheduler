@@ -171,6 +171,7 @@ RUN echo "=== Verifying critical scheduler components ===" && \
     echo "5. Prisma Client..." && \
     test -d /opt/scheduler/node_modules/.prisma/client && echo "   ✅ .prisma/client" || (echo "   ❌ MISSING: .prisma/client" && exit 1) && \
     test -d /opt/scheduler/node_modules/@prisma/client && echo "   ✅ @prisma/client" || (echo "   ❌ MISSING: @prisma/client" && exit 1) && \
+    test -f /opt/scheduler/node_modules/prisma/build/index.js && echo "   ✅ prisma CLI" || (echo "   ❌ MISSING: prisma CLI" && exit 1) && \
     \
     echo "6. Prisma schema..." && \
     test -f /opt/scheduler/prisma/schema.prisma && echo "   ✅ schema.prisma" || (echo "   ❌ MISSING: schema.prisma" && exit 1) && \

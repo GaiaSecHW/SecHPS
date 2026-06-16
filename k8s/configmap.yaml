@@ -9,9 +9,8 @@ data:
   WORKSPACE_BASE_PATH: "/data/codeswarm-workspace"
   TASK_CLEANUP_RETENTION_DAYS: "30"
   LOG_LEVEL: "info"
-  REDIS_URL: "redis://codeswarm-redis:6379"   # 指向集群内 Redis Service
+  REDIS_URL: "redis://codeswarm-redis:6379"
   MAX_CONCURRENT: "5"
   TASK_TIMEOUT_SEC: "86400"
   GRACEFUL_SHUTDOWN_TIMEOUT_MS: "300000"
   AIGW_WORK_KEYS_URL: "http://secflow.ai.icsl.huawei.com"
-  # Worker 地址自动检测，无需配置

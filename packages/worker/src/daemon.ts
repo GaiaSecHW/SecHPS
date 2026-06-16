@@ -110,6 +110,18 @@ function serializeError(error: unknown): unknown {
   return error;
 }
 
+function buildAgentFailureReason(exitCode: number, stderr: string): string {
+  if (exitCode === 124) {
+    const permissionPromptPattern = /permission(?:=|\s).*?(?:external_directory|asked)|permission\.asked|external_directory.*?asking/i;
+    if (permissionPromptPattern.test(stderr)) {
+      return '任务超时：Agent 请求交互式权限确认，Worker 非交互环境无法确认';
+    }
+    return '任务超时：Agent 执行超过任务 timeoutSec 限制';
+  }
+
+  return `任务执行失败，进程退出码: ${exitCode}`;
+}
+
 export class WorkerDaemon {
   private readonly config: WorkerDaemonConfig;
   private readonly server: FastifyInstance;
@@ -584,7 +596,7 @@ this.server.get('/health', async () => ({
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.workspacePath: ${payload.workspacePath}`);
-      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.projectPath: ${payload.projectPath}`);
+      logger.taskInfo(taskId, LOG_MODULES.DAEMON, `payload.INPUT_DIR: ${env?.INPUT_DIR || 'none'}`);
 
       const onEvent = (event: AgentEvent) => {
         logger.taskInfo(taskId, LOG_MODULES.AGENT, `Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
@@ -721,7 +733,7 @@ this.server.get('/health', async () => ({
         error = 'Task cancelled by user';
       } else if (result.exitCode !== 0) {
         status = 'failed';
-        error = `任务执行失败，进程退出码: ${result.exitCode}`;
+        error = buildAgentFailureReason(result.exitCode, result.stderr);
       } else {
         status = 'completed';
       }

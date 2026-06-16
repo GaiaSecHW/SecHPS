@@ -72,6 +72,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     instruction: '',
     projectPath: '',
     workspacePath: '',
+    platformTaskId: '',
     apiKey: '',
     timeoutSec: 300,
     preferredWorkerNodeId: '',
@@ -239,10 +240,15 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
     setLoading(true);
     try {
+      const reservedEnv = {
+        ...(form.projectPath ? { INPUT_DIR: form.projectPath } : {}),
+        ...(form.toolId && form.toolWorkDir ? { TOOL_WORK_DIR: form.toolWorkDir } : {}),
+        ...(form.platformTaskId ? { PLATFORM_TASK_ID: form.platformTaskId } : {}),
+      };
+
       const payload = {
         instruction: form.instruction,
         engine: form.engine,
-        projectPath: form.projectPath || undefined,
         workspacePath: form.workspacePath || undefined,
         apiKey: form.apiKey || undefined,
         timeoutSec: form.timeoutSec || undefined,
@@ -255,12 +261,13 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         // Tool Dispatch
         toolId: form.toolId || undefined,
         toolPath: form.toolId && form.toolPath ? form.toolPath : undefined,
-        toolWorkDir: form.toolId && form.toolWorkDir ? form.toolWorkDir : undefined,
         // Advanced
         skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : undefined,
         mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()).filter(Boolean) : undefined,
         scripts: form.scripts ? form.scripts.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-        env: envParsed,
+        env: Object.keys({ ...(envParsed || {}), ...reservedEnv }).length > 0
+          ? { ...(envParsed || {}), ...reservedEnv }
+          : undefined,
         targetProduct: form.targetProduct || undefined,
       };
 
@@ -285,6 +292,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           instruction: '',
           projectPath: '',
           workspacePath: '',
+          platformTaskId: '',
         }));
       } else {
         toast.error(data.error || '创建任务失败');
@@ -377,13 +385,19 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             {/* Basic Fields Grid */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">项目路径</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">项目路径 (env.INPUT_DIR)</label>
                 <input type="text" value={form.projectPath} onChange={(e) => setForm({ ...form, projectPath: e.target.value })} placeholder="/path/to/project" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">工作区路径 (NFS)</label>
                 <input type="text" value={form.workspacePath} onChange={(e) => setForm({ ...form, workspacePath: e.target.value })} placeholder="/shared/workspace/task-123" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
               </div>
+            </div>
+
+            {/* Worker Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">平台任务 ID (env.PLATFORM_TASK_ID)</label>
+              <input type="text" value={form.platformTaskId} onChange={(e) => setForm({ ...form, platformTaskId: e.target.value })} placeholder="外部平台任务 ID" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
             </div>
 
             {/* Worker Selection */}
@@ -457,7 +471,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                   <input type="text" value={form.toolPath} onChange={(e) => setForm({ ...form, toolPath: e.target.value })} placeholder="/usr/local/bin/my-tool" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Tool 工作目录</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Tool 工作目录 (env.TOOL_WORK_DIR)</label>
                   <input type="text" value={form.toolWorkDir} onChange={(e) => setForm({ ...form, toolWorkDir: e.target.value })} placeholder="/mnt/tool-workspace (默认 TOOL_WORK_DIR)" className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500" />
                 </div>
               </>
@@ -494,11 +508,11 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               <textarea
                 value={form.env}
                 onChange={(e) => setForm({ ...form, env: e.target.value })}
-                placeholder='{"NODE_ENV": "production", "DEBUG": "true"}'
+                placeholder='{"NODE_ENV": "production", "DEBUG": "true", "INPUT_DIR": "/data/project", "TOOL_WORK_DIR": "/data/tool-work", "PLATFORM_TASK_ID": "platform-task-id"}'
                 rows={3}
                 className="w-full px-3 py-2 bg-dark-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
               />
-              <p className="text-xs text-gray-500 mt-1">JSON 格式的环境变量对象，将传递给 Agent 进程</p>
+              <p className="text-xs text-gray-500 mt-1">JSON 格式的环境变量对象；INPUT_DIR / TOOL_WORK_DIR / PLATFORM_TASK_ID 为保留键</p>
             </div>
           </CollapsibleSection>
 

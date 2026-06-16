@@ -198,7 +198,9 @@ export class EnvironmentFactory {
     progress(`========== BUILD BEGIN ==========`);
     logger.info(LOG_MODULES.ENV, `payload.taskId: ${payload.taskId}`);
     logger.info(LOG_MODULES.ENV, `payload.workspacePath: ${payload.workspacePath}`);
-    logger.info(LOG_MODULES.ENV, `payload.projectPath: ${payload.projectPath}`);
+    const projectPathFromEnv = payload.env?.INPUT_DIR;
+    const projectPath = projectPathFromEnv || payload.projectPath;
+    logger.info(LOG_MODULES.ENV, `payload.projectPath: ${projectPath}`);
     logger.info(LOG_MODULES.ENV, `payload.skills: ${payload.skills?.join(', ') || 'none'}`);
     logger.info(LOG_MODULES.ENV, `payload.agent: ${payload.agent}`);
     logger.info(LOG_MODULES.ENV, `payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
@@ -357,7 +359,7 @@ export class EnvironmentFactory {
     }
 
     // Local workspace mode
-    progress(`Mode: 本地构建 (projectPath=${payload.projectPath})`);
+    progress(`Mode: 本地构建 (projectPath=${projectPath})`);
     const workspacePath = path.join(this.workspaceBasePath, payload.taskId);
 
     try {
@@ -365,7 +367,6 @@ export class EnvironmentFactory {
       fs.mkdirSync(workspacePath, { recursive: true });
 
       // Step 2: Populate workspace from local copy
-      const projectPath = payload.projectPath;
       if (!projectPath || !fs.existsSync(projectPath)) {
         throw new Error(`Project path does not exist: ${projectPath}`);
       }
