@@ -493,7 +493,9 @@ RUN mkdir -p /app/data/skills \
               /app/tmp && \
     chown -R nextjs:nodejs /app/data /app/uploads /app/skill_management \
                             /app/AgentHarness /app/backups /app/outputs /app/tmp && \
-    git config --global --add safe.directory "*"
+    git config --global --add safe.directory "*" && \
+    git config --file /home/nextjs/.gitconfig --add safe.directory "*" && \
+    chown nextjs:nodejs /home/nextjs/.gitconfig
 
 EXPOSE 3000
 

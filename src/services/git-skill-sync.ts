@@ -1,6 +1,7 @@
 import simpleGit, { SimpleGit, SimpleGitOptions } from 'simple-git';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 const GITEA_CONFIG = {
@@ -43,6 +44,7 @@ class GitSkillSync {
     logger.info(LOG_MODULES.SKILL, 'GitSkillSync 初始化', { repoPath, repo: GITEA_CONFIG.repo });
 
     try {
+      execSync(`git config --global safe.directory "${repoPath}"`, { stdio: 'pipe' });
       if (!fs.existsSync(repoPath)) {
         fs.mkdirSync(repoPath, { recursive: true });
         logger.info(LOG_MODULES.SKILL, '创建 skill_management 目录', { repoPath });
