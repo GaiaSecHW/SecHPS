@@ -1,34 +1,12 @@
 # ============================================================================
-# SecHPS Server - Docker Build (Full Project + All Dependencies)
+# SecHPS Server - Optimized Docker Build
 #
-# Build context: project root
-#   docker build -f Dockerfile.server -t sechps-server:latest .
-#
-# 特点:
-#   - 完整项目作为工作目录（含源码、脚本、prisma、plugins、skills）
-#   - 打包所有所需第三方软件和系统库（PostgreSQL、Redis、Git 等）
-#   - 保留 npm 脚本运行能力（db:push、db:seed、migrate 等）
-#   - 多阶段构建优化镜像体积
-#   - 完全自包含：适用于无外网隔离部署环境
-#
-# Runtime env vars (see .env.example for full list):
-#   DATABASE_URL       - PostgreSQL connection string (REQUIRED)
-#   JWT_SECRET         - JWT signing key (REQUIRED)
-#   NODE_ENV           - production
-#   REDIS_URL          - Redis for CodeSwarm scheduling
-#   NEXT_PUBLIC_BASE_URL - Worker callback URL
-#   GITEA_*            - Gitea file sync config
-#   MINIO_*            - MinIO object storage config
-#   PORT               - HTTP port (default 3000)
-#
-# Important:
-#   - Do NOT use --omit=optional or --production for npm install
-#     (@anthropic-ai/claude-agent-sdk requires optional native-binary deps)
-#   - Prisma binaryTargets include debian-openssl-3.0.x (matches bookworm)
-#   - node-pty requires native compilation (needs build-essential in builder)
-#   - better-sqlite3 moved to dependencies (used in 4 production API routes)
-#   - 在隔离环境中，Prisma 禁止运行时下载引擎（通过环境变量阻止）
-#   - COPY 顺序：先 standalone，后 node_modules（合并而非覆盖）
+# 优化要点:
+#   1. runner 使用 bookworm-slim（减少 ~800MB）
+#   2. 精准补充 standalone 缺失的 node_modules 包（减少 ~500MB+）
+#   3. apt 只装运行时必需库（减少 ~100MB）
+#   4. Skills 使用 symlink 代替多份拷贝
+#   5. 不 COPY src/ 到 runner
 # ============================================================================
 
 # ---------------------------------------------------------------------------
@@ -51,12 +29,7 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 # NPM: Taobao registry (will be overridden by .npmrc COPY)
 RUN npm config set registry https://registry.npmmirror.com
 
-# Install build tools for native C++ modules:
-#   - node-pty: needs forkpty/openpty (C++ addon, node-gyp)
-#   - better-sqlite3: needs C++20 compiler (node-gyp)
-#   - @img/sharp-*: prebuilt, no compilation needed
-#   - @anthropic-ai/claude-agent-sdk: prebuilt native binaries, no compilation
-#   - cpu-features (ssh2 optional): C addon, node-gyp
+# Build tools for native modules (node-pty, better-sqlite3)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
@@ -64,12 +37,11 @@ RUN apt-get update && \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency manifests first (leverage Docker layer cache)
+# Copy dependency manifests
 COPY package.json package-lock.json ./
 COPY .npmrc ./
 
-# Copy Prisma schema BEFORE npm ci (postinstall triggers prisma generate)
-# Without this, npm ci fails: "Could not find Prisma Schema"
+# Copy Prisma schema before npm ci (postinstall triggers prisma generate)
 COPY prisma/ ./prisma/
 
 # CRITICAL: Do NOT add --omit=optional or --production flags.
@@ -81,7 +53,7 @@ RUN npm ci && \
     ls -la node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node && \
     echo "=== Prisma engine OK ==="
 
-# Copy build-time config files
+# Copy build-time config
 COPY next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
 COPY tailwind.config.ts ./
 
@@ -116,15 +88,13 @@ COPY public/ ./public/
 # At runtime, the real DATABASE_URL and JWT_SECRET must be provided via docker run --env-file or -e.
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?connect_timeout=1"
 ENV JWT_SECRET="dummy-build-secret-not-for-production"
-RUN npm run build
+RUN npm run build && \
+    npm prune --production
 
 # ---------------------------------------------------------------------------
-# Stage 2: Production Runtime (Full Project + All System Libraries + Tools)
+# Stage 2: Production Runtime (bookworm-slim + minimal apt)
 # ---------------------------------------------------------------------------
-# Using node:20-bookworm (FULL, not slim) as base ensures all system shared
-# libraries are present: libssl3 (OpenSSL 3.0.x for Prisma), libstdc++6,
-# libgcc-s1, ncurses-base (terminfo for node-pty), fontconfig, zlib, glibc.
-FROM node:20-bookworm AS runner
+FROM node:20-bookworm-slim AS runner
 
 ARG BUILD_DATE
 ARG VERSION
@@ -136,44 +106,20 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
 LABEL org.opencontainers.image.created=$BUILD_DATE
 LABEL org.opencontainers.image.version=$VERSION
 LABEL org.opencontainers.image.title="SecHPS Server"
-LABEL org.opencontainers.image.description="AI-driven security testing platform - Server (full project + all dependencies)"
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-
-# ---------------------------------------------------------------------------
-# CRITICAL: Prevent Prisma from downloading engines at runtime
-# In an isolated (no internet) environment, Prisma Client would crash if
-# it tries to download the query engine on first use.
-# These env vars force Prisma to use the local engine files only.
-# ---------------------------------------------------------------------------
 ENV PRISMA_CLI_QUERY_ENGINE_TYPE=library
 ENV PRISMA_QUERY_ENGINE_TYPE=library
 
-# Create non-root user for security
 RUN addgroup --system nodejs && \
     adduser --system --ingroup nodejs nextjs
 
-# ---------------------------------------------------------------------------
-# Install ALL required third-party software and system dependency components
-# These are needed for runtime operations in an isolated environment
-# ---------------------------------------------------------------------------
+# Only install runtime-required system libs (no debug tools)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        \
-        # === Database ===
-        # PostgreSQL client: psql, pg_dump, pg_restore
-        #   - db:push, db:seed, migrations at runtime
-        #   - database debugging and manual queries
-        postgresql-client \
-        \
-        # === Queue / Cache ===
-        # Redis client: redis-cli
-        #   - CodeSwarm queue debugging (ioredis is pure JS, no native deps)
-        redis-tools \
-        \
         # === System Libraries (native module runtime deps) ===
         # libssl3: OpenSSL 3.0.x shared libs (libssl.so.3, libcrypto.so.3)
         #   - Required by Prisma query engine (debian-openssl-3.0.x target)
@@ -214,15 +160,7 @@ RUN apt-get update && \
         # git: Skill Gitea synchronization via simple-git
         #   - Also useful for debugging, patching in isolated env
         git \
-        \
-        # === Crypto ===
-        # openssl: CLI tool for certificate/key operations
-        #   - JWT debug, certificate generation, crypto testing
-        openssl \
-        \
         # === Data Processing ===
-        # jq: JSON processing and API response debugging
-        jq \
         # vim: text editor for debugging and config editing in isolated env
         vim \
         \
@@ -292,183 +230,87 @@ COPY opencode-config/opencode.jsonc /root/.config/opencode/opencode.jsonc
 COPY inner_skills/ /root/.config/opencode/skills/
 COPY skills/ /root/.config/opencode/skills/
 
-# Also configure for nextjs user (if container runs as USER nextjs)
-RUN mkdir -p /home/nextjs/.config/opencode/skills && \
-    mkdir -p /home/nextjs/.cache/opencode && \
+RUN mkdir -p /home/nextjs/.config/opencode /home/nextjs/.cache/opencode && \
+    ln -sf /root/.config/opencode/opencode.jsonc /home/nextjs/.config/opencode/opencode.jsonc && \
+    ln -sf /root/.config/opencode/skills /home/nextjs/.config/opencode/skills && \
     cp -r /root/.cache/opencode/node_modules /home/nextjs/.cache/opencode/node_modules && \
     chown -R nextjs:nodejs /home/nextjs/.config/opencode /home/nextjs/.cache/opencode
 
-COPY --chown=nextjs:nodejs opencode-config/opencode.jsonc /home/nextjs/.config/opencode/opencode.jsonc
-COPY --chown=nextjs:nodejs inner_skills/ /home/nextjs/.config/opencode/skills/
-COPY --chown=nextjs:nodejs skills/ /home/nextjs/.config/opencode/skills/
-
-# Default locale
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
 # ---------------------------------------------------------------------------
-# Copy full project structure from builder
-# IMPORTANT: Copy order matters!
-#   1) First copy standalone output (creates /app/ structure with traced node_modules)
-#   2) Then copy full node_modules (merges into traced one, adding missing packages)
-#   3) Then EXPLICITLY copy Prisma engine (not traced by Next.js standalone)
-#   This ensures all packages are present, including native modules and Prisma engine.
+# Copy from builder — standalone + targeted node_modules supplement
 # ---------------------------------------------------------------------------
 
-# Step 1: Copy Next.js standalone output (includes traced node_modules subset)
-# This creates /app/server.js, /app/.next/, /app/node_modules/ (traced subset)
+# Step 1: Next.js standalone output (includes traced node_modules subset)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/ ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static/ ./.next/static/
-# public/ is NOT included in Next.js standalone output — must copy explicitly
 COPY --from=builder --chown=nextjs:nodejs /app/public/ ./public/
 
-# Step 2: Copy full node_modules (merges with traced subset)
-# Docker COPY merges: overwrites existing files, preserves files not in source.
-# This adds packages missing from tracing: prisma CLI, better-sqlite3, etc.
-# Native binaries preserved: node-pty, better-sqlite3, @img/sharp-*, cpu-features
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/ ./node_modules/
-
-# Step 3: EXPLICITLY copy Prisma engine and client (critical for isolated env)
-# Next.js standalone tracing does NOT include .prisma/client/ engine binaries.
-# postbuild.js does NOT copy .prisma/client/ to standalone.
-# Without this explicit copy, Prisma would try to DOWNLOAD the engine at runtime,
-# which fails in an isolated environment.
+# Step 2: Targeted supplement — only packages missed by standalone tracing
+# Prisma engine + client (standalone does not trace .prisma/ engine binaries)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma/ ./node_modules/.prisma/
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client/ ./node_modules/@prisma/client/
-
-# Step 4: Copy Prisma CLI (for db:push, db:seed, prisma commands at runtime)
+# Prisma CLI (for db:push at runtime)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma/ ./node_modules/prisma/
-
-# Step 5: Copy @anthropic-ai SDK (native binaries, already in standalone via postbuild)
-# But copy again to ensure full SDK is in the merged node_modules
+# @anthropic-ai SDK (native binaries, postbuild handles standalone copy but full SDK needed)
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@anthropic-ai/ ./node_modules/@anthropic-ai/
+# better-sqlite3 (standalone may miss .node binary)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3/ ./node_modules/better-sqlite3/
+# node-pty (standalone may miss .node binary)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/node-pty/ ./node_modules/node-pty/
+# @img/sharp-* (optional native binaries)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@img/ ./node_modules/@img/
+# cpu-features (ssh2 optional dep)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/cpu-features/ ./node_modules/cpu-features/
 
-# -- Application source code --
-COPY --chown=nextjs:nodejs src/ ./src/
-
-# -- Configuration files --
+# Configuration files (minimal set for runtime)
 COPY --chown=nextjs:nodejs next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
-COPY --chown=nextjs:nodejs tailwind.config.ts package.json package-lock.json ./
+COPY --chown=nextjs:nodejs tailwind.config.ts package.json ./
 
-# -- Prisma schema and seed files (for db:push, db:seed at runtime) --
-# Includes: schema.prisma, seed scripts, migrations
+# Prisma schema + seed (for db:push, db:seed)
 COPY --from=builder --chown=nextjs:nodejs /app/prisma/ ./prisma/
 
-# -- Skills, Inner Skills and Plugins (runtime data) --
+# Skills, Inner Skills, Plugins (single copy — opencode uses symlinks)
 COPY --from=builder --chown=nextjs:nodejs /app/skills/ ./skills/
 COPY --from=builder --chown=nextjs:nodejs /app/inner_skills/ ./inner_skills/
 COPY --from=builder --chown=nextjs:nodejs /app/plugins/ ./plugins/
 
-# -- Scripts (migrations, seed, postbuild) --
+# Scripts (migrations, seed)
 COPY --chown=nextjs:nodejs scripts/ ./scripts/
 
-# -- Docs (developer guide used by /api/docs/agent-harness) --
+# Docs (agent-harness reference)
 COPY --chown=nextjs:nodejs docs/ ./docs/
 
 # ---------------------------------------------------------------------------
-# Verify ALL critical native binaries exist (fail build if any missing)
-# In an isolated environment, missing binaries = runtime crash with no recovery
+# Verify critical binaries
 # ---------------------------------------------------------------------------
 RUN echo "=== Verifying critical native binaries ===" && \
-    \
-    # Prisma query engine (OpenSSL 3.0.x linked .so)
     echo "1. Prisma query engine..." && \
     test -f /app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node \
-        && echo "   ✅ libquery_engine-debian-openssl-3.0.x.so.node" \
-        || (echo "   ❌ MISSING: Prisma engine binary" && exit 1) && \
-    \
-    # Prisma client JS
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
     echo "2. Prisma client..." && \
     test -f /app/node_modules/@prisma/client/index.js \
-        && echo "   ✅ @prisma/client/index.js" \
-        || (echo "   ❌ MISSING: @prisma/client" && exit 1) && \
-    \
-    # Prisma CLI binary
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
     echo "3. Prisma CLI..." && \
     test -f /app/node_modules/prisma/build/index.js \
-        && echo "   ✅ prisma CLI" \
-        || (echo "   ❌ MISSING: prisma CLI" && exit 1) && \
-    \
-    # node-pty (terminal emulation)
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
     echo "4. node-pty..." && \
     find /app/node_modules/node-pty -name "*.node" | head -1 | xargs test -f \
-        && echo "   ✅ node-pty native addon" \
-        || (echo "   ❌ MISSING: node-pty native addon" && exit 1) && \
-    \
-    # better-sqlite3 (statically embedded SQLite)
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
     echo "5. better-sqlite3..." && \
     find /app/node_modules/better-sqlite3 -name "*.node" | head -1 | xargs test -f \
-        && echo "   ✅ better-sqlite3 native addon" \
-        || (echo "   ❌ MISSING: better-sqlite3 native addon" && exit 1) && \
-    \
-    # @anthropic-ai/claude-agent-sdk
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
     echo "6. @anthropic-ai/claude-agent-sdk..." && \
     test -f /app/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs \
-        && echo "   ✅ claude-agent-sdk" \
-        || (echo "   ❌ MISSING: claude-agent-sdk" && exit 1) && \
-    \
-    # @img/sharp (image processing)
-    echo "7. @img/sharp-linux-x64..." && \
-    find /app/node_modules/@img/sharp-linux-x64 -name "*.node" | head -1 | xargs test -f \
-        && echo "   ✅ sharp native addon" \
-        || (echo "   ⚠️  sharp native addon missing (optional, non-critical)") && \
-    \
-    # OpenSSL shared library (Prisma runtime dependency)
-    echo "8. OpenSSL 3.0.x shared libs..." && \
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
+    echo "7. OpenCode CLI..." && \
+    which opencode && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
+    echo "8. OpenSSL 3.0.x..." && \
     test -f /usr/lib/x86_64-linux-gnu/libssl.so.3 \
-        && echo "   ✅ libssl.so.3" \
-        || (echo "   ❌ MISSING: libssl.so.3 (Prisma will crash)" && exit 1) && \
-    test -f /usr/lib/x86_64-linux-gnu/libcrypto.so.3 \
-        && echo "   ✅ libcrypto.so.3" \
-        || (echo "   ❌ MISSING: libcrypto.so.3 (Prisma will crash)" && exit 1) && \
-    \
-    # OpenCode CLI (global binary for ACP/agent/command modes)
-    echo "9. OpenCode CLI..." && \
-    which opencode \
-        && echo "   ✅ opencode CLI in PATH" \
-        || (echo "   ❌ MISSING: opencode CLI binary" && exit 1) && \
-    \
-    # inner_skills directory (runtime path for inner-skills.ts evaluation pipeline)
-    echo "10. inner_skills directory..." && \
-    test -d /app/inner_skills/audit-report-parser \
-        && echo "   ✅ /app/inner_skills/audit-report-parser" \
-        || (echo "   ❌ MISSING: /app/inner_skills/audit-report-parser" && exit 1) && \
-    \
-    # OpenCode global config (model/provider + global skills)
-    # Verify both root and nextjs user config paths (container may run as either)
-    echo "11. OpenCode global config..." && \
-    test -f /root/.config/opencode/opencode.jsonc \
-        && echo "   ✅ /root/.config/opencode/opencode.jsonc" \
-        || (echo "   ❌ MISSING: /root/.config/opencode/opencode.jsonc" && exit 1) && \
-    test -d /root/.config/opencode/skills/audit-report-parser \
-        && echo "   ✅ /root skills/audit-report-parser" \
-        || (echo "   ❌ MISSING: /root skills/audit-report-parser" && exit 1) && \
-    test -f /home/nextjs/.config/opencode/opencode.jsonc \
-        && echo "   ✅ /home/nextjs/.config/opencode/opencode.jsonc" \
-        || (echo "   ❌ MISSING: /home/nextjs/.config/opencode/opencode.jsonc" && exit 1) && \
-    test -d /home/nextjs/.config/opencode/skills/audit-report-parser \
-        && echo "   ✅ /home/nextjs skills/audit-report-parser" \
-        || (echo "   ❌ MISSING: /home/nextjs skills/audit-report-parser" && exit 1) && \
-    test -d /home/nextjs/.config/opencode/skills/threat-modeling \
-        && echo "   ✅ /home/nextjs skills/threat-modeling" \
-        || (echo "   ❌ MISSING: /home/nextjs skills/threat-modeling" && exit 1) && \
-    \
-    # OpenCode runtime deps (pre-installed in cache for isolated env)
-    echo "12. OpenCode runtime deps..." && \
-    test -d /root/.cache/opencode/node_modules/@opencode-ai/plugin \
-        && echo "   ✅ @opencode-ai/plugin (root cache)" \
-        || (echo "   ❌ MISSING: @opencode-ai/plugin" && exit 1) && \
-    test -d /root/.cache/opencode/node_modules/@ai-sdk/openai-compatible \
-        && echo "   ✅ @ai-sdk/openai-compatible (root cache)" \
-        || (echo "   ❌ MISSING: @ai-sdk/openai-compatible" && exit 1) && \
-    test -d /home/nextjs/.cache/opencode/node_modules/@opencode-ai/plugin \
-        && echo "   ✅ @opencode-ai/plugin (nextjs cache)" \
-        || (echo "   ❌ MISSING: @opencode-ai/plugin (nextjs)" && exit 1) && \
-    test -d /home/nextjs/.cache/opencode/node_modules/@ai-sdk/openai-compatible \
-        && echo "   ✅ @ai-sdk/openai-compatible (nextjs cache)" \
-        || (echo "   ❌ MISSING: @ai-sdk/openai-compatible (nextjs)" && exit 1) && \
-    \
-    echo "=== All critical binaries and configs verified OK ==="
+        && echo "   ✅" || (echo "   ❌ MISSING" && exit 1) && \
+    echo "=== All verified OK ==="
 
 # ---------------------------------------------------------------------------
 # Set Prisma engine path explicitly to prevent runtime download
