@@ -155,7 +155,11 @@ export async function GET(request: NextRequest) {
     const conditions: any[] = [];
 
     if (!tenant.isPlatformAdmin && !(tenant.isIcsTenant && payload.roles?.includes('admin'))) {
-      conditions.push({ userId: payload.userId });
+      if (payload.roles?.includes('admin') && tenant.tenantId) {
+        conditions.push({ tenantId: tenant.tenantId });
+      } else {
+        conditions.push({ userId: payload.userId });
+      }
     }
 
     if (search) {
@@ -200,8 +204,13 @@ export async function GET(request: NextRequest) {
 
       const isAdmin = tenant.isPlatformAdmin || (tenant.isIcsTenant && payload.roles?.includes('admin'));
       if (!isAdmin) {
-        sqlConds.push(`ti."userId" = $${idx++}`);
-        sqlParams.push(payload.userId);
+        if (payload.roles?.includes('admin') && tenant.tenantId) {
+          sqlConds.push(`ti."tenantId" = $${idx++}`);
+          sqlParams.push(tenant.tenantId);
+        } else {
+          sqlConds.push(`ti."userId" = $${idx++}`);
+          sqlParams.push(payload.userId);
+        }
       }
       if (search) {
         sqlConds.push(`(ti.name ILIKE $${idx} OR ti."agentName" ILIKE $${idx} OR ti.notes ILIKE $${idx})`);

@@ -31,7 +31,12 @@ export async function GET(request: Request) {
 
     // 根据用户角色和租户过滤
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
-      // 管理员/ICSL 可见所有
+      // 平台管理员/ICSL 可见所有
+    } else if (payload.roles?.includes('admin') && tenant.tenantId) {
+      // 非ICSL租户admin：可见同租户所有任务
+      where.OR = [
+        { tenantId: tenant.tenantId }
+      ];
     } else {
       // 普通用户：自己的 + 公开的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
