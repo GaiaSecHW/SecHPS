@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, FileText, Copy, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { buildFullSkill, getSkillDefaultTemplate, type SkillIntent } from '@/lib/skill-builder';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface SkillDraft {
   name: string;
@@ -115,7 +116,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
   }, []);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(skillData.content);
+    await safeClipboardWrite(skillData.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

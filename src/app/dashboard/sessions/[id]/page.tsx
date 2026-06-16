@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState, useRef, use } from 'react';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Copy,
@@ -836,7 +837,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
   };
 
   const handleCopy = (content: string) => {
-    navigator.clipboard.writeText(content);
+    safeClipboardWrite(content);
   };
 
   const handleMessageClick = async (message: any) => {
@@ -1635,7 +1636,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                         key={msg.id || `skill-msg-${idx}`}
                         message={msg}
                         onCopy={() => {
-                          navigator.clipboard.writeText(
+                          safeClipboardWrite(
                             typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2)
                           );
                         }}
@@ -1889,12 +1890,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                    <MessageBubble
                                      key={`${message.id}-${index}`}
                                      message={message}
-                                     onCopy={() => {
-                                       navigator.clipboard.writeText(
-                                         typeof message.content === 'string' 
-                                           ? message.content 
-                                           : JSON.stringify(message.content, null, 2)
-                                       );
+                                      onCopy={() => {
+                                        safeClipboardWrite(
+                                          typeof message.content === 'string' 
+                                            ? message.content 
+                                            : JSON.stringify(message.content, null, 2)
+                                        );
                                      }}
                                      onClick={() => {
                                        setSelectedMessage(message);
@@ -2050,7 +2051,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                                 key={childMsg.id || `child-msg-${msgIdx}`}
                                                 message={childMsg}
                                                 onCopy={() => {
-                                                  navigator.clipboard.writeText(
+                                                  safeClipboardWrite(
                                                     typeof childMsg.content === 'string' 
                                                       ? childMsg.content 
                                                       : JSON.stringify(childMsg.content, null, 2)

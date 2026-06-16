@@ -6,6 +6,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
 import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check, Server, ArrowUp, ArrowDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface Task {
   id: string;
@@ -41,7 +42,7 @@ interface TasksResponse {
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
+    safeClipboardWrite(text).then(() => {
       setCopied(true);
       toast.success('已复制');
       setTimeout(() => setCopied(false), 2000);

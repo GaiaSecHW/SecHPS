@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, FolderSearch, HardDrive, AlertTriangle, FileText, Shield, Zap, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface TestRecord {
   taskId: string;
@@ -639,7 +640,7 @@ export function LocalTestPanel() {
               解析日志
             </h3>
             <button onClick={() => {
-              navigator.clipboard.writeText(parseLogs.map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] ${l.message}`).join('\n'));
+              safeClipboardWrite(parseLogs.map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] ${l.message}`).join('\n'));
               toast.success('已复制');
             }} className="text-xs text-gray-500 hover:text-blue-400 flex items-center gap-1">
               <Copy className="w-3 h-3" />复制
@@ -782,7 +783,7 @@ export function LocalTestPanel() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="text-xs font-medium text-gray-400">解析日志</h5>
-                          <button onClick={() => { navigator.clipboard.writeText(selectedHistoryRecord.result || ''); toast.success('已复制'); }}
+                          <button onClick={() => { safeClipboardWrite(selectedHistoryRecord.result || ''); toast.success('已复制'); }}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-400">
                             <Copy className="w-3 h-3" />复制
                           </button>
@@ -817,7 +818,7 @@ export function LocalTestPanel() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="text-xs font-medium text-cyan-400">Skill 返回的完整数据 (入库前检查)</h5>
-                          <button onClick={() => { navigator.clipboard.writeText(selectedHistoryRecord.parsedVulnerabilities || ''); toast.success('已复制'); }}
+                          <button onClick={() => { safeClipboardWrite(selectedHistoryRecord.parsedVulnerabilities || ''); toast.success('已复制'); }}
                             className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-400">
                             <Copy className="w-3 h-3" />复制JSON
                           </button>

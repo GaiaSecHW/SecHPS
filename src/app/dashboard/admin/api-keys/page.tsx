@@ -5,6 +5,7 @@ import { Plus, Search, Trash2, Key, Copy, Check } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { apiGet, apiDelete } from '@/lib/api-client';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import CreateApiKeyModal from './CreateApiKeyModal';
 
 interface ApiKey {
@@ -88,7 +89,7 @@ export default function ApiKeysPage() {
 
   const handleCopyKey = async () => {
     if (newlyCreatedKey) {
-      await navigator.clipboard.writeText(newlyCreatedKey.key);
+      await safeClipboardWrite(newlyCreatedKey.key);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

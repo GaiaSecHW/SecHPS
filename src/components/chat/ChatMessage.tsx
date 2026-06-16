@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import { MarkdownRenderer } from '@/components/markdown';
 import {
   User,
@@ -63,7 +64,7 @@ export function ChatMessage({
           .map((part) => part.text || '')
           .join('\n');
 
-    await navigator.clipboard.writeText(textContent);
+    await safeClipboardWrite(textContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

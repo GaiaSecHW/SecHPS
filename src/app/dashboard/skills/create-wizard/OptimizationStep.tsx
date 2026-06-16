@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import { Sparkles, CheckCircle, TrendingUp, AlertCircle, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
@@ -75,7 +76,7 @@ export default function OptimizationStep({
   };
 
   const handleCopy = async (text: string, field: string) => {
-    await navigator.clipboard.writeText(text);
+    await safeClipboardWrite(text);
     setCopied(field);
     setTimeout(() => setCopied(null), 2000);
   };

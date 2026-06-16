@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import {
@@ -256,7 +257,7 @@ export function WorkerLogsPage() {
     return null;
   };
 
-  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text).then(() => {}).catch(console.error);
+  const copyToClipboard = (text: string) => safeClipboardWrite(text).catch(console.error);
 
   const getGroupContent = (group: LogEntry[]): string => group.map(log => getLogContent(log)).join('');
 

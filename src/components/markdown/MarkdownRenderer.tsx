@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Check, Copy, Code2 } from 'lucide-react';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface MarkdownRendererProps {
   content: string;
@@ -27,7 +28,7 @@ function CodeBlock({
   
   const handleCopy = useCallback(() => {
     const text = String(children || '').replace(/\n$/, '');
-    navigator.clipboard.writeText(text);
+    safeClipboardWrite(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [children]);

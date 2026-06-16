@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import DOMPurify from 'dompurify';
 import {
   Save,
@@ -273,7 +274,7 @@ export default function FileEditor({ projectId, filePath, language, onClose, onS
   const handleCopy = async () => {
     if (!content) return;
     try {
-      await navigator.clipboard.writeText(content);
+      await safeClipboardWrite(content);
       setSuccess('已复制到剪贴板');
       setTimeout(() => setSuccess(''), 2000);
     } catch {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Play, Loader2, FolderSearch, Copy, ChevronDown, ChevronRight, HardDrive, History, Trash2, Clock, RefreshCw, Brain, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface SkillCall {
   toolName: string;
@@ -228,7 +229,7 @@ export function SessionExtractPanel() {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    safeClipboardWrite(text);
     toast.success('已复制');
   };
 

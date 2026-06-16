@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ErrorAlert } from '@/components/ui/Alert';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { apiGet, apiPost } from '@/lib/api-client';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface Tenant {
   id: string;
@@ -49,6 +50,7 @@ export default function CreateApiKeyModal({
   const [showKeyResult, setShowKeyResult] = useState(false);
   const [createdKey, setCreatedKey] = useState<{ id: string; key: string; name: string; keyPrefix: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   // 加载租户列表
   useEffect(() => {
@@ -145,10 +147,14 @@ export default function CreateApiKeyModal({
   };
 
   const handleCopyKey = async () => {
-    if (createdKey) {
-      await navigator.clipboard.writeText(createdKey.key);
+    if (!createdKey) return;
+    setCopyFailed(false);
+    try {
+      await safeClipboardWrite(createdKey.key);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyFailed(true);
     }
   };
 
@@ -166,6 +172,7 @@ export default function CreateApiKeyModal({
     setShowKeyResult(false);
     setCreatedKey(null);
     setCopied(false);
+    setCopyFailed(false);
     onClose();
   };
 
@@ -226,10 +233,11 @@ export default function CreateApiKeyModal({
                 <span className="text-sm text-gray-400">API Key</span>
                 <button
                   onClick={handleCopyKey}
-                  className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300"
+                  className="flex items-center gap-1 text-sm hover:text-blue-300"
+                  style={{ color: copyFailed ? '#f87171' : copied ? '#4ade80' : '#60a5fa' }}
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
-                  {copied ? '已复制' : '复制'}
+                  {copied ? '已复制' : copyFailed ? '复制失败，请手动复制' : '复制'}
                 </button>
               </div>
               <div className="font-mono text-sm text-gray-100 break-all">

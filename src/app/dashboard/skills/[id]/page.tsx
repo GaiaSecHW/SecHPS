@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import { MarkdownRenderer } from '@/components/markdown';
 import JSZip from 'jszip';
 import {
@@ -1610,7 +1611,7 @@ export default function SkillDetailPage() {
             <button
               onClick={() => {
                 if (viewingVersionContent) {
-                  navigator.clipboard.writeText(viewingVersionContent);
+                  safeClipboardWrite(viewingVersionContent);
                   toast.success('已复制版本内容');
                 }
               }}

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 const MAX_UPLOAD_MB = parseInt(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB || '500', 10);
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
@@ -1051,7 +1052,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 *报告生成时间：${new Date().toLocaleString('zh-CN')}*
 `;
 
-    navigator.clipboard.writeText(markdown).then(() => {
+    safeClipboardWrite(markdown).then(() => {
       toast.success('已复制为 Markdown 格式');
     }).catch(() => {
       toast.error('复制失败');

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
+import { safeClipboardWrite } from '@/lib/clipboard';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -145,12 +146,12 @@ function CodeBlock({ code, label = '代码' }: { code: string; label?: string })
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await safeClipboardWrite(code);
       toast.success(`${label}已复制`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast.error('复制失败');
+    } catch {
+      toast.error('复制失败，请手动选择复制');
     }
   };
 

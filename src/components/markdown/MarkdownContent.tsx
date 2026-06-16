@@ -4,6 +4,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
+import { safeClipboardWrite } from '@/lib/clipboard';
 
 interface MarkdownContentProps {
   children?: string;
@@ -231,7 +232,7 @@ export function CodeBlock({
 
   const handleCopy = async () => {
     if (children) {
-      await navigator.clipboard.writeText(children);
+      await safeClipboardWrite(children);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
