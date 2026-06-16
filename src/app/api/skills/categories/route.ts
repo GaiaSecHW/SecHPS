@@ -23,7 +23,11 @@ export async function GET(request: Request) {
     });
     const hasFullAccess = Object.keys(tenantFilter).length === 0;
 
+    const url = new URL(request.url);
+    const isActiveParam = url.searchParams.get('isActive');
     const skillWhere: Record<string, unknown> = { isLatest: true };
+    if (isActiveParam === 'true') skillWhere.isActive = true;
+    else if (isActiveParam === 'false') skillWhere.isActive = false;
 
     // 分类计数需应用与 Skills 列表相同的可见性逻辑
     // 注意：Prisma OR 中 {}（空对象）无效，管理员级权限不加 OR

@@ -181,7 +181,7 @@ function SkillsPageContent() {
   }, []);
 
   useEffect(() => { fetchSkills(); }, [selectedCategoryId, selectedLanguageId, selectedPatternId, selectedActiveStatus, currentPage, pageSize, searchTerm]);
-  useEffect(() => { fetchCategories(); fetchVulnerabilityTree(); }, []);
+  useEffect(() => { fetchCategories(); fetchVulnerabilityTree(); }, [selectedActiveStatus]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -242,7 +242,9 @@ function SkillsPageContent() {
   const fetchCategories = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${token}` } });
+      const params = new URLSearchParams();
+      if (selectedActiveStatus) params.append('isActive', selectedActiveStatus);
+      const response = await fetch(`/api/skills/categories?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
       if (response.ok) {
         const data = await response.json();
         setCategories(data.categories || []);
