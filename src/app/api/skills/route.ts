@@ -61,35 +61,34 @@ export async function GET(request: Request) {
     // 默认只返回最新版本
     where.isLatest = true;
 
+    const tenantFilter = buildTenantFilter(tenant, {
+      tenantField: 'tenantId',
+      isPublicField: 'isPublic',
+    });
+    const hasFullAccess = Object.keys(tenantFilter).length === 0;
+
     // 作用域过滤 - 整合多租户
+    // 注意：Prisma OR 子句中 {}（空对象）不等于"匹配全部"（返回0行），
+    // 因此管理员级权限（tenantFilter={}）不应添加 OR 条件，直接用 isLatest=true 即可
     if (scope === 'public') {
-      // 选择模式：公共技能（系统内置 + isPublic=true）
       where.OR = [
-        { userId: null },           // 公共技能（系统内置）
-        { isPublic: true },         // 公开分享的技能
+        { userId: null },
+        { isPublic: true },
       ];
+    } else if (hasFullAccess) {
+      // 平台管理员 / ICSL管理员：tenantFilter 为空，不加 OR 过滤
+      // where 中已有 isLatest=true，可返回全部数据
     } else if (scope === 'mine') {
-      // 管理模式：自己的技能 + 系统内置的 + 同租户的
-      const tenantFilter = buildTenantFilter(tenant, {
-        tenantField: 'tenantId',
-        isPublicField: 'isPublic',
-      });
       where.OR = [
-        { userId: payload.userId }, // 自己创建的技能
-        { userId: null },           // 系统内置技能
-        { ...tenantFilter },        // 同租户的技能（含 public 可见）
+        { userId: payload.userId },
+        { userId: null },
+        { ...tenantFilter },
       ];
     } else {
-      // scope === 'all': 选择模式（用于执行时选择技能）
-      // 用户可用的所有 Skills：公共 + 自己的 + 同租户的
-      const tenantFilter = buildTenantFilter(tenant, {
-        tenantField: 'tenantId',
-        isPublicField: 'isPublic',
-      });
       where.OR = [
-        { userId: null },           // 公共技能（系统内置）
-        { userId: payload.userId }, // 自己创建的技能
-        { ...tenantFilter },        // 同租户的技能（含 public 可见）
+        { userId: null },
+        { userId: payload.userId },
+        { ...tenantFilter },
       ];
     }
 

@@ -2,22 +2,44 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/skills/categories - 获取 SkillCategory 列表
 export async function GET(request: Request) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
-    return authErrorResponseNested(auth);
+    return authErrorResponse(auth);
   }
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
+    const tenantFilter = buildTenantFilter(tenant, {
+      tenantField: 'tenantId',
+      isPublicField: 'isPublic',
+      userRoles: payload.roles,
+    });
+    const hasFullAccess = Object.keys(tenantFilter).length === 0;
+
+    const skillWhere: Record<string, unknown> = { isLatest: true };
+
+    // 分类计数需应用与 Skills 列表相同的可见性逻辑
+    // 注意：Prisma OR 中 {}（空对象）无效，管理员级权限不加 OR
+    if (!hasFullAccess) {
+      skillWhere.OR = [
+        { userId: payload.userId },
+        { userId: null },
+        { ...tenantFilter },
+      ];
+    }
+
     const categories = await prisma.skillCategory.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: 'asc' },
       include: {
-        _count: { select: { Skill: { where: { isLatest: true } } } },
+        _count: { select: { Skill: { where: skillWhere } } },
       },
     });
 
