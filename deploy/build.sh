@@ -128,9 +128,11 @@ case "$TARGET" in
         build_worker
         ;;
     all)
-        build_server
-        echo ""
-        build_worker
+        build_server &
+        SERVER_PID=$!
+        build_worker &
+        WORKER_PID=$!
+        wait "$SERVER_PID" "$WORKER_PID"
         ;;
     *)
         echo "Usage: $0 [server|worker|all]"
