@@ -120,6 +120,8 @@ RUN addgroup --system nodejs && \
 # Only install runtime-required system libs (no debug tools)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        nfs-common \
+
         # === System Libraries (native module runtime deps) ===
         # libssl3: OpenSSL 3.0.x shared libs (libssl.so.3, libcrypto.so.3)
         #   - Required by Prisma query engine (debian-openssl-3.0.x target)
