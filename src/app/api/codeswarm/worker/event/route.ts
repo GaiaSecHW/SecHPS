@@ -176,7 +176,7 @@ export async function POST(request: Request) {
               taskId: taskInstance.id,
               level,
               message,
-              details,
+              details: details.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ''),
               timestamp: new Date(),
             });
           }
