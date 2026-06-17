@@ -162,6 +162,83 @@ export function extractOpencodeAssistantText(messages: OpencodeExportMessage[]):
     .trim();
 }
 
+interface BuildAgentEnvironmentOptions {
+  engine: 'opencode' | 'claudecode';
+  apiKey?: string;
+  model?: string;
+  env?: Record<string, string>;
+  apiBaseUrl?: string;
+  baseEnv?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+  settingsEnv?: Record<string, string>;
+}
+
+export function buildAgentEnvironment({
+  engine,
+  apiKey,
+  model,
+  env,
+  apiBaseUrl,
+  baseEnv = process.env,
+  settingsEnv,
+}: BuildAgentEnvironmentOptions): Record<string, string> {
+  const mergedEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(baseEnv)) {
+    if (value !== undefined) mergedEnv[key] = value;
+  }
+
+  if (engine === 'claudecode') {
+    Object.assign(mergedEnv, settingsEnv ?? loadClaudeSettingsJson());
+  }
+
+  if (env) Object.assign(mergedEnv, env);
+
+  if (apiKey) {
+    if (engine === 'claudecode') {
+      mergedEnv.ANTHROPIC_AUTH_TOKEN = apiKey;
+      mergedEnv.CLAUDE_API_KEY = apiKey;
+      delete mergedEnv.ANTHROPIC_API_KEY;
+    } else {
+      if (model) {
+        const providerId = model.split('/')[0];
+        const envKey = `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+        mergedEnv[envKey] = apiKey;
+      }
+      mergedEnv.ANTHROPIC_API_KEY = apiKey;
+    }
+  }
+
+  if (model) mergedEnv.ANTHROPIC_MODEL = model;
+  if (apiBaseUrl && engine === 'claudecode') mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
+
+  return mergedEnv;
+}
+
+export function writeDebugEnvSnapshot({
+  workspacePath,
+  engine,
+  env,
+}: {
+  workspacePath: string;
+  engine: 'opencode' | 'claudecode';
+  env: Record<string, string>;
+}): string {
+  const snapshotPath = path.join(workspacePath, '.env.codeswarm.debug');
+  const keys = [
+    'ANTHROPIC_AUTH_TOKEN',
+    'CLAUDE_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'ANTHROPIC_BASE_URL',
+    'ANTHROPIC_MODEL',
+  ];
+  const lines = [
+    `ENGINE=${engine}`,
+    ...keys.map(key => `${key}=${env[key] ?? '<unset>'}`),
+    '',
+  ];
+  fs.writeFileSync(snapshotPath, lines.join('\n'));
+  return snapshotPath;
+}
+
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
 
@@ -243,27 +320,13 @@ export class ProcessManager {
 
     try {
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step A: Merging environment...');
-      const mergedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
-
-      if (engine === 'claudecode') {
-        const settingsEnv = loadClaudeSettingsJson();
-        Object.assign(mergedEnv, settingsEnv);
-      }
-
-      if (env) Object.assign(mergedEnv, env);
-      if (apiKey) {
-        if (model) {
-          const providerId = model.split('/')[0];
-          const envKey = `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-          mergedEnv[envKey] = apiKey;
-        }
-        mergedEnv.ANTHROPIC_API_KEY = apiKey;
-      }
-      if (model) mergedEnv.ANTHROPIC_MODEL = model;
-      if (apiBaseUrl && engine === 'claudecode') mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
-      if (engine === 'claudecode' && mergedEnv.ANTHROPIC_API_KEY && !mergedEnv.CLAUDE_API_KEY) {
-        mergedEnv.CLAUDE_API_KEY = mergedEnv.ANTHROPIC_API_KEY;
-      }
+      const mergedEnv = buildAgentEnvironment({
+        engine,
+        apiKey,
+        model,
+        env,
+        apiBaseUrl,
+      });
 
       // ========== OPENCODE RUN MODE (direct spawn, no ACP) ==========
       if (engine === 'opencode') {
@@ -271,6 +334,13 @@ export class ProcessManager {
         return result;
       }
       // ========== CLAUDECODE ACP MODE ==========
+
+      try {
+        const snapshotPath = writeDebugEnvSnapshot({ workspacePath: workspace, engine, env: mergedEnv });
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Wrote debug env snapshot: ${snapshotPath}`);
+      } catch (err) {
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, `Failed to write debug env snapshot: ${err instanceof Error ? err.message : String(err)}`);
+      }
 
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step B: Creating and starting ACP client...');
       const clientConfig: ACPClientConfig = {

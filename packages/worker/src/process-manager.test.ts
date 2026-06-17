@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as processManager from './process-manager.js';
 
@@ -75,4 +77,33 @@ test('returns empty string when opencode export contains no assistant text', () 
   ];
 
   assert.equal(processManager.extractOpencodeAssistantText(messages), '');
+});
+
+test('writes a debug env snapshot for claudecode', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codeswarm-env-'));
+  const workspace = path.join(tmpDir, 'workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+
+  const snapshotPath = processManager.writeDebugEnvSnapshot({
+    workspacePath: workspace,
+    engine: 'claudecode',
+    env: {
+      ANTHROPIC_AUTH_TOKEN: 'virtual_auth_token',
+      CLAUDE_API_KEY: 'virtual_claude_key',
+      ANTHROPIC_API_KEY: 'should_not_be_written',
+      ANTHROPIC_BASE_URL: 'https://aigw.example.com',
+      ANTHROPIC_MODEL: 'anthropic/claude-opus-4-8',
+    },
+  });
+
+  assert.equal(snapshotPath, path.join(workspace, '.env.codeswarm.debug'));
+  assert.equal(fs.readFileSync(snapshotPath, 'utf8'), [
+    'ENGINE=claudecode',
+    'ANTHROPIC_AUTH_TOKEN=virtual_auth_token',
+    'CLAUDE_API_KEY=virtual_claude_key',
+    'ANTHROPIC_API_KEY=should_not_be_written',
+    'ANTHROPIC_BASE_URL=https://aigw.example.com',
+    'ANTHROPIC_MODEL=anthropic/claude-opus-4-8',
+    '',
+  ].join('\n'));
 });
