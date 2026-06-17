@@ -187,7 +187,10 @@ export class EnvironmentFactory {
       const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
       progress(`路径映射: ${payload.workspacePath} -> ${localWorkspacePath}`);
 
-      // Check workspace permissions for NFS passthrough mode
+      if (!fs.existsSync(localWorkspacePath)) {
+        throw new Error(`工作区路径不存在: ${localWorkspacePath}。请检查 NFS 挂载或 PATH_MAPPING 配置（原路径: ${payload.workspacePath}）`);
+      }
+
       this.checkWorkspacePermissions(localWorkspacePath);
 
       let actualWorkspacePath = localWorkspacePath;

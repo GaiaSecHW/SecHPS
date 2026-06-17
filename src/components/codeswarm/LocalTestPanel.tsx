@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Play, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, FolderSearch, HardDrive, AlertTriangle, FileText, Shield, Zap, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { safeClipboardWrite } from '@/lib/clipboard';
+import { AnsiText } from '@/components/ui/AnsiText';
 
 interface TestRecord {
   taskId: string;
@@ -675,7 +676,7 @@ export function LocalTestPanel() {
             <XCircle className="w-4 h-4 text-red-400" />
             <h3 className="text-sm font-medium text-red-400">错误信息</h3>
           </div>
-          <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-dark-bg rounded-lg p-3">{result.error}</pre>
+          <AnsiText text={result.error} className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-dark-bg rounded-lg p-3" />
         </div>
       )}
 
@@ -808,9 +809,7 @@ export function LocalTestPanel() {
                     {selectedHistoryRecord.error && (
                       <div>
                         <h5 className="text-xs font-medium text-red-400 mb-2">错误信息</h5>
-                        <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-dark-bg rounded-lg p-3 border border-red-700/50">
-                          {selectedHistoryRecord.error}
-                        </pre>
+                        <AnsiText text={selectedHistoryRecord.error} className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-dark-bg rounded-lg p-3 border border-red-700/50" />
                       </div>
                     )}
 
@@ -824,16 +823,14 @@ export function LocalTestPanel() {
                           </button>
                         </div>
                         <div className="bg-dark-bg rounded-lg p-3 max-h-[400px] overflow-y-auto">
-                          <pre className="text-xs text-cyan-300 whitespace-pre-wrap font-mono">
-                            {(() => {
-                              try {
-                                const data = JSON.parse(selectedHistoryRecord.parsedVulnerabilities || '{}');
-                                return JSON.stringify(data, null, 2);
-                              } catch {
-                                return selectedHistoryRecord.parsedVulnerabilities;
-                              }
-                            })()}
-                          </pre>
+                          <AnsiText text={(() => {
+                            try {
+                              const data = JSON.parse(selectedHistoryRecord.parsedVulnerabilities || '{}');
+                              return JSON.stringify(data, null, 2);
+                            } catch {
+                              return selectedHistoryRecord.parsedVulnerabilities;
+                            }
+                          })()} className="text-xs text-cyan-300 whitespace-pre-wrap font-mono" />
                           <div className="mt-2 pt-2 border-t border-gray-700">
                             <p className="text-xs text-gray-400 mb-1">漏洞数量: {(() => {
                               try {

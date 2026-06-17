@@ -163,6 +163,16 @@ export async function POST(
 
     const workspacePath = task.projectPath || undefined;
 
+    if (workspacePath && !existsSync(workspacePath)) {
+      await prisma.taskInstance.updateMany({
+        where: { id, status: 'running' },
+        data: { status: 'pending', startedAt: null, errorMessage: null, updatedAt: new Date() },
+      });
+      return NextResponse.json({
+        error: `工作区目录不存在 (${workspacePath})，请检查共享存储挂载或等待目录就绪后再执行`,
+      }, { status: 400 });
+    }
+
     // On-demand: check if workspace has agent harness files, copy from local if missing
     if (workspacePath && task.agentId) {
       const hasHarness = checkWorkspaceHasHarness(workspacePath);

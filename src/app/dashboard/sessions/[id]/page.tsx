@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/markdown';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { AnsiText } from '@/components/ui/AnsiText';
 import { EvaluationHeader } from '@/components/evaluation';
 import {
   useEvaluation,
@@ -2723,9 +2724,7 @@ function MessageBubble({
                           </button>
                           {isExpanded && (
                             <div className="px-2 pb-2 border-t border-gray-100">
-                              <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-900/20 text-red-800' : 'bg-dark-surface text-gray-200'}`}>
-                                {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
-                              </pre>
+                              <AnsiText text={content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'} className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-900/20 text-red-800' : 'bg-dark-surface text-gray-200'}`} />
                               {result.error && (
                                 <div className="text-xs text-red-400 mt-1">错误: {result.error}</div>
                               )}

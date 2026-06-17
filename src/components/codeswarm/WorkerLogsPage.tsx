@@ -29,6 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { AnsiText } from '@/components/ui/AnsiText';
 
 interface LogEntry {
   id: string;
@@ -477,7 +478,7 @@ export function WorkerLogsPage() {
                             <button onClick={() => copyToClipboard(content)} className="ml-auto text-gray-400 hover:text-gray-200"><Copy size={12} /></button>
                           </div>
                           {isTool && toolInfo && <div className="mb-1 bg-gray-900/50 rounded p-2 border border-amber-600/30"><div className="flex items-center gap-1.5 text-amber-300 font-medium mb-1"><Wrench size={12} /><span className="font-mono text-xs">{toolInfo.name}</span></div><pre className="text-xs text-gray-300 overflow-x-auto max-h-32">{JSON.stringify(toolInfo.args, null, 2)}</pre></div>}
-                          {isMultiLine || content.length > 200 ? <div><pre className={`text-sm whitespace-pre-wrap break-all font-mono ${!isExpanded ? 'max-h-32 overflow-hidden' : ''}`}>{content}</pre><button onClick={() => toggleExpand(`g-${gi}`)} className="mt-0.5 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">{isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}{isExpanded ? '收起' : '展开'}</button></div> : <div className="text-sm">{content}</div>}
+                          {isMultiLine || content.length > 200 ? <div><AnsiText text={content} className={`text-sm whitespace-pre-wrap break-all font-mono ${!isExpanded ? 'max-h-32 overflow-hidden' : ''}`} /><button onClick={() => toggleExpand(`g-${gi}`)} className="mt-0.5 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">{isExpanded ? <ChevronRight size={12} className="rotate-90" /> : <ChevronRight size={12} />}{isExpanded ? '收起' : '展开'}</button></div> : <AnsiText text={content} as="div" className="text-sm" />}
                         </div>
                     );
                   })}<div ref={logsEndRef} /></div>}
@@ -492,8 +493,8 @@ export function WorkerLogsPage() {
                 </button>
                 {!resultCollapsed && (
                   <div className="p-4 max-h-[200px] overflow-y-auto">
-                    {taskDetail?.result && <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3"><div className="text-emerald-400 text-xs uppercase mb-1">执行结果</div><pre className="text-gray-200 whitespace-pre-wrap break-all text-xs">{taskDetail.result}</pre></div>}
-                    {taskDetail?.error && <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mt-2"><div className="text-red-400 text-xs uppercase mb-1">错误信息</div><pre className="text-red-300 whitespace-pre-wrap break-all text-xs">{taskDetail.error}</pre></div>}
+                    {taskDetail?.result && <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-lg p-3"><div className="text-emerald-400 text-xs uppercase mb-1">执行结果</div><AnsiText text={taskDetail.result} className="text-gray-200 whitespace-pre-wrap break-all text-xs" /></div>}
+                    {taskDetail?.error && <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mt-2"><div className="text-red-400 text-xs uppercase mb-1">错误信息</div><AnsiText text={taskDetail.error} className="text-red-300 whitespace-pre-wrap break-all text-xs" /></div>}
                     {!taskDetail?.result && !taskDetail?.error && <div className="text-center py-4 text-gray-500 text-sm">暂无执行结果</div>}
                   </div>
                 )}

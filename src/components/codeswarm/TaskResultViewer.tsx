@@ -5,6 +5,7 @@ import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
 import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check, Server, ArrowUp, ArrowDown } from 'lucide-react';
+import { AnsiText } from '@/components/ui/AnsiText';
 import toast from 'react-hot-toast';
 import { safeClipboardWrite } from '@/lib/clipboard';
 
@@ -460,12 +461,19 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       const rawEvents = taskEvents[task.taskId] || task.events;
                       if (!rawEvents || rawEvents.length === 0) return null;
 
+                      const stripAnsi = (s: string) => s.replace(/␛\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
                       const cleanText = (t: string, max = 150): string => {
                         if (!t) return '';
                         try { t = JSON.parse(`"${t}"`); } catch {}
                         t = t.replace(/\\n/g, ' ').replace(/\\t/g, ' ').replace(/\\"/g, '"');
-                        t = t.replace(/  +/g, ' ').trim();
+                        t = stripAnsi(t).replace(/  +/g, ' ').trim();
                         return t.length > max ? t.slice(0, max) + '...' : t;
+                      };
+                      const prepareAnsi = (t: string): string => {
+                        if (!t) return '';
+                        try { t = JSON.parse(`"${t}"`); } catch {}
+                        t = t.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+                        return t;
                       };
 
                       const CHUNK_TYPES = new Set(['agent_message_chunk', 'log_chunk', 'agent_log_chunk']);
@@ -543,12 +551,16 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                             ) : (
                               <div className="space-y-0.5 font-mono text-xs">
                                 {filteredEvents.map((event: any, i: number) => {
-                                  const { badge, detail, color } = getEventDisplay(event);
+                                  const { badge, detail, color, category } = getEventDisplay(event);
+                                  const rawContent = category === 'log' ? prepareAnsi(event.content || '') : '';
                                   return (
                                     <div key={i} className="flex items-start space-x-1.5">
                                       <span className="text-gray-600 shrink-0">{new Date(event.timestamp || event._createdAt).toLocaleTimeString()}</span>
                                       <span className={`px-1 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
-                                      {detail && <span className="text-gray-400 truncate">{detail}</span>}
+                                      {rawContent
+                                        ? <AnsiText text={rawContent} as="span" className="text-gray-400 truncate max-w-full inline-block" />
+                                        : detail && <span className="text-gray-400 truncate">{detail}</span>
+                                      }
                                     </div>
                                   );
                                 })}
@@ -581,9 +593,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {task.result && (
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">执行结果</h4>
-                        <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
-                          {task.result}
-                        </pre>
+                        <AnsiText text={task.result} className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48 whitespace-pre-wrap" />
                       </div>
                     )}
 
@@ -601,9 +611,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {task.error && (
                       <div>
                         <h4 className="text-sm font-medium text-red-400 mb-2">错误信息</h4>
-                        <pre className="bg-red-50 text-red-400 p-3 rounded-lg text-xs overflow-x-auto">
-                          {task.error}
-                        </pre>
+                        <AnsiText text={task.error} className="bg-red-50 text-red-400 p-3 rounded-lg text-xs overflow-x-auto" />
                       </div>
                     )}
                   </div>

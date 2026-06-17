@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'rea
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Settings, FileText, Clock, Play, CheckCircle, XCircle, Loader2, ChevronRight, Wrench, Activity, Cpu, ShieldAlert, Download, Shield, Eye, Ban, MapPin } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { AnsiText } from '@/components/ui/AnsiText';
 import toast from 'react-hot-toast';
 
 interface TaskInstance {
@@ -789,7 +790,7 @@ function TaskDetailContent() {
             <XCircle size={20} className="text-red-400" />
             <h2 className="text-lg font-semibold text-red-400">错误信息</h2>
           </div>
-          <pre className="text-sm text-red-400 whitespace-pre-wrap overflow-x-auto">{task.errorMessage}</pre>
+          <AnsiText text={task.errorMessage} className="text-sm text-red-400 whitespace-pre-wrap overflow-x-auto" />
         </div>
       )}
 
@@ -888,13 +889,13 @@ function TaskDetailContent() {
                       {v.POC && (
                         <div>
                           <span className="text-gray-500 text-xs">PoC</span>
-                          <pre className="mt-0.5 bg-gray-900/60 text-red-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40">{v.POC}</pre>
+                          <AnsiText text={v.POC} className="mt-0.5 bg-gray-900/60 text-red-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40" />
                         </div>
                       )}
                       {v.fixSuggestion && (
                         <div>
                           <span className="text-gray-500 text-xs">修复建议</span>
-                          <pre className="mt-0.5 bg-gray-900/60 text-green-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40">{v.fixSuggestion}</pre>
+                          <AnsiText text={v.fixSuggestion} className="mt-0.5 bg-gray-900/60 text-green-300 p-2 rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40" />
                         </div>
                       )}
                       {v.status === 'false-positive' && v.falsePositiveReason && (
@@ -918,9 +919,7 @@ function TaskDetailContent() {
             <CheckCircle size={20} className="text-green-400" />
             <h2 className="text-lg font-semibold text-gray-100">执行结果</h2>
           </div>
-          <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap">
-            {task.executionResult}
-          </pre>
+          <AnsiText text={task.executionResult} className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap" />
         </div>
       )}
 
