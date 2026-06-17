@@ -562,6 +562,7 @@ this.server.get('/health', async () => ({
     const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env, timeoutSec } = payload;
     const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
     const taskTimeoutMs = timeoutSec ? timeoutSec * 1000 : this.config.taskTimeoutMs;
+    let agentApiKey = apiKey;
     let buildResult = null;
 
     await setTaskLogFile(taskId);
@@ -620,6 +621,7 @@ this.server.get('/health', async () => ({
           timestamp: new Date().toISOString(),
         });
         const workKeyResult = await resolveWorkKey(apiKey, taskId, payload.toolId || agent || 'default');
+        agentApiKey = workKeyResult.apiKey;
         // 覆盖 payload.apiKey，后续 envFactory.build 和 runAgent 都使用 secret
         (payload as any).apiKey = workKeyResult.apiKey;
         logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Work key resolved, skipped=${workKeyResult.skipped}, apiKey=${workKeyResult.skipped ? '(original)' : '(wsk_*)'}`);
@@ -706,7 +708,7 @@ this.server.get('/health', async () => ({
         workspacePath,
         engine,
         agentName,
-        apiKey,
+        agentApiKey,
         model,
         env,
         instruction,
