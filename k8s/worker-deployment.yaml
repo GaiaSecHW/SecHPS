@@ -46,12 +46,21 @@ spec:
               value: "300000"
             - name: WORKSPACE_BASE_PATH
               value: "/data/codeswarm-workspace"
+            - name: OPENCODE_DISABLE_MODELS_FETCH
+              value: "true"
+            - name: IS_SANDBOX
+              value: "1"
+            - name: OPENCODE_DISABLE_AUTOUPDATE
+              value: "true"
           envFrom:
             - secretRef:
                 name: codeswarm-secrets
           volumeMounts:
             - name: shared-data
               mountPath: /data
+            - name: npmrc-config
+              mountPath: /root/.npmrc
+              subPath: .npmrc
           lifecycle:
             preStop:
               exec:
@@ -73,3 +82,6 @@ spec:
         - name: shared-data
           persistentVolumeClaim:
             claimName: secflow-platform-fileserver-data-nfs-pvc
+        - name: npmrc-config
+          configMap:
+            name: codeswarm-config
