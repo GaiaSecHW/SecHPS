@@ -240,30 +240,17 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
 # ---------------------------------------------------------------------------
-# Copy from builder — standalone + targeted node_modules supplement
+# Copy from builder — standalone + production node_modules
 # ---------------------------------------------------------------------------
-
 # Step 1: Next.js standalone output (includes traced node_modules subset)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/ ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static/ ./.next/static/
 COPY --from=builder --chown=nextjs:nodejs /app/public/ ./public/
 
-# Step 2: Targeted supplement — only packages missed by standalone tracing
-# Prisma engine + client (standalone does not trace .prisma/ engine binaries)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma/ ./node_modules/.prisma/
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client/ ./node_modules/@prisma/client/
-# Prisma CLI (for db:push at runtime)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma/ ./node_modules/prisma/
-# @anthropic-ai SDK (native binaries, postbuild handles standalone copy but full SDK needed)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@anthropic-ai/ ./node_modules/@anthropic-ai/
-# better-sqlite3 (standalone may miss .node binary)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3/ ./node_modules/better-sqlite3/
-# node-pty (standalone may miss .node binary)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/node-pty/ ./node_modules/node-pty/
-# @img/sharp-* (optional native binaries)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@img/ ./node_modules/@img/
-# cpu-features (ssh2 optional dep)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/cpu-features/ ./node_modules/cpu-features/
+# Step 2: Copy full production node_modules (pruned after build)
+# Docker COPY merges: standalone's traced subset + production deps = complete
+# Covers all transitive deps (e.g. fast-xml-parser for minio) missed by tracing
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/ ./node_modules/
 
 # Configuration files (minimal set for runtime)
 COPY --chown=nextjs:nodejs next.config.js postcss.config.js tsconfig.json instrumentation.ts ./
