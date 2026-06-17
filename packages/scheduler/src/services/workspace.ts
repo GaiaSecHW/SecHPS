@@ -31,10 +31,10 @@ export function ensureWorkspaceDir(dirPath: string): void {
 
 /**
  * 为 tool 任务分配工作区路径
- * 格式: TOOL_WORK_DIR/toolTaskId/run
+ * 格式: TOOL_WORK_DIR/run
  */
-export function allocateToolWorkspacePath(toolWorkDir: string, toolTaskId: string): string {
-  return `${toolWorkDir}/${toolTaskId}/run`;
+export function allocateToolWorkspacePath(toolWorkDir: string): string {
+  return `${toolWorkDir.replace(/[\\/]+$/, '')}/run`;
 }
 
 /**

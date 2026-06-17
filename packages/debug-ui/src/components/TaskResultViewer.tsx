@@ -42,6 +42,7 @@ interface Task {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  rawSubmitPayload?: any;
   worker?: { nodeId: string; address: string };
 }
 
@@ -73,6 +74,12 @@ function parseJsonField(value: any) {
   } catch {
     return value;
   }
+}
+
+function formatJsonForDisplay(value: any) {
+  const parsed = parseJsonField(value);
+  if (parsed === null || parsed === undefined || parsed === '') return null;
+  return parsed;
 }
 
 function buildInputParams(task: Task) {
@@ -302,12 +309,29 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {/* Input Params */}
                     {(() => {
                       const params = buildInputParams(task);
+                      const rawParams = formatJsonForDisplay(task.rawSubmitPayload);
                       const hasParams = Object.keys(params).length > 0;
-                      if (!hasParams) return null;
+                      const hasRawParams = rawParams !== null;
+                      if (!hasParams && !hasRawParams) return null;
+                      const rawParamsText = hasRawParams ? JSON.stringify(rawParams, null, 2) : '';
                       return (
-                        <div>
-                          <div className="flex items-center justify-between mb-2"><h4 className="text-sm font-medium text-gray-300">输入参数</h4><CopyButton text={JSON.stringify(params, null, 2)} /></div>
-                          <div className="bg-gray-900 rounded-lg p-3 max-h-[70vh] overflow-auto"><pre className="text-xs text-cyan-400 font-mono whitespace-pre-wrap break-words">{JSON.stringify(params, null, 2)}</pre></div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div>
+                            <div className="flex items-center justify-between mb-2"><h4 className="text-sm font-medium text-gray-300">输入参数</h4>{hasParams && <CopyButton text={JSON.stringify(params, null, 2)} />}</div>
+                            {hasParams ? (
+                              <div className="bg-gray-900 rounded-lg p-3 max-h-[70vh] overflow-auto"><pre className="text-xs text-cyan-400 font-mono whitespace-pre-wrap break-words">{JSON.stringify(params, null, 2)}</pre></div>
+                            ) : (
+                              <div className="bg-gray-900 rounded-lg p-3"><p className="text-xs text-gray-500">无输入参数记录</p></div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-2"><h4 className="text-sm font-medium text-gray-300">原始输入参数</h4>{hasRawParams && <CopyButton text={rawParamsText} />}</div>
+                            {hasRawParams ? (
+                              <div className="bg-gray-900 rounded-lg p-3 max-h-[70vh] overflow-auto"><pre className="text-xs text-yellow-400 font-mono whitespace-pre-wrap break-words">{rawParamsText}</pre></div>
+                            ) : (
+                              <div className="bg-gray-900 rounded-lg p-3"><p className="text-xs text-gray-500">无原始输入参数记录</p></div>
+                            )}
+                          </div>
                         </div>
                       );
                     })()}

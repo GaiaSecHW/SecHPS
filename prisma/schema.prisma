@@ -34,6 +34,7 @@ model CodeswarmTask {
   maxTokens             Int?
   contextWindow         Int?
   env                   String?   // JSON
+  rawSubmitPayload      String?   @db.Text // 原始 /api/codeswarm/task/submit 请求 JSON
 
   // 平台关联（跨服务）
   platformTaskId        String?   // 外部平台的 TaskInstance ID

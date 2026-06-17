@@ -9,6 +9,7 @@
  * DELETE /api/codeswarm/task/batch         — 批量删除
  */
 import type { FastifyInstance } from 'fastify';
+import path from 'node:path';
 import { prisma, withDeadlockRetry } from '../prisma.js';
 import { allocateWorkspacePath, allocateToolWorkspacePath, ensureWorkspaceDir } from '../services/workspace.js';
 import { metrics } from '../services/metrics.js';
@@ -41,6 +42,17 @@ export function normalizeSubmitTaskEnv(input: SubmitTaskEnvInput): {
   return { env, projectDir, toolWorkDir, platformTaskId };
 }
 
+function normalizeWorkspacePathForCompare(value: string): string {
+  const normalized = path.posix.normalize(value.replace(/\\/g, '/'));
+  return normalized.replace(/[\/]+$/, '') || '/';
+}
+
+function isWorkspacePathUnderBase(workspacePath: string, basePath: string): boolean {
+  const normalizedWorkspacePath = normalizeWorkspacePathForCompare(workspacePath);
+  const normalizedBasePath = normalizeWorkspacePathForCompare(basePath);
+  return normalizedWorkspacePath === normalizedBasePath || normalizedWorkspacePath.startsWith(`${normalizedBasePath}/`);
+}
+
 export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): void {
 
   // POST /api/codeswarm/task/submit
@@ -66,9 +78,11 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
       contextWindow?: number;
       // Tool 调度字段
       toolId?: string;
+      toolTaskId?: string;
       toolPath?: string;
       toolWorkDir?: string;
     };
+    const rawSubmitPayload = JSON.stringify(body ?? {});
 
     if (!body.instruction) {
       return reply.status(400).send({ error: 'Missing instruction' });
@@ -86,9 +100,15 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
 
     if (body.toolId) {
       const uuidPart = crypto.randomUUID().split('-')[0]; // 8 chars
-      toolTaskId = `${body.toolId}-${uuidPart}-${Date.now()}`;
+      const generatedToolTaskId = `${body.toolId}-${uuidPart}-${Date.now()}`;
+      const requestedToolTaskId = String(body.toolTaskId || '').trim();
+      toolTaskId = requestedToolTaskId || generatedToolTaskId;
       resolvedToolWorkDir = normalizedEnv.toolWorkDir || process.env.TOOL_WORK_DIR || '/mnt/tool-workspace';
-      toolWorkspacePath = allocateToolWorkspacePath(resolvedToolWorkDir, toolTaskId);
+      const defaultToolWorkspacePath = allocateToolWorkspacePath(resolvedToolWorkDir);
+      const requestedWorkspacePath = String(body.workspacePath || '').trim();
+      toolWorkspacePath = requestedWorkspacePath && isWorkspacePathUnderBase(requestedWorkspacePath, resolvedToolWorkDir)
+        ? requestedWorkspacePath
+        : defaultToolWorkspacePath;
       ensureWorkspaceDir(toolWorkspacePath);
       normalizedEnv.env.TOOL_WORK_DIR = resolvedToolWorkDir;
       normalizedEnv.env.TOOL_ID = body.toolId;
@@ -120,6 +140,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             skills: body.skills ? JSON.stringify(body.skills) : null,
             mcps: body.mcps ? JSON.stringify(body.mcps) : null,
             env: Object.keys(normalizedEnv.env).length > 0 ? JSON.stringify(normalizedEnv.env) : null,
+            rawSubmitPayload,
             preferredWorkerNodeId: body.preferredWorkerNodeId || null,
             targetProduct: body.targetProduct || null,
             maxTokens: body.maxTokens || null,
@@ -178,6 +199,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
           projectPath: true, workspacePath: true,
           gitUrl: true, gitRef: true,
           skills: true, scripts: true, mcps: true, env: true,
+          rawSubmitPayload: true,
           preferredWorkerNodeId: true, targetProduct: true,
           toolId: true, toolTaskId: true, toolPath: true, toolWorkDir: true,
           startedAt: true, completedAt: true, createdAt: true,

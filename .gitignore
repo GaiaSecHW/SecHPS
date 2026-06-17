@@ -61,3 +61,4 @@ _test_*.json
 .opencode/
 .omo/
 .sisyphus/
+.worktrees/
