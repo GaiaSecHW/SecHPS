@@ -128,6 +128,10 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
     try {
       const task = await withDeadlockRetry(() =>
         prisma.codeswarmTask.create({
+          // select 投影收窄 RETURNING：本路由只需 id(分发)+taskId(响应)。
+          // DB 连接对 extended-query 的大 RETURNING 子句有字节上限，全列
+          // RETURNING 会触发 P1017 (Server has closed the connection)。
+          select: { id: true, taskId: true },
           data: {
             taskId,
             state: 'queued',

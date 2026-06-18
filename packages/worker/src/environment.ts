@@ -350,9 +350,10 @@ export class EnvironmentFactory {
         progress(`Step 2: 跳过 opencode.json 检查 (engine=${engine || 'opencode(default)'})`);
       }
 
-      // Ensure .opencode directory exists (skills, session data etc.)
-      const opencodeDir = path.join(actualWorkspacePath, '.opencode');
-      fs.mkdirSync(opencodeDir, { recursive: true });
+      // Ensure engine config directory exists (skills, session data etc.)
+      // claudecode 走 .claude/，不创建 .opencode
+      const configDirName = engine === 'claudecode' ? '.claude' : '.opencode';
+      fs.mkdirSync(path.join(actualWorkspacePath, configDirName), { recursive: true });
 
       progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
       return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate, model: payload.model };
@@ -374,9 +375,10 @@ export class EnvironmentFactory {
       fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
       this.copyToolPathIntoWorkspace(payload.toolPath, workspacePath, progress);
 
-      // Step 3: Create .opencode/skills/ subdirectory
+      // Step 3: Create skills subdirectory (claudecode 走 .claude/，其余走 .opencode/)
       progress(`Step 3: 创建技能目录`);
-      const skillsDir = path.join(workspacePath, '.opencode', 'skills');
+      const configDirName = engine === 'claudecode' ? '.claude' : '.opencode';
+      const skillsDir = path.join(workspacePath, configDirName, 'skills');
       fs.mkdirSync(skillsDir, { recursive: true });
 
       // (Removed .npmrc offline=true — it blocks opencode from loading cached npm

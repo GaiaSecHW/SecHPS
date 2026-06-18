@@ -233,7 +233,8 @@ RUN /opt/jdk-21/bin/java -version && \
     /opt/jdk-21/bin/javac -version && \
     echo "=== JDK 21 OK ==="
 
-ENV JAVA_HOME=/opt/jdk-21
+ENV JAVA_HOME=/opt/jdk-21 \
+    PATH="/opt/jdk-21/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # Install Claude Code CLI (from builder stage — no runtime download)
