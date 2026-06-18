@@ -559,8 +559,8 @@ this.server.get('/health', async () => ({
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env, timeoutSec } = payload;
-    const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
+    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env, timeoutSec, command, scriptCwd } = payload;
+    const engine: 'opencode' | 'claudecode' | 'script' = payloadEngine || 'opencode';
     const taskTimeoutMs = timeoutSec ? timeoutSec * 1000 : this.config.taskTimeoutMs;
     let agentApiKey = apiKey;
     let buildResult = null;
@@ -714,7 +714,9 @@ this.server.get('/health', async () => ({
         instruction,
         onEvent,
         apiBaseUrl,
-        taskTimeoutMs
+        taskTimeoutMs,
+        command,
+        scriptCwd,
       );
       logger.taskInfo(taskId, LOG_MODULES.AGENT, 'Step 3 DONE: runAgent returned');
 

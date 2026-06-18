@@ -28,6 +28,8 @@ model CodeswarmTask {
   timeoutSec            Int?
   engine                String?
   agent                 String?
+  command               String?   // JSON argv array (script engine, e.g. ["python","run.py"])
+  scriptCwd             String?   // script engine working directory override
   preferredWorkerNodeId String?
   targetProduct         String?
   apiBaseUrl            String?

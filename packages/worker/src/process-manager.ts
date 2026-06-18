@@ -147,6 +147,39 @@ function logOpencodeChunk(taskId: string, stream: 'stdout' | 'stderr', content: 
   }
 }
 
+export function buildScriptStreamLogEvent(
+  content: string,
+  stream: 'stdout' | 'stderr',
+): Omit<AgentEvent, 'timestamp'> {
+  return {
+    type: 'log_chunk',
+    content,
+    level: 'agent',
+    stream,
+  };
+}
+
+export function buildScriptLogFilePaths(workspace: string): { stdout: string; stderr: string } {
+  return {
+    stdout: path.join(workspace, 'script_stdout.logs'),
+    stderr: path.join(workspace, 'script_stderr.logs'),
+  };
+}
+
+function logScriptChunk(taskId: string, stream: 'stdout' | 'stderr', content: string): void {
+  const prefix = stream === 'stderr' ? '[script stderr]' : '[script stdout]';
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+
+    const message = line.length > 4000
+      ? `${prefix} ${line.slice(0, 4000)}... <truncated ${line.length - 4000} chars>`
+      : `${prefix} ${line}`;
+
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, message);
+  }
+}
+
 function extractOpencodeSessionId(stderr: string): string | null {
   const match = stderr.match(/\bsession id=(ses_[^\s]+)/);
   return match?.[1] ?? null;
@@ -163,7 +196,7 @@ export function extractOpencodeAssistantText(messages: OpencodeExportMessage[]):
 }
 
 interface BuildAgentEnvironmentOptions {
-  engine: 'opencode' | 'claudecode';
+  engine: 'opencode' | 'claudecode' | 'script';
   apiKey?: string;
   model?: string;
   env?: Record<string, string>;
@@ -184,6 +217,12 @@ export function buildAgentEnvironment({
   const mergedEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(baseEnv)) {
     if (value !== undefined) mergedEnv[key] = value;
+  }
+
+  // Script engine: no LLM credentials/model — forward base env + task env only.
+  if (engine === 'script') {
+    if (env) Object.assign(mergedEnv, env);
+    return mergedEnv;
   }
 
   if (engine === 'claudecode') {
@@ -219,7 +258,7 @@ export function writeDebugEnvSnapshot({
   env,
 }: {
   workspacePath: string;
-  engine: 'opencode' | 'claudecode';
+  engine: 'opencode' | 'claudecode' | 'script';
   env: Record<string, string>;
 }): string {
   const snapshotPath = path.join(workspacePath, '.env.codeswarm.debug');
@@ -286,7 +325,7 @@ export class ProcessManager {
   async runAgent(
     taskId: string,
     workspace: string,
-    engine: 'opencode' | 'claudecode',
+    engine: 'opencode' | 'claudecode' | 'script',
     agentName: string,
     apiKey?: string,
     model?: string,
@@ -295,6 +334,8 @@ export class ProcessManager {
     onEvent?: AgentEventCallback,
     apiBaseUrl?: string,
     timeoutMs?: number,
+    command?: string[],
+    scriptCwd?: string,
   ): Promise<RunAgentResult> {
     const TASK_TIMEOUT_SEC = parseInt(process.env.TASK_TIMEOUT_SEC || '604800');
     const effectiveTimeoutMs = timeoutMs || TASK_TIMEOUT_SEC * 1000;
@@ -331,6 +372,14 @@ export class ProcessManager {
       // ========== OPENCODE RUN MODE (direct spawn, no ACP) ==========
       if (engine === 'opencode') {
         const result = await this.runOpencodeRun(taskId, workspace, agentName, instruction || '执行任务', onEvent, mergedEnv, effectiveTimeoutMs);
+        return result;
+      }
+      // ========== SCRIPT RUN MODE (direct argv spawn, no ACP/LLM) ==========
+      if (engine === 'script') {
+        if (!command || command.length === 0) {
+          throw new Error('script engine requires a non-empty command (payload.command)');
+        }
+        const result = await this.runScript(taskId, workspace, command, scriptCwd, onEvent, mergedEnv, effectiveTimeoutMs);
         return result;
       }
       // ========== CLAUDECODE ACP MODE ==========
@@ -584,6 +633,132 @@ export class ProcessManager {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.taskError(taskId, LOG_MODULES.PROCESS, `opencode run error: ${errorMsg}`);
+      state.stderr += errorMsg;
+      return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
+    } finally {
+      this.processes.delete(taskId);
+      if (stdoutLogStream) {
+        try { stdoutLogStream.end(); } catch { /* non-critical */ }
+      }
+      if (stderrLogStream) {
+        try { stderrLogStream.end(); } catch { /* non-critical */ }
+      }
+    }
+  }
+
+  /**
+   * Execute an arbitrary script command via direct argv spawn (script engine).
+   * No ACP protocol, no LLM — just capture stdout/stderr + exit code.
+   * Mirrors runOpencodeRun's lifecycle (timeout → SIGTERM → SIGKILL).
+   */
+  private async runScript(
+    taskId: string,
+    workspace: string,
+    command: string[],
+    scriptCwd: string | undefined,
+    onEvent: AgentEventCallback | undefined,
+    mergedEnv: Record<string, string>,
+    timeoutMs: number,
+  ): Promise<RunAgentResult> {
+    const state: RunState = { stdout: '', stderr: '', currentSkill: null };
+    let childProcess: ChildProcess | null = null;
+    const logFilePaths = buildScriptLogFilePaths(workspace);
+    let stdoutLogStream: fs.WriteStream | null = null;
+    let stderrLogStream: fs.WriteStream | null = null;
+
+    const [cmd, ...args] = command;
+
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== SCRIPT RUN START ==========`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `argv: ${cmd} ${args.join(' ')}`);
+    logger.taskInfo(taskId, LOG_MODULES.PROCESS, `cwd: ${scriptCwd || workspace}`);
+
+    try {
+      stdoutLogStream = fs.createWriteStream(logFilePaths.stdout, { flags: 'w' });
+      stderrLogStream = fs.createWriteStream(logFilePaths.stderr, { flags: 'w' });
+
+      // Direct argv spawn (NO shell) — command comes from platform-internal trusted
+      // payloads; argv form means shell metacharacters cannot be interpreted.
+      childProcess = spawn(cmd, args, {
+        cwd: scriptCwd || workspace,
+        env: mergedEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      if (!childProcess.stdout || !childProcess.stderr) {
+        throw new Error('Failed to create script process streams');
+      }
+
+      this.processes.set(taskId, { process: childProcess, workspace, createdAt: Date.now() });
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Spawned script process with PID ${childProcess.pid}`);
+
+      let resolveExit!: (code: number | null) => void;
+      const exitPromise = new Promise<number | null>((resolve) => {
+        resolveExit = resolve;
+      });
+
+      childProcess.stdout.on('data', (data: Buffer) => {
+        const content = data.toString();
+        state.stdout += content;
+        stdoutLogStream?.write(data);
+        logScriptChunk(taskId, 'stdout', content);
+        if (onEvent) {
+          onEvent({ ...buildScriptStreamLogEvent(content, 'stdout'), timestamp: new Date().toISOString() });
+        }
+      });
+      childProcess.stderr.on('data', (data: Buffer) => {
+        const content = data.toString();
+        state.stderr += content;
+        stderrLogStream?.write(data);
+        logScriptChunk(taskId, 'stderr', content);
+        if (onEvent) {
+          onEvent({ ...buildScriptStreamLogEvent(content, 'stderr'), timestamp: new Date().toISOString() });
+        }
+      });
+
+      childProcess.on('error', (err) => {
+        logger.taskError(taskId, LOG_MODULES.PROCESS, `script spawn error: ${err.message}`);
+        state.stderr += err.message;
+        resolveExit(1);
+      });
+      childProcess.on('close', (code) => {
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `script exited with code=${code}`);
+        resolveExit(code);
+      });
+
+      const result = await Promise.race([
+        exitPromise.then(code => ({
+          exitCode: code ?? 1,
+          stdout: state.stdout,
+          stderr: state.stderr,
+        })),
+        new Promise<RunAgentResult>((resolve) => {
+          setTimeout(() => {
+            resolve({
+              exitCode: 124,
+              stdout: state.stdout,
+              stderr: state.stderr + '\nTimeout exceeded',
+            });
+          }, timeoutMs);
+        }),
+      ]);
+
+      // Timeout: SIGTERM first, then SIGKILL after grace period to guarantee
+      // process death and free the slot.
+      if (result.exitCode === 124 && childProcess && childProcess.exitCode === null) {
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Timeout, sending SIGTERM to script');
+        childProcess.kill('SIGTERM');
+        await new Promise<void>(r => setTimeout(r, 10000));
+        if (childProcess.exitCode === null && !childProcess.killed) {
+          logger.taskWarn(taskId, LOG_MODULES.PROCESS, 'Process ignored SIGTERM, sending SIGKILL');
+          childProcess.kill('SIGKILL');
+        }
+      }
+
+      logger.taskInfo(taskId, LOG_MODULES.PROCESS, `========== SCRIPT RUN END (exitCode=${result.exitCode}) ==========`);
+      return result;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.taskError(taskId, LOG_MODULES.PROCESS, `script run error: ${errorMsg}`);
       state.stderr += errorMsg;
       return { exitCode: 1, stdout: state.stdout, stderr: state.stderr };
     } finally {

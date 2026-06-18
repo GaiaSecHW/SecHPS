@@ -14,7 +14,7 @@ export interface BuildResult {
   instruction?: string;
   commandTemplate?: string;
   model?: string;
-  engine?: 'opencode' | 'claudecode';
+  engine?: 'opencode' | 'claudecode' | 'script';
 }
 
 export type BuildProgressCallback = (message: string) => void;
@@ -190,7 +190,7 @@ export class EnvironmentFactory {
    * Build an isolated workspace for a task.
    * Priority: workspacePath (NFS) > projectPath (local copy)
    */
-  async build(payload: TaskPayload, onProgress?: BuildProgressCallback, engine?: 'opencode' | 'claudecode'): Promise<BuildResult> {
+  async build(payload: TaskPayload, onProgress?: BuildProgressCallback, engine?: 'opencode' | 'claudecode' | 'script'): Promise<BuildResult> {
     const progress = (msg: string) => {
       logger.info(LOG_MODULES.ENV, msg);
       onProgress?.(msg);
@@ -251,8 +251,8 @@ export class EnvironmentFactory {
         resolvedInstruction = payload.instruction ?? undefined;
       }
 
-      // opencode.json is opencode-specific config; skip for claudecode engine
-      if (engine !== 'claudecode') {
+      // opencode.json is opencode-specific config; only processed for opencode engine
+      if (engine === 'opencode') {
         progress(`Step 2: 检查 opencode.json...`);
         const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
         progress(`opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
@@ -347,7 +347,7 @@ export class EnvironmentFactory {
           }
         }
       } else {
-        progress(`Step 2: 跳过 opencode.json 检查 (claudecode engine)`);
+        progress(`Step 2: 跳过 opencode.json 检查 (engine=${engine || 'opencode(default)'})`);
       }
 
       // Ensure .opencode directory exists (skills, session data etc.)
@@ -401,7 +401,7 @@ export class EnvironmentFactory {
       }
 
 // Step 5: Generate opencode.json (opencode engine only)
-      if (engine !== 'claudecode') {
+      if (engine === 'opencode') {
         const opencodeConfig: Record<string, any> = {};
         if (payload.model) {
           const modelConfig = buildModelConfig(payload.model, payload.apiKey, payload.apiBaseUrl, {
@@ -432,7 +432,7 @@ export class EnvironmentFactory {
           );
         }
       } else {
-        progress(`Step 5: 跳过 opencode.json 生成 (claudecode engine)`);
+        progress(`Step 5: 跳过 opencode.json 生成 (engine=${engine || 'opencode(default)'})`);
       }
 
       // Step 6: Write instruction.txt

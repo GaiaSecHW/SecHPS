@@ -197,6 +197,9 @@ export class CodeswarmDispatcher {
     env?: string;
     platformTaskId?: string;
     platformCallbackUrl?: string;
+    // Script engine: argv array + working directory override
+    command?: string[];
+    scriptCwd?: string;
     // Tool dispatch fields
     toolId?: string;
     toolTaskId?: string;
@@ -228,6 +231,8 @@ export class CodeswarmDispatcher {
           env: payload.env,
           platformTaskId: payload.platformTaskId,
           platformCallbackUrl: payload.platformCallbackUrl,
+          command: payload.command ? JSON.stringify(payload.command) : undefined,
+          scriptCwd: payload.scriptCwd,
           // Tool dispatch fields
           toolId: payload.toolId,
           toolTaskId: payload.toolTaskId,
@@ -600,6 +605,8 @@ export class CodeswarmDispatcher {
       preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
       targetProduct: task.targetProduct || undefined,
       env: task.env ? safeJsonParse(task.env) : undefined,
+      command: task.command ? safeJsonParse(task.command) : undefined,
+      scriptCwd: task.scriptCwd || undefined,
       // Tool dispatch fields
       toolId: task.toolId || undefined,
       toolTaskId: task.toolTaskId || undefined,

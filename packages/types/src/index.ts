@@ -119,10 +119,15 @@ export const TaskPayloadSchema = z.object({
   callbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
   env: z.record(z.string(), z.string()).optional(),
-  // Execution engine (opencode, claudecode)
-  engine: z.enum(['opencode', 'claudecode']).optional(),
+  // Execution engine (opencode, claudecode, script)
+  engine: z.enum(['opencode', 'claudecode', 'script']).optional(),
   // Agent name (e.g. nazhua-audit)
   agent: z.string().optional(),
+  // Script engine: argv array executed directly (e.g. ["python", "run.py"]).
+  // Passed as separate argv elements — never via shell — to avoid command injection.
+  command: z.array(z.string()).optional(),
+  // Script engine: working directory override (defaults to workspacePath)
+  scriptCwd: z.string().optional(),
   // Preferred worker nodeId for manual scheduling
   preferredWorkerNodeId: z.string().optional(),
   // Target product name, used as codedmap db filename ({targetProduct}.db)

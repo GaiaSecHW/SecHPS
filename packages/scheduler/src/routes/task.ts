@@ -76,6 +76,9 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
       targetProduct?: string;
       maxTokens?: number;
       contextWindow?: number;
+      // Script engine: argv array + working directory override
+      command?: string[];
+      scriptCwd?: string;
       // Tool 调度字段
       toolId?: string;
       toolTaskId?: string;
@@ -147,6 +150,8 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
             contextWindow: body.contextWindow || null,
             platformTaskId: normalizedEnv.platformTaskId || null,
             platformCallbackUrl: body.callbackUrl || null,
+            command: body.command ? JSON.stringify(body.command) : null,
+            scriptCwd: body.scriptCwd || null,
             // Tool 调度字段
             toolId: body.toolId || null,
             toolTaskId: toolTaskId || null,
@@ -194,6 +199,7 @@ export function registerTaskRoutes(server: FastifyInstance, dispatcher: any): vo
         select: {
           id: true, taskId: true, state: true, instruction: true,
           engine: true, agent: true, model: true,
+          command: true, scriptCwd: true,
           apiBaseUrl: true, timeoutSec: true, maxTokens: true, contextWindow: true,
           platformTaskId: true, platformCallbackUrl: true,
           projectPath: true, workspacePath: true,
