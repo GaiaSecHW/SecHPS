@@ -4,6 +4,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check, Server, ArrowUp, ArrowDown } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getEngineBadge, getEngineLabel } from './engine-display.js';
 
 interface Task {
   id: string;
@@ -258,6 +259,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
           {filteredTasks.map((task) => {
             const isExpanded = expandedTask === task.taskId;
             const isSelected = selectedTaskId === task.taskId;
+            const engineBadge = getEngineBadge(task.engine);
             return (
               <div key={task.id} className={`bg-dark-surface rounded-lg shadow border ${isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700/50'} overflow-hidden`}>
                 <div className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-dark-surface-hover" onClick={() => { setExpandedTask(isExpanded ? null : task.taskId); onTaskSelect(isExpanded ? null : task.taskId); }}>
@@ -273,8 +275,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                           {getStateLabel(task.state)}
                         </span>
                         {task.engine && (
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${task.engine === 'claudecode' ? 'bg-purple-900/30 text-purple-400' : 'bg-orange-900/20 text-orange-400'}`}>
-                            {task.engine === 'claudecode' ? 'Claude Code' : 'OpenCode'}
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${engineBadge.color}`}>
+                            {engineBadge.label}
                           </span>
                         )}
                       </div>
@@ -299,7 +301,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                   <div className="px-4 py-4 border-t border-gray-700/50 bg-dark-bg space-y-4">
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div><span className="text-gray-500">Task ID:</span><span className="ml-2 font-mono text-xs">{task.taskId}</span></div>
-                      <div><span className="text-gray-500">Engine:</span><span className="ml-2">{task.engine === 'claudecode' ? 'Claude Code' : task.engine === 'opencode' ? 'OpenCode' : task.engine || '-'}</span></div>
+                      <div><span className="text-gray-500">Engine:</span><span className="ml-2">{getEngineLabel(task.engine)}</span></div>
                       <div><span className="text-gray-500">Agent:</span><span className="ml-2">{task.agent || '-'}</span></div>
                       <div><span className="text-gray-500">Model:</span><span className="ml-2">{task.model || '-'}</span></div>
                     </div>

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { cp, mkdir, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
@@ -120,6 +121,32 @@ function buildAgentFailureReason(exitCode: number, stderr: string): string {
   }
 
   return `任务执行失败，进程退出码: ${exitCode}`;
+}
+
+export async function prepareInputDirSnapshot(
+  taskId: string,
+  workspacePath: string,
+  env?: Record<string, string>,
+): Promise<boolean> {
+  const inputDir = env?.INPUT_DIR?.trim();
+  if (!inputDir) return false;
+
+  let inputStat;
+  try {
+    inputStat = await stat(inputDir);
+  } catch {
+    throw new Error(`INPUT_DIR does not exist or is not a directory: ${inputDir}`);
+  }
+
+  if (!inputStat.isDirectory()) {
+    throw new Error(`INPUT_DIR does not exist or is not a directory: ${inputDir}`);
+  }
+
+  const targetDir = path.join(workspacePath, 'vlu_scan_code');
+  await mkdir(targetDir, { recursive: true });
+  await cp(inputDir, targetDir, { recursive: true, force: true });
+  logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Copied INPUT_DIR to workspace: ${inputDir} -> ${targetDir}`);
+  return true;
 }
 
 export class WorkerDaemon {
@@ -668,6 +695,17 @@ this.server.get('/health', async () => ({
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
       logger.taskInfo(taskId, LOG_MODULES.DAEMON, `Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
       this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
+
+      const copiedInputDir = await prepareInputDirSnapshot(taskId, workspacePath, env);
+      if (copiedInputDir) {
+        onEvent({
+          type: 'phase_complete',
+          phase: 'input_snapshot',
+          success: true,
+          message: `INPUT_DIR 已复制到工作区: ${path.join(workspacePath, 'vlu_scan_code')}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       // agentName: resolved from opencode.json > payload.agent > fallback 'build'
       const agentName = resolvedAgent || agent || 'build';

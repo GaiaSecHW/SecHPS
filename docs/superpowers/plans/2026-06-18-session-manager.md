@@ -355,23 +355,26 @@ function findClaudeTranscript(cwd: string | null, sid?: string): string | null {
   const home = process.env.HOME || os.homedir();
   const projectsDir = path.join(home, '.claude', 'projects');
   if (!fs.existsSync(projectsDir)) return null;
-  // cwd → encoded path(cc-switch 同款:把 / 替换为 -)
-  const candidates: string[] = [];
-  if (cwd) candidates.push(path.join(projectsDir, cwd.replace(/[\\/]/g, '-')));
-  candidates.push(projectsDir);
-  for (const dir of candidates) {
-    if (!fs.existsSync(dir)) continue;
-    const files = fs.readdirSync(dir)
-      .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
-      .map(f => ({ f, abs: path.join(dir, f), mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.mtime - a.mtime);
-    if (sid) {
-      const hit = files.find(x => x.f.includes(sid));
-      if (hit) return hit.abs;
+  // 与 cc-switch claude.rs 一致：递归收集整个 projects 目录所有 *.jsonl
+  // （排除 agent- 前缀的子代理会话），不假设 cwd→编码路径的精确映射。
+  const all: { abs: string; f: string; mtime: number }[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(abs);
+      else if (entry.name.endsWith('.jsonl') && !entry.name.startsWith('agent-')) {
+        all.push({ abs, f: entry.name, mtime: fs.statSync(abs).mtimeMs });
+      }
     }
-    if (files[0]) return files[0].abs;
+  };
+  walk(projectsDir);
+  if (sid) {
+    const hit = all.find(x => x.f.includes(sid));
+    if (hit) return hit.abs;
   }
-  return null;
+  // 无 sid 或未命中 → 取 mtime 最新（归档时机最近的通常就是本任务）
+  all.sort((a, b) => b.mtime - a.mtime);
+  return all[0]?.abs ?? null;
 }
 
 export function archiveSession(input: ArchiveInput): ArchiveResult | null {
@@ -422,6 +425,12 @@ getSessionId(taskId: string): string | undefined {
 
 - [ ] **Step 3: daemon 收尾归档**
 
+> **事件类型说明**:`session_archived` 由 **daemon 直接构造**(`postEvent` 接受 `unknown[]`,不经 `AgentEventType` 联合类型,故无需改 `process-manager.ts:45` 的 enum)。它区别于 agent 侧的 `session_created`(ACP session 建立时发,只有裸 sid,无 transcript)。scheduler `/worker/event` 路由的 events 是 `Array<{type:string;...}>` 开放类型,`session_archived` 可透传。
+>
+> **失败路径**:任务 failed 时 ACP 可能未产出 transcript → `archiveSession` 返回 null → `if (archived)` 不发事件、不更新 `sessionId`。这是正确行为:不写兼容、不强制归档失败任务。
+>
+> **script/opencode 路径**:`runScript`/`runOpencodeRun` 不走 ACP,`getSessionId` 返回 undefined → `acpSessionId` 为 undefined → claudecode 归档器靠 mtime fallback;opencode/script 在 Task 4 返回 null,此处 `if (archived)` 自然跳过。
+
 ```ts
 // packages/worker/src/daemon.ts executeTask 末尾、postResult 之前
 import { archiveSession } from './session/archiver.js';
@@ -441,8 +450,11 @@ try {
       timestamp: new Date().toISOString(),
       data: {
         meta: archived.meta,
-        // 大 transcript 只回传前 N 条 + 摘要,全文留在 workspacePath 文件
-        messages: archived.messages.slice(0, 200),
+        // CodeswarmEvent.data 是 @db.Text（无长度上限），全文回传。
+        // 这样 P1 回放完全从 scheduler DB 重建，不依赖 scheduler pod 能否访问
+        // /mnt/workspace PVC（worker/scheduler 跨 pod 卷共享未确认）。
+        // workspacePath 下的 jsonl 文件仅作冗余权威源 + 人工 debug。
+        messages: archived.messages,
         messageCount: archived.messages.length,
       },
     }]).catch(err => this.server.log.warn({ taskId, err }, 'session_archived post failed'));
@@ -630,7 +642,9 @@ git commit -m "feat: support resume-from-task (claude --resume) session continua
 
 ## 风险与备注
 
-- **transcript 体量**:大对话 jsonl 可能数 MB。Task 5 已只回传前 200 条 + count,全文留 workspacePath。若需全量回放且 scheduler 无 workspace 访问权,再评估 DB `@db.Text` 单行存储或对象存储。
-- **跨 pod workspace**:worker pod 与 scheduler 可能不共享卷。P0 已把消息流随 event 回传到 scheduler DB,故 P1 回放**不依赖** scheduler 读 workspace 文件——这是刻意解耦。
-- **opencode 归档**:Task 4 P0 阶段先返回 null(只 claudecode 跑通);opencode 走 `opencode export <sid>` 的归档在 Task 4 之后单独补一个小 task。
+- **transcript 体量**:大对话 jsonl 可能数 MB。`CodeswarmEvent.data` 是 `@db.Text`(无上限),全文随 `session_archived` 事件回传到 scheduler DB,故 P1 回放**不依赖** scheduler pod 是否能访问 `/mnt/workspace` PVC。workspacePath 下的 jsonl 仅作冗余权威源 + 人工 debug。
+- **跨 pod workspace**:worker pod 与 scheduler 可能不共享卷(未确认)。**刻意**让回放数据走 event → DB,而非 scheduler 读 workspace 文件。
+- **DB 无需迁移**:`transcriptRelPath` 存在 `session_archived` 事件的 `data.meta.transcriptRelPath` 里(进 `CodeswarmEvent.data` 的 JSON),不新增 CodeswarmTask 列。`CodeswarmTask.sessionId` 是**已存在**的列(line 51),Task 6 只是首次真正写入它。
+- **opencode 归档**:Task 4 P0 阶段 opencode 返回 null(只 claudecode 跑通)。Task 5 的 daemon 无差别调用 `archiveSession`,opencode 任务静默无归档——Task 7 的 UI 必须区分"会话未归档(engine=opencode/script,P0 不支持)"与"会话为空(异常)",前者用 disabled hint 而非报错。opencode 走 `opencode export <sid>` 的归档在 Task 4 之后单独补一个小 task。
+- **敏感信息遮罩**(对齐 cc-switch PRD §7):transcript 可能含 API key / token / 密码。Task 4 归档前对 `messages[].content` 做正则遮罩(`sk-ant-[\w-]+`、`Bearer\s+[\w.]+`、常见 `password/token/secret` key=value)。遮罩在**归档时一次性落定**,DB 与 UI 拿到的都是已遮罩版,降低泄露面。注意:遮罩是单向不可逆,会影响 resume 续接(P2)能否真实复现上下文——若 P2 需要原样上下文,则在 worker 侧归档时保留原文、仅回传 scheduler 时遮罩(两个版本)。
 - **不写兼容代码**(遵循 CLAUDE.md):`session_created` 老事件若无 meta.data,UI 直接显示"无归档",不做降级兼容。

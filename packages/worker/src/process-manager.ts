@@ -219,12 +219,6 @@ export function buildAgentEnvironment({
     if (value !== undefined) mergedEnv[key] = value;
   }
 
-  // Script engine: no LLM credentials/model — forward base env + task env only.
-  if (engine === 'script') {
-    if (env) Object.assign(mergedEnv, env);
-    return mergedEnv;
-  }
-
   if (engine === 'claudecode') {
     Object.assign(mergedEnv, settingsEnv ?? loadClaudeSettingsJson());
   }
@@ -237,17 +231,32 @@ export function buildAgentEnvironment({
       mergedEnv.CLAUDE_API_KEY = apiKey;
       delete mergedEnv.ANTHROPIC_API_KEY;
     } else {
+      mergedEnv.CODESWARM_API_KEY = apiKey;
       if (model) {
-        const providerId = model.split('/')[0];
-        const envKey = `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-        mergedEnv[envKey] = apiKey;
+        const providerId = model.split('/')[0].toUpperCase().replace(/-/g, '_');
+        mergedEnv[`${providerId}_API_KEY`] = apiKey;
       }
       mergedEnv.ANTHROPIC_API_KEY = apiKey;
     }
   }
 
-  if (model) mergedEnv.ANTHROPIC_MODEL = model;
-  if (apiBaseUrl && engine === 'claudecode') mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
+  if (model) {
+    mergedEnv.CODESWARM_MODEL = model;
+    mergedEnv.ANTHROPIC_MODEL = model;
+  }
+
+  if (apiBaseUrl) {
+    if (engine !== 'claudecode') {
+      mergedEnv.CODESWARM_API_BASE_URL = apiBaseUrl;
+      if (model) {
+        const providerId = model.split('/')[0].toUpperCase().replace(/-/g, '_');
+        mergedEnv[`${providerId}_BASE_URL`] = apiBaseUrl;
+      }
+    }
+    if (engine === 'claudecode' || engine === 'script') {
+      mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
+    }
+  }
 
   return mergedEnv;
 }
@@ -262,13 +271,22 @@ export function writeDebugEnvSnapshot({
   env: Record<string, string>;
 }): string {
   const snapshotPath = path.join(workspacePath, '.env.codeswarm.debug');
-  const keys = [
+  const defaultKeys = [
+    'CODESWARM_API_KEY',
+    'CODESWARM_API_BASE_URL',
+    'CODESWARM_MODEL',
     'ANTHROPIC_AUTH_TOKEN',
     'CLAUDE_API_KEY',
     'ANTHROPIC_API_KEY',
     'ANTHROPIC_BASE_URL',
     'ANTHROPIC_MODEL',
+    'OPENAI_API_KEY',
+    'OPENAI_BASE_URL',
   ];
+  const dynamicProviderKeys = Object.keys(env)
+    .filter(key => /_API_KEY$|_BASE_URL$/.test(key) && !defaultKeys.includes(key))
+    .sort();
+  const keys = [...defaultKeys, ...dynamicProviderKeys];
   const lines = [
     `ENGINE=${engine}`,
     ...keys.map(key => `${key}=${env[key] ?? '<unset>'}`),
@@ -369,6 +387,13 @@ export class ProcessManager {
         apiBaseUrl,
       });
 
+      try {
+        const snapshotPath = writeDebugEnvSnapshot({ workspacePath: workspace, engine, env: mergedEnv });
+        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Wrote debug env snapshot: ${snapshotPath}`);
+      } catch (err) {
+        logger.taskWarn(taskId, LOG_MODULES.PROCESS, `Failed to write debug env snapshot: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
       // ========== OPENCODE RUN MODE (direct spawn, no ACP) ==========
       if (engine === 'opencode') {
         const result = await this.runOpencodeRun(taskId, workspace, agentName, instruction || '执行任务', onEvent, mergedEnv, effectiveTimeoutMs);
@@ -383,13 +408,6 @@ export class ProcessManager {
         return result;
       }
       // ========== CLAUDECODE ACP MODE ==========
-
-      try {
-        const snapshotPath = writeDebugEnvSnapshot({ workspacePath: workspace, engine, env: mergedEnv });
-        logger.taskInfo(taskId, LOG_MODULES.PROCESS, `Wrote debug env snapshot: ${snapshotPath}`);
-      } catch (err) {
-        logger.taskWarn(taskId, LOG_MODULES.PROCESS, `Failed to write debug env snapshot: ${err instanceof Error ? err.message : String(err)}`);
-      }
 
       logger.taskInfo(taskId, LOG_MODULES.PROCESS, 'Step B: Creating and starting ACP client...');
       const clientConfig: ACPClientConfig = {
