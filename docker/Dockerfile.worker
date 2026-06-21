@@ -219,8 +219,9 @@ RUN apt-get update && \
 RUN python3 --version && \
     python3 -m venv /opt/python-tools && \
     /opt/python-tools/bin/pip install --no-cache-dir --upgrade pip && \
-    /opt/python-tools/bin/pip install --no-cache-dir 'neo4j>=5.0' && \
+    /opt/python-tools/bin/pip install --no-cache-dir 'neo4j>=5.0' 'httpx>=0.27' && \
     /opt/python-tools/bin/python -c "import neo4j; print('neo4j', neo4j.__version__)" && \
+    /opt/python-tools/bin/python -c "import httpx; print('httpx', httpx.__version__)" && \
     echo "=== Python neo4j driver OK ==="
 
 ENV PATH="/opt/python-tools/bin:${PATH}"
