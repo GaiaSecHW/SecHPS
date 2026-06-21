@@ -221,6 +221,7 @@ export function buildAgentEnvironment({
 
   if (engine === 'claudecode') {
     Object.assign(mergedEnv, settingsEnv ?? loadClaudeSettingsJson());
+    mergedEnv.CLAUDE_CODE_COMPACT_WINDOW = '102400';
   }
 
   if (env) Object.assign(mergedEnv, env);

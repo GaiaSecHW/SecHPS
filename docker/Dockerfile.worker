@@ -191,6 +191,8 @@ RUN apt-get update && \
         python3 \
         python3-venv \
         procps \
+        # -- PID 1 zombie reaper: Node.js does not reap reparented orphan grandchildren --
+        tini \
         # -- debugging & diagnostics --
         strace \
         lsof \
@@ -385,4 +387,4 @@ EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8090/health || exit 1
 
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["/usr/bin/tini", "--", "node", "dist/index.js"]
