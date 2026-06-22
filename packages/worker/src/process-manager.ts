@@ -221,7 +221,10 @@ export function buildAgentEnvironment({
 
   if (engine === 'claudecode') {
     Object.assign(mergedEnv, settingsEnv ?? loadClaudeSettingsJson());
-    mergedEnv.CLAUDE_CODE_COMPACT_WINDOW = '102400';
+    mergedEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW = '128000';
+    mergedEnv.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = '70';
+    mergedEnv.CLAUDE_CODE_MAX_OUTPUT_TOKENS = '12000';
+    mergedEnv.MAX_THINKING_TOKENS = '4000';
   }
 
   if (env) Object.assign(mergedEnv, env);
