@@ -14,4 +14,12 @@ declare global {
   }
 }
 
+declare module 'ansi-to-html' {
+  class Convert {
+    constructor(options?: Record<string, unknown>);
+    toHtml(text: string): string;
+  }
+  export default Convert;
+}
+
 export {};
