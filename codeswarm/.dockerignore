@@ -41,3 +41,12 @@ plugins/codedmap/ignored.db
 plugins/codedmap/**/__pycache__
 plugins/codedmap/codedmap.egg-info
 plugins/codedmap/uv.lock
+
+# === Cache & build artifacts ===
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.egg-info
+.cache/
+coverage/
+.nyc_output/

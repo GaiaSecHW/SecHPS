@@ -89,7 +89,19 @@ COPY public/ ./public/
 ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?connect_timeout=1"
 ENV JWT_SECRET="dummy-build-secret-not-for-production"
 RUN npm run build && \
-    npm prune --production
+    npm prune --production && \
+    rm -rf node_modules/@next/swc-linux-x64-musl \
+           node_modules/@img/sharp-libvips-linuxmusl-x64 \
+           node_modules/@img/sharp-linuxmusl-x64 \
+           node_modules/lightningcss-linux-x64-musl \
+           node_modules/7zip-bin/mac \
+           node_modules/7zip-bin/win \
+           node_modules/better-sqlite3/build \
+           node_modules/better-sqlite3/deps \
+           node_modules/better-sqlite3/src \
+           node_modules/better-sqlite3/contrib \
+           node_modules/node-pty/src \
+           node_modules/node-pty/build
 
 # ---------------------------------------------------------------------------
 # Stage 2: Production Runtime (bookworm-slim + minimal apt)
@@ -120,8 +132,6 @@ RUN addgroup --system nodejs && \
 # Only install runtime-required system libs (no debug tools)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        nfs-common \
-
         # === System Libraries (native module runtime deps) ===
         # libssl3: OpenSSL 3.0.x shared libs (libssl.so.3, libcrypto.so.3)
         #   - Required by Prisma query engine (debian-openssl-3.0.x target)
@@ -155,9 +165,6 @@ RUN apt-get update && \
         #   - Required for HTTPS connections to external services
         #   - In isolated env, needed for internal TLS if configured
         ca-certificates \
-        # netcat-openbsd: TCP connectivity testing and debugging
-        netcat-openbsd \
-        \
         # === Version Control ===
         # git: Skill Gitea synchronization via simple-git
         #   - Also useful for debugging, patching in isolated env
@@ -211,7 +218,7 @@ RUN mkdir -p /tmp/opencode-pkg && \
     cd /tmp/opencode-pkg && \
     npm config set registry https://registry.npmmirror.com && \
     npm init -y && \
-    npm install @opencode-ai/plugin@latest @ai-sdk/openai-compatible@latest && \
+    npm install @opencode-ai/plugin@1.17.9 @ai-sdk/openai-compatible@2.0.51 && \
     mkdir -p /root/.cache/opencode/node_modules && \
     cp -r node_modules/* /root/.cache/opencode/node_modules/ && \
     rm -rf /tmp/opencode-pkg && \
@@ -269,8 +276,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/ ./plugins/
 # Scripts (migrations, seed)
 COPY --chown=nextjs:nodejs scripts/ ./scripts/
 
-# Docs (agent-harness reference)
-COPY --chown=nextjs:nodejs docs/ ./docs/
+# Docs (only agent-harness guide, rest excluded by .dockerignore)
+COPY --chown=nextjs:nodejs docs/agent-harness-developer-guide.md ./docs/agent-harness-developer-guide.md
 
 # ---------------------------------------------------------------------------
 # Verify critical binaries

@@ -27,6 +27,10 @@ RUN apt-get update && \
 RUN curl -fsSL "${GITHUB_PROXY}https://github.com/joernio/joern/releases/download/${JOERN_VERSION}/joern-cli.zip" -o joern-cli.zip && \
     unzip -q joern-cli.zip -d /opt/ && \
     rm joern-cli.zip && \
+    rm -rf /opt/joern-cli/docs \
+           /opt/joern-cli/samples \
+           /opt/joern-cli/*.md \
+           /opt/joern-cli/target/streams && \
     echo "=== Joern CLI downloaded OK ==="
 
 # ---------------------------------------------------------------------------
@@ -147,7 +151,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 FROM node:20-trixie AS acp-builder
 
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g @agentclientprotocol/claude-agent-acp@latest && \
+    npm install -g @agentclientprotocol/claude-agent-acp@0.50.0 && \
     which claude-agent-acp && \
     claude-agent-acp --version && \
     echo "=== claude-agent-acp installed OK ==="
@@ -163,7 +167,7 @@ WORKDIR /opt/worker
 RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
     && sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
 
-# Only install runtime-required tools (no debug tools like strace/tcpdump/htop)
+# Only install runtime-required tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         # -- AI agent tool calling essentials --
@@ -296,7 +300,7 @@ RUN mkdir -p /tmp/opencode-pkg && \
     cd /tmp/opencode-pkg && \
     npm config set registry https://registry.npmmirror.com && \
     npm init -y && \
-    npm install @opencode-ai/plugin@latest @ai-sdk/openai-compatible@latest && \
+    npm install @opencode-ai/plugin@1.17.9 @ai-sdk/openai-compatible@2.0.51 && \
     mkdir -p /root/.cache/opencode/node_modules && \
     cp -r node_modules/* /root/.cache/opencode/node_modules/ && \
     rm -rf /tmp/opencode-pkg && \

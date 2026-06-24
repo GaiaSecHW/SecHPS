@@ -66,3 +66,14 @@ prod_dev.db
 tsconfig.tsbuildinfo
 temp-*
 session-ses_*.md
+
+# === Cache & build artifacts ===
+**/__pycache__
+**/*.egg-info
+**/*.pyc
+**/*.pyo
+.cache/
+.npm/
+npm-cache/
+coverage/
+.nyc_output/

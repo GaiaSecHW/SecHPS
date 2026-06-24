@@ -64,10 +64,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^3.4.19",
     "tar": "^7.5.15",
-    "tsx": "^4.21.0",
-    "typescript": "6.0.2",
     "undici": "^7.10.0",
-    "vitest": "^4.1.4",
     "ws": "^8.20.0",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
@@ -89,6 +86,9 @@
     "@types/tar": "^6.1.13",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15"
+    "postcss": "^8.5.15",
+    "tsx": "^4.21.0",
+    "typescript": "6.0.2",
+    "vitest": "^4.1.4"
   }
 }

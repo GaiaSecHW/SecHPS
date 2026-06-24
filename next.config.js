@@ -75,6 +75,11 @@ const nextConfig = {
       'server-new.ts',
       'server-new1.ts',
     ],
+    // 跨平台原生二进制冗余排除（生产镜像为 glibc/linux-x64，不含 musl/alpine）
+    '@next/swc-linux-x64-musl': [],
+    '@img/sharp-linuxmusl-x64': [],
+    '@img/sharp-libvips-linuxmusl-x64': [],
+    'lightningcss-linux-x64-musl': [],
   },
   
   // 强制包含必要的 Next.js 内部文件
