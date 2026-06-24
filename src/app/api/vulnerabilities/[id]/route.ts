@@ -49,8 +49,17 @@ export async function GET(
       }
     }
 
+    const userIds = [vulnerability.confirmedBy, vulnerability.fixedBy, vulnerability.verifiedBy].filter(Boolean) as string[];
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, username: true } })
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u.name || u.username]));
+
     const result = {
       ...vulnerability,
+      confirmedByName: vulnerability.confirmedBy ? (userMap.get(vulnerability.confirmedBy) || vulnerability.confirmedBy) : null,
+      fixedByName: vulnerability.fixedBy ? (userMap.get(vulnerability.fixedBy) || vulnerability.fixedBy) : null,
+      verifiedByName: vulnerability.verifiedBy ? (userMap.get(vulnerability.verifiedBy) || vulnerability.verifiedBy) : null,
       rawReport: vulnerability.rawReport
         ? (() => {
             const urls = vulnerability.rawReport.split(';').map(p => p.trim()).filter(p => p.startsWith('http://') || p.startsWith('https://'));

@@ -52,10 +52,13 @@ interface Vulnerability {
   notes: string | null;
   falsePositiveReason: string | null;
   confirmedBy: string | null;
+  confirmedByName: string | null;
   confirmedAt: string | null;
   fixedBy: string | null;
+  fixedByName: string | null;
   fixedAt: string | null;
   verifiedBy: string | null;
+  verifiedByName: string | null;
   verifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -232,10 +235,10 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
               <div className="w-2 h-2 rounded-full bg-amber-500" />
               <span className="text-gray-500">确认于</span>
               <span className="text-white">{new Date(vulnerability.confirmedAt).toLocaleString()}</span>
-              {vulnerability.confirmedBy && (
+              {vulnerability.confirmedByName && (
                 <span className="text-gray-400 flex items-center gap-1">
                   <User size={12} />
-                  {vulnerability.confirmedBy}
+                  {vulnerability.confirmedByName}
                 </span>
               )}
             </div>
@@ -245,10 +248,10 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-gray-500">修复于</span>
               <span className="text-white">{new Date(vulnerability.fixedAt).toLocaleString()}</span>
-              {vulnerability.fixedBy && (
+              {vulnerability.fixedByName && (
                 <span className="text-gray-400 flex items-center gap-1">
                   <User size={12} />
-                  {vulnerability.fixedBy}
+                  {vulnerability.fixedByName}
                 </span>
               )}
             </div>
@@ -258,10 +261,10 @@ function StatusTimeline({ vulnerability }: { vulnerability: Vulnerability }) {
               <div className="w-2 h-2 rounded-full bg-cyan-500" />
               <span className="text-gray-500">验证于</span>
               <span className="text-white">{new Date(vulnerability.verifiedAt).toLocaleString()}</span>
-              {vulnerability.verifiedBy && (
+              {vulnerability.verifiedByName && (
                 <span className="text-gray-400 flex items-center gap-1">
                   <User size={12} />
-                  {vulnerability.verifiedBy}
+                  {vulnerability.verifiedByName}
                 </span>
               )}
             </div>

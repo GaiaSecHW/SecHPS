@@ -209,7 +209,8 @@ export async function PUT(
       return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
     }
 
-    if (assignedTenantId !== undefined && assignedTenantId !== null && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+    // 仅当实际变更租户分配时才需要 ICSL/管理员权限
+    if (assignedTenantId !== undefined && assignedTenantId !== existingModel.tenantId && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
       return NextResponse.json({ error: '只有 ICSL 或平台管理员可以指定分配租户' }, { status: 403 });
     }
 
@@ -220,8 +221,9 @@ export async function PUT(
       }
     }
 
-    // 管理员专属字段
-    if (isSystemModel !== undefined && !tenant.isPlatformAdmin) {
+    // 管理员专属字段：仅当实际变更 isSystemModel 时才需要管理员权限
+    const existingIsSystemModel = existingModel.userId === null;
+    if (isSystemModel !== undefined && isSystemModel !== existingIsSystemModel && !tenant.isPlatformAdmin) {
       return NextResponse.json(
         { error: '只有管理员可以修改系统模型属性' },
         { status: 403 }
